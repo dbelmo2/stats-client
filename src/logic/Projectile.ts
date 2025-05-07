@@ -1,26 +1,15 @@
 import { Graphics, Container } from 'pixi.js';
 
 export class Projectile extends Container {
-  private speed = 4; // do we need?
-  private vx;
-  private vy;
+  protected speed: number;
+  protected lifespan: number;
+  protected vx: number = 0;
+  protected vy: number = 0;
+  protected body: Graphics;
+  protected gravityEffect: number;
+  public shouldBeDestroyed = false;
 
-  private body: Graphics;
-
-
-  constructor(spawnX: number, spawnY: number, targetX: number, targetY: number) {
-    super();
-
-
-    this.body = new Graphics().circle(0, 0, 5).fill(0x000000);
-    this.addChild(this.body);
-
-    // Set spawn & target location
-    this.x = spawnX + 50;
-    this.y = spawnY + -50;
-
-
-    // Calculate direction vector
+  protected calculateVelocity(spawnX: number, spawnY: number, targetX: number, targetY: number): void {
     const dx = targetX - spawnX;
     const dy = targetY - spawnY;
 
@@ -29,33 +18,38 @@ export class Projectile extends Container {
     const dirY = dy / mag;
     this.vx = dirX * this.speed;
     this.vy = dirY * this.speed;
+  }
 
+
+  constructor(spawnX: number, spawnY: number, targetX: number, targetY: number, speed = 5, lifespan = 2000, gravityEffect = 0.005) {
+    super();
+
+    this.body = new Graphics().circle(0, 0, 5).fill('#ffffff');
+    this.addChild(this.body);
+
+    // initialize 
+    this.x = spawnX + 50;
+    this.y = spawnY + -50;
+    this.speed = speed;
+    this.lifespan = lifespan;
+    this.gravityEffect = gravityEffect;
+
+    // Calculate direction vector
+    this.calculateVelocity(spawnX, spawnY, targetX, targetY);
+    
+
+    // Begin the age process (we dont want projetiles sticking around forever)
+    this.age();
   }
 
   update() {
-    // Update the position of the projectile
-    // For reference from google: 
-    //      The trajectory of a projectile 
-    //      is a parabola. The equation for 
-    //      the trajectory of a projectile 
-    //      launched with an initial velocity
-    //      v at an angle θ above the horizontal, 
-    //      neglecting air resistance, 
-    //      is: y = x * tan(θ) - (g * x^2) / (2 * v^2 * cos^2(θ)).
-    //      Where 'y' is the vertical displacement,
-    //      'x' is the horizontal displacement, 'g' is 
-    //      the acceleration due to gravity, and 'v'
-    //      is the initial speed. 
-    console.log('updating projectile');
-    this.vy += 0.005;
+    this.vy += this.gravityEffect;
     this.x += this.vx;
     this.y += this.vy;
-
-
-
   }
 
-destroy() {
+  destroy() {
+    console.log('destroy called');
     // Remove the projectile from its parent container
     if (this.parent) {
         this.parent.removeChild(this);
@@ -66,5 +60,12 @@ destroy() {
 
     // Call the superclass destroy method
     super.destroy();
-}
+  }
+
+  age() {
+    setTimeout(() => {
+        this.shouldBeDestroyed = true;
+    }, this.lifespan)
+  }
+
 }

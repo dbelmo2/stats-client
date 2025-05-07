@@ -18,7 +18,7 @@ export class Player extends Container {
 
     this.FLOOR_Y = screenHeight - 100;
 
-    this.body = new Graphics().rect(0, 0, 50, 50).fill(0xff0000);
+    this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.addChild(this.body);
 
     // Set pivot to bottom center for better physics alignment
@@ -64,5 +64,19 @@ export class Player extends Container {
       this.isOnGround = true;
       this.canDoubleJump = true;
     }
+  }
+
+  damage() {
+    console.log('damaging player');
+
+    // Redraw the shape with red fill
+    this.body.clear();
+    this.body.rect(0, 0, 50, 50).fill(0xff0000);
+  
+    // Restore to green after 300ms
+    setTimeout(() => {
+      this.body.clear();
+      this.body.rect(0, 0, 50, 50).fill(0x228B22);
+    }, 100);
   }
 }
