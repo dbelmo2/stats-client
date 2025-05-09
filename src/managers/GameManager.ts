@@ -6,7 +6,11 @@ import { EnemyPlayer } from '../logic/EnemyPlayer';
 import { Projectile } from '../logic/Projectile';
 import { EnemyProjectile } from '../logic/EnemyProjectile';
 
+import { testForAABB } from '../logic/collision';
 
+const PROJECTILE_SPEED = 5;
+const PROJECTILE_LIFESPAN = 2000;
+const PROJECTILE_GRAVITY = 0.05;
 
 type PlayerState = {
   id: string;
@@ -94,11 +98,14 @@ export class GameManager {
             }
         }
 
-        // Clean up own projectiles
+        // Clean up own projectiles only if they were in server state and now aren't
         for (let i = this.ownProjectiles.length - 1; i >= 0; i--) {
             const projectile = this.ownProjectiles[i];
-            if (!activeIds.has(projectile.getId())) {
-                console.log('destroying projectile due to stateUpdate', projectile.getId());
+            const projectileId = projectile.getId();
+            
+            // Only clean up projectiles that were previously acknowledged by server
+            if (projectile.wasAcknowledged && !activeIds.has(projectileId)) {
+                console.log('destroying projectile', projectileId);
                 this.app.stage.removeChild(projectile);
                 projectile.destroy();
                 this.ownProjectiles.splice(i, 1);
@@ -108,7 +115,13 @@ export class GameManager {
 
     private updateProjectiles(projectiles: ProjectileState[]): void {
         for (const projectile of projectiles) {
-            if (!this.enemyProjectileGraphics.has(projectile.id) && projectile.ownerId !== this.selfId) {
+            if (projectile.ownerId === this.selfId) {
+                // Mark own projectiles as acknowledged when they appear in server state
+                const ownProjectile = this.ownProjectiles.find(p => p.getId() === projectile.id);
+                if (ownProjectile) {
+                    ownProjectile.wasAcknowledged = true;
+                }
+            } else if (!this.enemyProjectileGraphics.has(projectile.id)) {
                 const graphic = new EnemyProjectile(projectile.x, projectile.y, projectile.vx, projectile.vy);
                 this.app.stage.addChild(graphic);
                 this.enemyProjectileGraphics.set(projectile.id, graphic);
@@ -153,9 +166,9 @@ export class GameManager {
                 this.self.y,
                 target.x,
                 target.y,
-                5,
-                5000,
-                0.05,
+                PROJECTILE_SPEED,
+                PROJECTILE_LIFESPAN,
+                PROJECTILE_GRAVITY,
                 this.app.screen.height
             );
             target.id = projectile.getId();
@@ -169,10 +182,26 @@ export class GameManager {
         for (let i = this.ownProjectiles.length - 1; i >= 0; i--) {
             const projectile = this.ownProjectiles[i];
             projectile.update();
-            if (projectile.shouldBeDestroyed) {
-                this.ownProjectiles.splice(i, 1);
-                projectile.destroy();
+
+
+        // Check for collisions with enemy players
+        for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
+            if (testForAABB(projectile, enemyGraphic)) {
+                // Apply predicted damage (the server will confirm or correct this)
+                enemyGraphic.damage();
+
+                // Mark projectile for cleanup
+                projectile.shouldBeDestroyed = true;
+                break; // Exit collision check loop once hit is found
             }
+        }
+
+        if (projectile.shouldBeDestroyed) {
+            this.ownProjectiles.splice(i, 1);
+            projectile.destroy();
+        }
+
+            
         }
     }
 

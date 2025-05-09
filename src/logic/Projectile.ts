@@ -10,6 +10,8 @@ export class Projectile extends Container {
   protected screenHeight: number;
   public shouldBeDestroyed = false;
   protected id: string;
+  public wasAcknowledged: boolean = false;
+
 
   protected calculateVelocity(spawnX: number, spawnY: number, targetX: number, targetY: number): void {
     const dx = targetX - spawnX;
@@ -87,6 +89,6 @@ export class Projectile extends Container {
   getId(): string {
     return this.id;
   }
-  
+
 
 }
