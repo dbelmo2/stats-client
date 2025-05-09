@@ -9,6 +9,7 @@ export class Projectile extends Container {
   protected gravityEffect: number;
   protected screenHeight: number;
   public shouldBeDestroyed = false;
+  protected id: string;
 
   protected calculateVelocity(spawnX: number, spawnY: number, targetX: number, targetY: number): void {
     const dx = targetX - spawnX;
@@ -22,13 +23,24 @@ export class Projectile extends Container {
   }
 
 
-  constructor(spawnX: number, spawnY: number, targetX: number, targetY: number, speed = 5, lifespan = 2000, gravityEffect = 0.005, screenHeight: number) {
+  constructor(
+    spawnX: number, 
+    spawnY: number, 
+    targetX: number, 
+    targetY: number, 
+    speed = 5, 
+    lifespan = 2000, 
+    gravityEffect = 0.005, 
+    screenHeight: number,
+    id = Math.random().toString(36).substring(2, 15)
+  ) {
     super();
 
     this.body = new Graphics().circle(0, 0, 5).fill('#ffffff');
     this.addChild(this.body);
 
-    // initialize 
+    // initialize
+    this.id = id;
     this.x = spawnX + 50;
     this.y = spawnY + -50;
     this.speed = speed;
@@ -49,7 +61,7 @@ export class Projectile extends Container {
     this.x += this.vx;
     this.y += this.vy;
     if (this.y > this.screenHeight + 100) {
-      this.shouldBeDestroyed = true;
+      this.shouldBeDestroyed = true; // Is this causing the server to destroy it?
     }
   }
 
@@ -71,5 +83,10 @@ export class Projectile extends Container {
         this.shouldBeDestroyed = true;
     }, this.lifespan)
   }
+
+  getId(): string {
+    return this.id;
+  }
+  
 
 }
