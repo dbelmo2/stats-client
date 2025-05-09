@@ -1,5 +1,5 @@
 import { Graphics, Container } from 'pixi.js';
-import type { Controller } from './controller';
+import { Controller } from './controller'
 
 export class Player extends Container {
   private speed = 4;

@@ -1,10 +1,28 @@
 import { Application } from 'pixi.js';
 import { Player } from '../logic/Player';
-import { Controller } from '../logic/Controller';
+import { Controller } from '../logic/controller';
 import { SocketManager } from '../network/SocketManager';
 import { EnemyPlayer } from '../logic/EnemyPlayer';
 import { Projectile } from '../logic/Projectile';
 import { EnemyProjectile } from '../logic/EnemyProjectile';
+
+
+
+type PlayerState = {
+  id: string;
+  x: number;
+  y: number;
+  hp: number;
+}
+
+type ProjectileState = {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  ownerId: string;
+};
 
 export class GameManager {
     private static instance: GameManager;
@@ -12,7 +30,7 @@ export class GameManager {
     private socketManager: SocketManager;
     private controller: Controller;
     private self: Player;
-    private selfId: string;
+    private selfId: string = '';
     
     private ownProjectiles: Projectile[] = [];
     private enemyPlayerStates: PlayerState[] = [];
@@ -24,15 +42,16 @@ export class GameManager {
         this.controller = new Controller();
         this.socketManager = new SocketManager('http://localhost:3000');
         this.self = new Player(app.screen.height);
-        this.setupPlayer();
-        this.setupNetworking();
-        this.setupGameLoop();
+
     }
 
     public static async initialize(app: Application): Promise<GameManager> {
         if (!GameManager.instance) {
             GameManager.instance = new GameManager(app);
             await GameManager.instance.socketManager.waitForConnect();
+            GameManager.instance.setupPlayer();
+            GameManager.instance.setupNetworking();
+            GameManager.instance.setupGameLoop();
         }
         return GameManager.instance;
     }
@@ -44,7 +63,9 @@ export class GameManager {
     }
 
     private setupNetworking(): void {
-        this.selfId = this.socketManager.getId();
+        const id = this.socketManager.getId();
+        if (!id) throw new Error('Socket ID is undefined');
+        this.selfId = id;
         this.socketManager.joinQueue('NA');
         
         this.socketManager.on('stateUpdate', this.handleStateUpdate.bind(this));
@@ -52,6 +73,7 @@ export class GameManager {
 
     private handleStateUpdate({ players, projectiles }: { players: PlayerState[], projectiles: ProjectileState[] }): void {
         this.enemyPlayerStates = players.filter(player => player.id !== this.selfId);
+        console.log(`Number projectiles active: ${projectiles.length}`);
         this.handleProjectileUpdates(projectiles);
         this.updateEnemyPlayers();
     }
@@ -76,6 +98,7 @@ export class GameManager {
         for (let i = this.ownProjectiles.length - 1; i >= 0; i--) {
             const projectile = this.ownProjectiles[i];
             if (!activeIds.has(projectile.getId())) {
+                console.log('destroying projectile due to stateUpdate', projectile.getId());
                 this.app.stage.removeChild(projectile);
                 projectile.destroy();
                 this.ownProjectiles.splice(i, 1);
@@ -130,7 +153,7 @@ export class GameManager {
                 this.self.y,
                 target.x,
                 target.y,
-                30,
+                5,
                 5000,
                 0.05,
                 this.app.screen.height
