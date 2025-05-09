@@ -1,104 +1,128 @@
 
-import { Application, Container } from 'pixi.js';
+import { Application } from 'pixi.js';
 import { Player } from './logic/Player';
 import { Controller } from './logic/controller';
 import { Projectile } from './logic/Projectile';
+import { SocketManager } from './network/SocketManager';
+import { EnemyPlayer } from './logic/EnemyPlayer';
+import { EnemyProjectile } from './logic/EnemyProjectile';
 
-
-// Example loading screen
-
-
-
-    // Test For Hit
-    // A basic AABB check between two different squares
-const testForAABB = (object1: Container, object2: Container) => {
-  const bounds1 = object1.getBounds();
-  const bounds2 = object2.getBounds();
-
-  return (
-      bounds1.x < bounds2.x + bounds2.width
-      && bounds1.x + bounds1.width > bounds2.x
-      && bounds1.y < bounds2.y + bounds2.height
-      && bounds1.y + bounds1.height > bounds2.y
-  );
+type PlayerState = {
+  id: string;
+  x: number;
+  y: number;
+  hp: number;
 }
 
-(async () => {
+type ProjectileState = {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  ownerId: string;
+};
 
+
+
+
+(async () => {
   const app = new Application();
   await app.init({ background: '#202020', resizeTo: window })
   document.body.appendChild(app.canvas);
 
   const controller = new Controller();
   const projectiles: Projectile[] = [];
-  const players: Player[] = [];
+  let enemyPlayerStates: PlayerState[] = [];
+  let enemyGraphics: Map<string, EnemyPlayer> = new Map();
 
-  const player = new Player(app.screen.height);
-  player.x = 400;
-  player.y = 300;
-  app.stage.addChild(player);
+  let enemyProjectileStates: ProjectileState[] = [];
+  let enemyProjectileGraphics: Map<string, EnemyProjectile> = new Map();
 
-  // Spawn in a target
-  const target = new Player(app.screen.height);
-  target.x = 200;
-  target.y = 300;
-  app.stage.addChild(target);
+  const self = new Player(app.screen.height);
+  self.x = 400;
+  self.y = 300;
+  app.stage.addChild(self);
 
-  players.push(target);
-  
-  
+  const socketManager = new SocketManager('http://localhost:3000');
+  await socketManager.waitForConnect();
+  const selfId = socketManager.getId();
+  socketManager.joinQueue('NA');
 
-  
-
+  socketManager.on('stateUpdate', ({ players, projectiles }) => {
+    // Filter out self and save enemies for renderingaa
+    enemyPlayerStates = players.filter((player: PlayerState) => player.id !== selfId);
+    for ( const projectile of projectiles) {
+      if (!enemyProjectileGraphics.has(projectile.id) && projectile.ownerId !== selfId) {
+        const graphic = new EnemyProjectile(projectile.x, projectile.y, projectile.vx, projectile.vy);
+        app.stage.addChild(graphic);
+        enemyProjectileGraphics.set(projectile.id, graphic);
+        continue;
+      } 
+      const graphic = enemyProjectileGraphics.get(projectile.id);
+      if (graphic) {
+        //graphic.sync(projectile.x, projectile.y, projectile.vx, projectile.vy);
+      }
+    }
+  });
 
 
   app.ticker.add(() => {
-    player.update(controller);
+    self.update(controller);
 
-  
-
-
+    // Handle player shooting
     if (controller.mouse.justReleased) {
       // Spawn a projectile and add it to our array of projectiles
       controller.mouse.justReleased = false;
-      const projectile = new Projectile(player.x, player.y, controller.mouse.xR ?? 0, controller.mouse.yR ?? 0, 12, 5000, 0.05);
+      const target = { x: controller.mouse.xR ?? 0 , y: controller.mouse.yR ?? 0 }
+      const projectile = new Projectile(self.x, self.y, target.x, target.y, 12, 5000, 0.05, app.screen.height);
       app.stage.addChild(projectile);
       projectiles.push(projectile);
+      // Emit the shoot event to inform the server
+      socketManager.emit('shoot', target);
     }
 
 
 
-    // update all projectiles
+    // update owned projectiles
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const projectile = projectiles[i];
       projectile.update();
-
       if (projectile.shouldBeDestroyed) {
         projectiles.splice(i, 1);
         projectile.destroy();
         continue;
       } 
-
-      for (const player of players) {
-        if (testForAABB(projectile, player)) {
-          projectiles.splice(i, 1);
-          projectile.destroy();
-          player.damage();
-          
-        }
-      }
-
-
-
-
     }
+
+    // Iterate through the enemy player state data and
+    // 1. If a graphic for the enemy does not exist, create it
+    // 2. If a graphic for the enemy already exists, update its position
+    for ( const enemyPlayer of enemyPlayerStates) {
+      if (!enemyGraphics.has(enemyPlayer.id)) {
+        const graphic = new EnemyPlayer(enemyPlayer.x, enemyPlayer.y)
+        app.stage.addChild(graphic);
+        enemyGraphics.set(enemyPlayer.id, graphic);
+      } else {
+        const enemyGraphic = enemyGraphics.get(enemyPlayer.id);
+        enemyGraphic?.syncPosition(enemyPlayer.x, enemyPlayer.y);
+      }
+    }
+
+    // Update all enemy projectiles
+    for (const graphic of enemyProjectileGraphics.values()) {
+      graphic.update(); // this.x += this.vx; this.y += this.vy
+    }
+
+    // Send the server informationa bout the players current location
+    socketManager.emit('playerInput', { x: self.x, y: self.y });
+
+    // TODO: Iterate through the enemy graphics array to find any graphics that do not have a corresponding
+    // object in the enemy player state array. These are players who are no longer in the game. Their graphics 
+    // should be cleaned up.
+
+  
   });
-
-
-
-
-
-
 })();
 
 

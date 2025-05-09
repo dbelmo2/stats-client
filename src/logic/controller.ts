@@ -85,11 +85,6 @@ export class Controller {
       state.timestamp = now;
     }
   }
-
-
-
-  // Refactor these two functions into one that takes a callback for whent the mouse is released and then cleans up state after???
-
   
 
   private mouseDownHandler(_: MouseEvent): void {

@@ -7,6 +7,7 @@ export class Projectile extends Container {
   protected vy: number = 0;
   protected body: Graphics;
   protected gravityEffect: number;
+  protected screenHeight: number;
   public shouldBeDestroyed = false;
 
   protected calculateVelocity(spawnX: number, spawnY: number, targetX: number, targetY: number): void {
@@ -21,7 +22,7 @@ export class Projectile extends Container {
   }
 
 
-  constructor(spawnX: number, spawnY: number, targetX: number, targetY: number, speed = 5, lifespan = 2000, gravityEffect = 0.005) {
+  constructor(spawnX: number, spawnY: number, targetX: number, targetY: number, speed = 5, lifespan = 2000, gravityEffect = 0.005, screenHeight: number) {
     super();
 
     this.body = new Graphics().circle(0, 0, 5).fill('#ffffff');
@@ -33,6 +34,7 @@ export class Projectile extends Container {
     this.speed = speed;
     this.lifespan = lifespan;
     this.gravityEffect = gravityEffect;
+    this.screenHeight = screenHeight;
 
     // Calculate direction vector
     this.calculateVelocity(spawnX, spawnY, targetX, targetY);
@@ -46,10 +48,12 @@ export class Projectile extends Container {
     this.vy += this.gravityEffect;
     this.x += this.vx;
     this.y += this.vy;
+    if (this.y > this.screenHeight + 100) {
+      this.shouldBeDestroyed = true;
+    }
   }
 
   destroy() {
-    console.log('destroy called');
     // Remove the projectile from its parent container
     if (this.parent) {
         this.parent.removeChild(this);

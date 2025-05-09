@@ -67,7 +67,6 @@ export class Player extends Container {
   }
 
   damage() {
-    console.log('damaging player');
 
     // Redraw the shape with red fill
     this.body.clear();
