@@ -1,6 +1,6 @@
 import { Application } from 'pixi.js';
 import { Player } from '../logic/Player';
-import { Controller } from '../logic/controller';
+import { Controller } from '../logic/Controller';
 import { SocketManager } from '../network/SocketManager';
 import { EnemyPlayer } from '../logic/EnemyPlayer';
 import { Projectile } from '../logic/Projectile';
@@ -11,6 +11,7 @@ import { testForAABB } from '../logic/collision';
 const PROJECTILE_SPEED = 5;
 const PROJECTILE_LIFESPAN = 2000;
 const PROJECTILE_GRAVITY = 0.05;
+
 
 type PlayerState = {
   id: string;
@@ -35,11 +36,14 @@ export class GameManager {
     private controller: Controller;
     private self: Player;
     private selfId: string = '';
-    
     private ownProjectiles: Projectile[] = [];
     private enemyPlayerStates: PlayerState[] = [];
     private enemyGraphics: Map<string, EnemyPlayer> = new Map();
     private enemyProjectileGraphics: Map<string, EnemyProjectile> = new Map();
+
+    private pendingCollisions: Map<string, { projectileId: string, timestamp: number }> = new Map();
+    private readonly COLLISION_TIMEOUT = 1000; // ms to wait before considering server missed collision
+
 
     private constructor(app: Application) {
         this.app = app;
@@ -77,7 +81,9 @@ export class GameManager {
 
     private handleStateUpdate({ players, projectiles }: { players: PlayerState[], projectiles: ProjectileState[] }): void {
         this.enemyPlayerStates = players.filter(player => player.id !== this.selfId);
+        const selfData = players.find(player => player.id === this.selfId);
         console.log(`Number projectiles active: ${projectiles.length}`);
+        this.handleSelfUpdate(selfData);
         this.handleProjectileUpdates(projectiles);
         this.updateEnemyPlayers();
     }
@@ -130,17 +136,68 @@ export class GameManager {
     }
 
     private updateEnemyPlayers(): void {
+        const now = Date.now();
+        // Clean up stale collision predictions
+        for (const [enemyId, collision] of this.pendingCollisions.entries()) {
+            if (now - collision.timestamp > this.COLLISION_TIMEOUT) {
+                this.pendingCollisions.delete(enemyId);
+            }
+        }
         for (const enemyPlayer of this.enemyPlayerStates) {
             if (!this.enemyGraphics.has(enemyPlayer.id)) {
-                const graphic = new EnemyPlayer(enemyPlayer.x, enemyPlayer.y);
+                const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.x, enemyPlayer.y);
                 this.app.stage.addChild(graphic);
                 this.enemyGraphics.set(enemyPlayer.id, graphic);
             } else {
                 const graphic = this.enemyGraphics.get(enemyPlayer.id);
+                if (!graphic) continue;
+                    
+                // Only update health if we don't have a pending collision
+                const pendingCollision = this.pendingCollisions.get(enemyPlayer.id);
+                if (!pendingCollision) {
+                    graphic.revertPrediction
+                    graphic.setHealth(enemyPlayer.hp);
+                }
+
+                // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
+                // than our prediction, collision was confirmed
+                if (enemyPlayer.hp <= graphic.getPredictedHealth()) {
+                    this.pendingCollisions.delete(enemyPlayer.id);
+                    graphic.setHealth(enemyPlayer.hp);
+                }
+
                 graphic?.syncPosition(enemyPlayer.x, enemyPlayer.y);
-                graphic?.setHealth(enemyPlayer.hp);
             }
         }
+
+        // Remove stale enemy players
+        for (const [id, graphic] of this.enemyGraphics.entries()) {
+            if (!this.enemyPlayerStates.some(player => player.id === id)) {
+                this.app.stage.removeChild(graphic);
+                graphic.destroy();
+                this.enemyGraphics.delete(id);
+            }
+        }
+    }
+
+    private handleSelfUpdate(selfData: PlayerState | undefined): void {
+        if (!selfData) {
+
+            // were dead?
+            return;
+        }
+        this.self.setHealth(selfData.hp);
+        //this.self.syncPosition(selfData.x, selfData.y);
+        // Check for collisions with enemy projectiles
+        /*
+        for (const [enemyId, collision] of this.pendingCollisions.entries()) {
+            if (collision.projectileId === selfData.id) {
+                this.self.damage();
+                this.pendingCollisions.delete(enemyId);
+                break; // Exit collision check loop once hit is found
+            }
+        }
+        */
     }
 
     private setupGameLoop(): void {
@@ -187,7 +244,15 @@ export class GameManager {
         // Check for collisions with enemy players
         for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
             if (testForAABB(projectile, enemyGraphic)) {
-                // Apply predicted damage (the server will confirm or correct this)
+                // Record collision prediction
+                // This is required so we can reject stateUpdates that likely haven't computed
+                // the collision yet due to network latency
+                this.pendingCollisions.set(enemyId, {
+                    projectileId: projectile.getId(),
+                    timestamp: Date.now()
+                });
+
+                // Apply predicted damage (the server will confirm or correct this after a timeout)
                 enemyGraphic.damage();
 
                 // Mark projectile for cleanup

@@ -1,15 +1,19 @@
 import { Graphics, Container } from 'pixi.js';
 
 export class EnemyPlayer extends Container {
+  private id: string;
   private body: Graphics;
   private healthBar: Graphics;
   private maxHealth: number = 100;
-  private currentHealth: number = 100;
+  private serverHealth: number = 100;
+  private predictedHealth: number = 100;
   private readonly HEALTH_BAR_WIDTH = 50;
   private readonly HEALTH_BAR_HEIGHT = 5;
 
-  constructor(spawnX: number, spawnY: number) {
+  constructor(id: string, spawnX: number, spawnY: number) {
     super();
+
+    this.id = id;
 
     // Create main body
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0xff9900);
@@ -36,7 +40,7 @@ export class EnemyPlayer extends Container {
 
   private updateHealthBar(): void {
     this.healthBar.clear();
-    const healthPercentage = this.currentHealth / this.maxHealth;
+    const healthPercentage = this.predictedHealth / this.maxHealth;
     const barWidth = this.HEALTH_BAR_WIDTH * healthPercentage;
     
     // Health bar colors based on remaining health
@@ -49,18 +53,37 @@ export class EnemyPlayer extends Container {
       .fill(color);
   }
 
+  public revertPrediction(): void {
+      // Revert to server-authoritative health
+      this.predictedHealth = this.serverHealth;
+      this.updateHealthBar();
+  }
+
   syncPosition(x: number, y: number) {
     this.x = x;
     this.y = y;
   }
 
-  setHealth(health: number): void {
-    this.currentHealth = Math.max(0, Math.min(health, this.maxHealth));
-    this.updateHealthBar();
+  setHealth(updatedServerHealth: number): void {
+      this.serverHealth = updatedServerHealth;
+      // Only lower predicted health if server health is lower
+      // NOTE: this will likely break if health regen is introduced
+      if (updatedServerHealth < this.predictedHealth) {
+          this.predictedHealth = updatedServerHealth;
+      }
+      this.updateHealthBar();
+  }
+
+  getServerHealth(): number {
+    return this.serverHealth;
+  }
+
+  getPredictedHealth(): number {
+    return this.predictedHealth;
   }
 
   damage(amount: number = 10) {
-    this.currentHealth = Math.max(0, this.currentHealth - amount);
+    this.predictedHealth = Math.max(0, this.predictedHealth - amount);
     this.updateHealthBar();
 
     // Flash effect
@@ -72,4 +95,9 @@ export class EnemyPlayer extends Container {
       this.body.rect(0, 0, 50, 50).fill(0xff9900);
     }, 100);
   }
+
+  getId(): string {
+    return this.id;
+  }
+  
 }
