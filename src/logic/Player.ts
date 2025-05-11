@@ -14,7 +14,7 @@ export class Player extends Container {
   private predictedHealth: number = 100;
   private readonly HEALTH_BAR_WIDTH = 50;
   private readonly HEALTH_BAR_HEIGHT = 5;
-
+  private damageFlashTimeout?: NodeJS.Timeout;
 
   private body: Graphics;
 
@@ -85,18 +85,18 @@ export class Player extends Container {
   }
 
     private updateHealthBar(): void {
-    this.healthBar.clear();
-    const healthPercentage = this.predictedHealth / this.maxHealth;
-    const barWidth = this.HEALTH_BAR_WIDTH * healthPercentage;
-    
-    // Health bar colors based on remaining health
-    let color = 0x00ff00; // Green
-    if (healthPercentage < 0.6) color = 0xffff00; // Yellow
-    if (healthPercentage < 0.3) color = 0xff0000; // Red
+      this.healthBar.clear();
+      const healthPercentage = this.predictedHealth / this.maxHealth;
+      const barWidth = this.HEALTH_BAR_WIDTH * healthPercentage;
+      
+      // Health bar colors based on remaining health
+      let color = 0x00ff00; // Green
+      if (healthPercentage < 0.6) color = 0xffff00; // Yellow
+      if (healthPercentage < 0.3) color = 0xff0000; // Red
 
-    this.healthBar
-      .rect(0, -15, barWidth, this.HEALTH_BAR_HEIGHT)
-      .fill(color);
+      this.healthBar
+        .rect(0, -15, barWidth, this.HEALTH_BAR_HEIGHT)
+        .fill(color);
   }
 
   public revertPrediction(): void {
@@ -114,6 +114,7 @@ export class Player extends Container {
       this.serverHealth = updatedServerHealth;
       // Only lower predicted health if server health is lower
       // NOTE: this will likely break if health regen is introduced
+  
       if (updatedServerHealth < this.predictedHealth) {
           this.predictedHealth = updatedServerHealth;
       }
@@ -129,6 +130,7 @@ export class Player extends Container {
   }
 
   damage(amount: number = 10) {
+    console.log(`Damaging player with predicted health: ${this.predictedHealth}. Doing ${amount} damage.`); 
     this.predictedHealth = Math.max(0, this.predictedHealth - amount);
     this.updateHealthBar();
 
@@ -136,10 +138,28 @@ export class Player extends Container {
     this.body.clear();
     this.body.rect(0, 0, 50, 50).fill(0xff0000);
 
-    setTimeout(() => {
-      this.body.clear();
-      this.body.rect(0, 0, 50, 50).fill(0xff9900);
+
+    this.damageFlashTimeout = setTimeout(() => {
+        this.body.clear();
+        this.body.rect(0, 0, 50, 50).fill(0x228B22);
     }, 100);
   }
+
+    destroy(): void {
+      // Clear any pending timeouts
+      if (this.damageFlashTimeout) {
+          clearTimeout(this.damageFlashTimeout);
+      }
+
+      // Clean up graphics
+      this.body.destroy();
+      this.healthBar.destroy();
+
+      // Call parent destroy method
+      super.destroy({
+          children: true,
+          texture: true
+      });
+    }
 
 }

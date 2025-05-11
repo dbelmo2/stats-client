@@ -46,6 +46,11 @@ export class SocketManager {
   disconnect() {
     this.socket.disconnect();
   }
+
+  once(event: string, callback: (...args: any[]) => void) {
+    this.socket.once(event, callback);
+  }
+
   public getId() {
     console.log('returning this.socket.id', this.socket.id);
     return this.socket.id;

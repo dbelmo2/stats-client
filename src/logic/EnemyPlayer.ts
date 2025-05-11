@@ -9,6 +9,8 @@ export class EnemyPlayer extends Container {
   private predictedHealth: number = 100;
   private readonly HEALTH_BAR_WIDTH = 50;
   private readonly HEALTH_BAR_HEIGHT = 5;
+  private damageFlashTimeout?: NodeJS.Timeout;
+
 
   constructor(id: string, spawnX: number, spawnY: number) {
     super();
@@ -90,7 +92,7 @@ export class EnemyPlayer extends Container {
     this.body.clear();
     this.body.rect(0, 0, 50, 50).fill(0xff0000);
 
-    setTimeout(() => {
+    this.damageFlashTimeout = setTimeout(() => {
       this.body.clear();
       this.body.rect(0, 0, 50, 50).fill(0xff9900);
     }, 100);
@@ -100,4 +102,21 @@ export class EnemyPlayer extends Container {
     return this.id;
   }
   
+  destroy(): void {
+    // Clear any pending timeouts
+    if (this.damageFlashTimeout) {
+        clearTimeout(this.damageFlashTimeout);
+    }
+
+    // Clean up graphics
+    this.body.destroy();
+    this.healthBar.destroy();
+
+    // Call parent destroy method
+    super.destroy({
+        children: true,
+        texture: true
+    });
+  }
+
 }
