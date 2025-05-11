@@ -15,6 +15,8 @@ export class Player extends Container {
   private readonly HEALTH_BAR_WIDTH = 50;
   private readonly HEALTH_BAR_HEIGHT = 5;
   private damageFlashTimeout?: NodeJS.Timeout;
+  private healthBarContainer: Container;
+
 
   private body: Graphics;
 
@@ -28,23 +30,27 @@ export class Player extends Container {
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.addChild(this.body);
 
+    // Create separate container for UI elements
+    this.healthBarContainer = new Container();
+    this.addChild(this.healthBarContainer);
+
     // Create health bar background
     const healthBarBg = new Graphics()
       .rect(0, -15, this.HEALTH_BAR_WIDTH, this.HEALTH_BAR_HEIGHT)
       .fill(0x333333);
-    this.addChild(healthBarBg);
+    this.healthBarContainer.addChild(healthBarBg);
 
     // Create health bar
     this.healthBar = new Graphics();
     this.updateHealthBar();
-    this.addChild(this.healthBar);
+    this.healthBarContainer.addChild(this.healthBar);
 
     // Set pivot to bottom center for better physics alignment
     this.pivot.set(25, 50); // half width, full height
 
     // Start on the floor
     this.x = 100;
-    this.y = this.FLOOR_Y;
+    this.y = 100; // TODO: Might need to adjust this when finalizing player spawning positions.
   }
 
   update(controller: Controller) {
@@ -145,21 +151,27 @@ export class Player extends Container {
     }, 100);
   }
 
-    destroy(): void {
-      // Clear any pending timeouts
-      if (this.damageFlashTimeout) {
-          clearTimeout(this.damageFlashTimeout);
-      }
-
-      // Clean up graphics
-      this.body.destroy();
-      this.healthBar.destroy();
-
-      // Call parent destroy method
-      super.destroy({
-          children: true,
-          texture: true
-      });
+  destroy(): void {
+    // Clear any pending timeouts
+    if (this.damageFlashTimeout) {
+        clearTimeout(this.damageFlashTimeout);
     }
+
+    // Clean up graphics
+    this.body.destroy();
+    this.healthBar.destroy();
+    this.healthBarContainer.destroy();
+
+
+    // Call parent destroy method
+    super.destroy({
+        children: true,
+        texture: true
+    });
+  }
+
+  getBounds() {
+    return this.body.getBounds();
+  }
 
 }

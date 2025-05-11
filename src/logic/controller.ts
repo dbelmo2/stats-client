@@ -87,13 +87,17 @@ export class Controller {
   }
   
 
+  
   private mouseDownHandler(_: MouseEvent): void {
+    // Check if it's a left click (main button)
+    if (_.button !== 0) return;
     this.mouse.pressed = true;
     this.mouse.x = _.clientX;
     this.mouse.y = _.clientY;
   }
 
   private mouseUpHandler(_: MouseEvent): void {
+    if (_.button !== 0) return;
     this.mouse.pressed = false;
     this.mouse.justReleased = true;
     this.mouse.xR = _.clientX;

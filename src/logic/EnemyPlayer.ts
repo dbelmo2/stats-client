@@ -10,6 +10,8 @@ export class EnemyPlayer extends Container {
   private readonly HEALTH_BAR_WIDTH = 50;
   private readonly HEALTH_BAR_HEIGHT = 5;
   private damageFlashTimeout?: NodeJS.Timeout;
+  private healthBarContainer: Container;
+
 
 
   constructor(id: string, spawnX: number, spawnY: number) {
@@ -21,16 +23,20 @@ export class EnemyPlayer extends Container {
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0xff9900);
     this.addChild(this.body);
 
+    // Create separate container for UI elements
+    this.healthBarContainer = new Container();
+    this.addChild(this.healthBarContainer);
+
     // Create health bar background
     const healthBarBg = new Graphics()
       .rect(0, -15, this.HEALTH_BAR_WIDTH, this.HEALTH_BAR_HEIGHT)
       .fill(0x333333);
-    this.addChild(healthBarBg);
+    this.healthBarContainer.addChild(healthBarBg);
 
     // Create health bar
     this.healthBar = new Graphics();
     this.updateHealthBar();
-    this.addChild(this.healthBar);
+    this.healthBarContainer.addChild(this.healthBar);
 
     // Set pivot to bottom center
     this.pivot.set(25, 50);
@@ -101,6 +107,11 @@ export class EnemyPlayer extends Container {
   getId(): string {
     return this.id;
   }
+
+  getBounds() {
+      // Only return bounds of the body
+      return this.body.getBounds();
+  }
   
   destroy(): void {
     // Clear any pending timeouts
@@ -111,6 +122,7 @@ export class EnemyPlayer extends Container {
     // Clean up graphics
     this.body.destroy();
     this.healthBar.destroy();
+    this.healthBarContainer.destroy();
 
     // Call parent destroy method
     super.destroy({
@@ -118,5 +130,6 @@ export class EnemyPlayer extends Container {
         texture: true
     });
   }
+  
 
 }

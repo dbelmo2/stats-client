@@ -21,8 +21,8 @@ export class SocketManager {
       console.log(`[SocketManager] Queued in region: ${region}`);
     });
 
-    this.socket.on('matchStart', ({ matchId, region }) => {
-      console.log(`[SocketManager] Match started: ${matchId} in ${region}`);
+    this.socket.on('matchFound', ({ matchId, region }) => {
+      console.log(`[SocketManager] Match found: ${matchId} in ${region}`);
     });
 
     this.socket.on('movedToGlobalQueue', () => {

@@ -37,11 +37,6 @@ type PlayerScore = {
     deaths: number;
 }
 
-type GameState = {
-    players: PlayerState[];
-    projectiles: ProjectileState[];
-    scores: PlayerScore[];
-}
 
 // TODO: When a player is repeatedly hit by a projectile, the health bar rubberbands. It eventually settles down,
 // it is a bad ux. This notably does not happen when the player hits an enemy with a projectile. Pending collision logic
@@ -72,12 +67,12 @@ export class GameManager {
     private pendingCollisions: Map<string, { projectileId: string, timestamp: number }> = new Map();
     private readonly COLLISION_TIMEOUT = 2000; // ms to wait before considering server missed collision
     private totalCollisions = new Set<string>();
+    private gameActive: boolean = false;
 
     private constructor(app: Application) {
         this.app = app;
         this.controller = new Controller();
         this.socketManager = new SocketManager('http://localhost:3000');
-        this.self = new Player(app.screen.height);
         this.scoreDisplay = new ScoreDisplay();
         this.app.stage.addChild(this.scoreDisplay);
 
@@ -103,36 +98,30 @@ export class GameManager {
         if (!GameManager.instance) {
             GameManager.instance = new GameManager(app);
             await GameManager.instance.socketManager.waitForConnect();
-            await GameManager.instance.setupNetworking();
-            GameManager.instance.setupPlayer();
             GameManager.instance.setupGameLoop();
+            await GameManager.instance.setupNetworking();
+            // After the first state update, we can start the game loop
         }
         return GameManager.instance;
     }
 
-    private setupPlayer(): void {
-        if (!this.self) throw new Error('Player instance is undefined');
-        this.self.x = 100;
-        this.self.y = 100;
-        this.app.stage.addChild(this.self);
-    }
+
+    // TODO: Modify client to listen for setup event from server.. upong receiving it, emit playerReady event.
+    // Then listen to gameStart server to allow player input from controller... block until then but render the playars as soon as the first stateUpdate is received
 
     private async setupNetworking(): Promise<void> {
         const id = this.socketManager.getId();
         if (!id) throw new Error('Socket ID is undefined');
         this.selfId = id;
         
-        // Wait for queue join
-        await this.socketManager.joinQueue('NA');
-        
+        // Join the queue
+        this.socketManager.joinQueue('NA');
+
         // Set up state update handler - this is essential
+        // Upon reveiving the first state update, we will render the initial players but ignore 
+        // Player input in app ticker
         this.socketManager.on('stateUpdate', this.handleStateUpdate.bind(this));
         
-        // Wait for first state update to ensure sync
-        await new Promise<void>(resolve => {
-            this.socketManager.once('stateUpdate', () => resolve());
-        });
-
         this.socketManager.on('gameOver', (scores: PlayerScore[]) => {
             console.log('Game over, stopping game loop');
             
@@ -169,6 +158,21 @@ export class GameManager {
             
             console.log('Game over screen displayed');
         });
+
+        await new Promise<void>(resolve => {
+            this.socketManager.once('setupComplete', () => {
+                this.socketManager.emit('playerReady');
+                resolve();
+            });
+        });
+
+        await new Promise<void>(resolve => {
+            this.socketManager.once('matchStart', () => {
+                console.log('Match started, player controls enabled');
+                this.gameActive = true;
+                resolve();
+            });
+        })
     }
 
     private handleStateUpdate({ players, projectiles, scores }: { 
@@ -179,7 +183,6 @@ export class GameManager {
         this.enemyPlayerStates = players.filter(player => player.id !== this.selfId);
         const selfData = players.find(player => player.id === this.selfId);
         this.scoreDisplay.updateScores(scores, this.selfId);
-        console.log(`Latest state update, selfData: ${JSON.stringify(selfData)}`);
         this.handleSelfUpdate(selfData);
         this.handleProjectileUpdates(projectiles);
         this.updateEnemyPlayers(); // this cleans up pending collisions but is only called when stateUpdate is received
@@ -225,6 +228,7 @@ export class GameManager {
                 }
             } else if (!this.enemyProjectileGraphics.has(projectile.id) && !this.destroyedProjectiles.has(projectile.id)) {
                 // Only create new projectile if it hasn't been destroyed locally
+                console.log(`enemy player shot.. victim location when shot occured: x: ${this.self?.x}, y: ${this.self?.y}`);
                 const graphic = new EnemyProjectile(projectile.id, projectile.ownerId, projectile.x, projectile.y, projectile.vx, projectile.vy);
                 this.app.stage.addChild(graphic);
                 this.enemyProjectileGraphics.set(projectile.id, graphic);
@@ -368,7 +372,7 @@ export class GameManager {
 
     private setupGameLoop(): void {
         this.app.ticker.add(() => {
-            if (this.self) {
+            if (this.self && this.gameActive) {
                 // Only update self if it exists
                 this.self.update(this.controller);
                 this.handleShooting();
@@ -378,7 +382,6 @@ export class GameManager {
             this.cleanupDestroyedProjectiles();
             this.updateEnemyProjectiles();
             this.sendPlayerState();
-            console.log(`Total collisions:,`, this.totalCollisions);
         });
 
     }
@@ -402,6 +405,9 @@ export class GameManager {
                 PROJECTILE_GRAVITY,
                 this.app.screen.height
             );
+            console.log(`Player ${this.selfId} shot projectile at (${target.x}, ${target.y})`);
+            console.log(`Player location when shooting: (${this.self.x}, ${this.self.y})`);
+            console.log(`Projectile spawned at (${projectile.x}, ${projectile.y})`);
             target.id = projectile.getId();
             this.app.stage.addChild(projectile);
             this.ownProjectiles.push(projectile);
@@ -418,6 +424,10 @@ export class GameManager {
         // Check for collisions with enemy players
         for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
             if (testForAABB(projectile, enemyGraphic)) {
+                const bounds = enemyGraphic.getBounds();
+                console.log(`projcetile ${projectile.getId()} hit enemy...`);
+                console.log(`victim data when shot: x: ${bounds.x}, y: ${bounds.y}, width: ${bounds.width}, height: ${bounds.height}`);
+                console.log(`victim location when shot: x: ${enemyGraphic.x}, y: ${enemyGraphic.y}`);
                 // Record collision prediction
                 // This is required so we can reject stateUpdates that likely haven't computed
                 // the collision yet due to network latency
@@ -470,7 +480,7 @@ export class GameManager {
                 // Check collisions with other enemies
                 for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
                     if (enemyId !== projectile.getOwnerId() && testForAABB(projectile, enemyGraphic)) {
-                        this.destroyedProjectileIds.add(projectileId);
+                        this.destroyedProjectiles.set(projectileId, Date.now());
                         // Record collision prediction
                         this.pendingCollisions.set(enemyId, {
                             projectileId: projectileId,

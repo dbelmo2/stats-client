@@ -29,10 +29,10 @@ export class GameOverDisplay extends Container {
 
         // Winner display
         const winner = scores[0];
-        const winnerText = new Text(
-            `${winner.playerId === selfId ? 'YOU' : 'Player ' + winner.playerId} WON!\nKills: ${winner.kills}  Deaths: ${winner.deaths}`,
-            winnerStyle
-        );
+        const winnerText = new Text({
+            text: `${winner.playerId === selfId ? 'YOU' : 'Player ' + winner.playerId} WON!\nKills: ${winner.kills}  Deaths: ${winner.deaths}`,
+            style: winnerStyle
+        });
         winnerText.anchor.set(0.5);
         this.addChild(winnerText);
 
