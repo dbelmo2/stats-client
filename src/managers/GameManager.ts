@@ -9,17 +9,33 @@ import { EnemyProjectile } from '../logic/EnemyProjectile';
 import { testForAABB } from '../logic/collision';
 import { ScoreDisplay } from '../logic/ScoreDisplay';
 import { GameOverDisplay } from '../logic/GameOverDisplay';
+import { Platform } from '../logic/Platform';
+import { AmmoBox } from '../logic/objects/AmmoBox';
 
 const PROJECTILE_SPEED = 30;
 const PROJECTILE_LIFESPAN = 5000;
 const PROJECTILE_GRAVITY = 0.05;
 
+// TODO: fix issue where while the player is dead, enemy projectiles spawn
+// but do not moved
+
+// Address y mismatch based on screen height
+
+// Address projectiles remaining on screen (motionless) after match ends
+
+// After a match ends, enemy projectiles and friendly ones should continue to move
+// but should not collide with players.
+
+// Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
+// can start with low health. Once they take damage, the health bar updates to the correct value.
+// There seems to be an issue with projectiles stopping and then resuming after match ends and restarts
 
 type PlayerState = {
   id: string;
   x: number;
   y: number;
   hp: number;
+  isBystander: boolean;
 }
 
 type ProjectileState = {
@@ -49,12 +65,15 @@ type PlayerScore = {
 
 // TODO: Implement death prediciton for enemies (and self) on client (with servber confirmation)??
 
+type GamePhase = 'initializing' | 'ready' | 'active' | 'ended';
 
 export class GameManager {
     private static instance: GameManager;
     private app: Application;
     private socketManager: SocketManager;
     private controller: Controller;
+
+    // Game objects & state
     private self: Player | undefined;
     private selfId: string = '';
     private ownProjectiles: Projectile[] = [];
@@ -62,12 +81,16 @@ export class GameManager {
     private enemyGraphics: Map<string, EnemyPlayer> = new Map();
     private enemyProjectileGraphics: Map<string, EnemyProjectile> = new Map();
     private destroyedProjectiles: Map<string, number> = new Map();
+    private pendingCollisions: Map<string, { projectileId: string, timestamp: number }> = new Map();
+    private gamePhase: GamePhase = 'active';
+
+    // Map displays &d
     private scoreDisplay: ScoreDisplay;
     private gameOverDisplay: GameOverDisplay | null = null;
-    private pendingCollisions: Map<string, { projectileId: string, timestamp: number }> = new Map();
+    private ammoBox: AmmoBox;
+    //private platform: Platform;
+    
     private readonly COLLISION_TIMEOUT = 2000; // ms to wait before considering server missed collision
-    private totalCollisions = new Set<string>();
-    private gameActive: boolean = false;
 
     private constructor(app: Application) {
         this.app = app;
@@ -75,6 +98,24 @@ export class GameManager {
         this.socketManager = new SocketManager('http://localhost:3000');
         this.scoreDisplay = new ScoreDisplay();
         this.app.stage.addChild(this.scoreDisplay);
+
+        // Create platform
+        //this.platform = new Platform(300, this.app.screen.height - 600);
+        //this.app.stage.addChild(this.platform);
+
+
+        // Create ammo box at right side of screen
+        this.ammoBox = new AmmoBox(this.app.screen.width - 100, this.app.screen.height - 150);
+        this.app.stage.addChild(this.ammoBox);
+
+
+        // Add E key handler
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'e' || e.key === 'E') {
+                this.controller.resetMouse()
+                this.handleAmmoBoxInteraction();
+            }
+        });
 
         // Handle resize
         window.addEventListener('resize', () => {
@@ -84,30 +125,27 @@ export class GameManager {
     }
 
     private handleResize(): void {
-    // Update app dimensions
-    this.app.renderer.resize(window.innerWidth, window.innerHeight);
-    
-    // Update game over display position if it exists
-    if (this.gameOverDisplay) {
-        this.gameOverDisplay.x = this.app.screen.width / 2;
-        this.gameOverDisplay.y = this.app.screen.height / 3;
+        // Update app dimensions
+        this.app.renderer.resize(window.innerWidth, window.innerHeight);
+        
+        // Update game over display position if it exists
+        if (this.gameOverDisplay) {
+            this.gameOverDisplay.x = this.app.screen.width / 2;
+            this.gameOverDisplay.y = this.app.screen.height / 3;
+        }
     }
-}
 
     public static async initialize(app: Application): Promise<GameManager> {
         if (!GameManager.instance) {
             GameManager.instance = new GameManager(app);
-            await GameManager.instance.socketManager.waitForConnect();
+            GameManager.instance.setupPlayer();
             GameManager.instance.setupGameLoop();
+            await GameManager.instance.socketManager.waitForConnect();
             await GameManager.instance.setupNetworking();
             // After the first state update, we can start the game loop
         }
         return GameManager.instance;
     }
-
-
-    // TODO: Modify client to listen for setup event from server.. upong receiving it, emit playerReady event.
-    // Then listen to gameStart server to allow player input from controller... block until then but render the playars as soon as the first stateUpdate is received
 
     private async setupNetworking(): Promise<void> {
         const id = this.socketManager.getId();
@@ -123,56 +161,51 @@ export class GameManager {
         this.socketManager.on('stateUpdate', this.handleStateUpdate.bind(this));
         
         this.socketManager.on('gameOver', (scores: PlayerScore[]) => {
-            console.log('Game over, stopping game loop');
-            
-            // First, stop all updates
-            this.app.ticker.stop();
-            
-            // Store selfId before cleanup
-            const finalSelfId = this.selfId;
-            
-            // Force cleanup of all game objects
-            this.cleanupGame();
-            
-            // Clear state
-            this.enemyPlayerStates = [];
-            this.selfId = '';
-            this.totalCollisions.clear();
-            
-            // Ensure score display is removed
-            if (this.scoreDisplay) {
-                this.app.stage.removeChild(this.scoreDisplay);
-                this.scoreDisplay.destroy();
-            }
-            
-            // Create game over display with proper positioning
-            this.gameOverDisplay = new GameOverDisplay(scores, finalSelfId, this.app);
+            this.controller.resetMouse();
+            this.gamePhase = 'ended';
+            this.pendingCollisions.clear(); // ????
+            // Create and display game over screen
+            this.gameOverDisplay = new GameOverDisplay(scores, this.selfId, this.app);
             this.gameOverDisplay.x = this.app.screen.width / 2;
             this.gameOverDisplay.y = this.app.screen.height / 3;
-            
-            // Add to stage last
             this.app.stage.addChild(this.gameOverDisplay);
+
+                    
+            // Wait for next match signal
+            this.socketManager.once('matchReset', () => {
+                // Clear combat-related state
+                this.ownProjectiles = [];
+                this.enemyProjectileGraphics.clear();
+                this.pendingCollisions.clear();
+                this.destroyedProjectiles.clear();
+
+
+                // Remove game over display
+                if (this.gameOverDisplay) {
+                    this.app.stage.removeChild(this.gameOverDisplay);
+                    this.gameOverDisplay.destroy();
+                    this.gameOverDisplay = null;
+                }
+                this.gamePhase = 'active';
+            });
+    
             
             // Force a render update
-            this.app.renderer.render(this.app.stage);
+            //this.app.renderer.render(this.app.stage);
             
-            console.log('Game over screen displayed');
         });
 
-        await new Promise<void>(resolve => {
-            this.socketManager.once('setupComplete', () => {
-                this.socketManager.emit('playerReady');
-                resolve();
-            });
-        });
+        this.socketManager.on('disconnect', () => this.cleanupSession());
 
-        await new Promise<void>(resolve => {
-            this.socketManager.once('matchStart', () => {
-                console.log('Match started, player controls enabled');
-                this.gameActive = true;
-                resolve();
-            });
-        })
+    }
+
+    
+    private setupPlayer(): void {
+        this.self = new Player(this.app.screen.height);
+        // Set up platform references
+        //this.self.setPlatforms([this.platform]);
+        // Add to stage
+        this.app.stage.addChild(this.self);
     }
 
     private handleStateUpdate({ players, projectiles, scores }: { 
@@ -185,8 +218,18 @@ export class GameManager {
         this.scoreDisplay.updateScores(scores, this.selfId);
         this.handleSelfUpdate(selfData);
         this.handleProjectileUpdates(projectiles);
-        this.updateEnemyPlayers(); // this cleans up pending collisions but is only called when stateUpdate is received
+        this.updateEnemyPlayers(); // TODO: Move? this cleans up pending collisions but is only called when stateUpdate is received
     }
+
+    
+    private handleAmmoBoxInteraction(): void {
+        if (!this.self || !this.self.getIsBystander()) return;
+        // Check if player is near ammo box
+        if (testForAABB(this.self, this.ammoBox)) {
+            this.socketManager.emit('toggleBystander', false);
+        }
+    }
+
 
     private handleProjectileUpdates(projectiles: ProjectileState[]): void {
         const activeProjectileIds = new Set(projectiles.map(p => p.id));
@@ -228,7 +271,6 @@ export class GameManager {
                 }
             } else if (!this.enemyProjectileGraphics.has(projectile.id) && !this.destroyedProjectiles.has(projectile.id)) {
                 // Only create new projectile if it hasn't been destroyed locally
-                console.log(`enemy player shot.. victim location when shot occured: x: ${this.self?.x}, y: ${this.self?.y}`);
                 const graphic = new EnemyProjectile(projectile.id, projectile.ownerId, projectile.x, projectile.y, projectile.vx, projectile.vy);
                 this.app.stage.addChild(graphic);
                 this.enemyProjectileGraphics.set(projectile.id, graphic);
@@ -265,8 +307,10 @@ export class GameManager {
         }
     }
 
-    private cleanupGame(): void {
+    private cleanupSession(): void {
         // Clean up projectiles first
+        this.app.ticker.stop();
+
         for (let i = this.ownProjectiles.length - 1; i >= 0; i--) {
             const projectile = this.ownProjectiles[i];
             this.app.stage.removeChild(projectile);
@@ -297,16 +341,23 @@ export class GameManager {
         // Clear all remaining state
         this.pendingCollisions.clear();
         this.destroyedProjectiles.clear();
+
+
     }
     private updateEnemyPlayers(): void {
+        // TODO: Figure out why this isnt invoked after match ends
+
         for (const enemyPlayer of this.enemyPlayerStates) {
             if (!this.enemyGraphics.has(enemyPlayer.id)) {
-                const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.x, enemyPlayer.y);
+                // This doesn't trigger when match ends and player respawns immediately
+                console.log(`Adding new enemy player ${enemyPlayer.id} to stage`);
+                const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.x, enemyPlayer.y, enemyPlayer.isBystander);
                 this.app.stage.addChild(graphic);
                 this.enemyGraphics.set(enemyPlayer.id, graphic);
             } else {
                 const graphic = this.enemyGraphics.get(enemyPlayer.id);
                 if (!graphic) continue;
+                graphic.setIsBystander(enemyPlayer.isBystander);
                     
                 // Only update health if we don't have a pending collision
                 const pendingCollision = this.pendingCollisions.get(enemyPlayer.id);
@@ -325,9 +376,11 @@ export class GameManager {
             }
         }
 
+
         // Remove stale enemy players
         for (const [id, graphic] of this.enemyGraphics.entries()) {
             if (!this.enemyPlayerStates.some(player => player.id === id)) {
+                console.log(`Removing enemy player ${id} from stage`);
                 this.app.stage.removeChild(graphic);
                 graphic.destroy();
                 this.enemyGraphics.delete(id);
@@ -350,44 +403,56 @@ export class GameManager {
             this.self = new Player(this.app.screen.height);
             this.self.x = selfData.x;
             this.self.y = selfData.y;
+            this.self.setIsBystander(selfData.isBystander);
             this.app.stage.addChild(this.self);
         }
         if (!this.self) return;
 
-        // Only update health if we don't have a pending collision
-        const pendingCollision = this.pendingCollisions.get(this.selfId);
-        if (!pendingCollision) {
-            this.self.setHealth(selfData.hp);
-        }
         
-        // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
-        // than our prediction, collision was confirmed
-        if (selfData.hp <= this.self.getPredictedHealth()) {
-            this.pendingCollisions.delete(this.selfId);
-            this.self.setHealth(selfData.hp);
+        this.self.setIsBystander(selfData.isBystander);
+        
+        if (this.self.getIsBystander() === false && selfData.isBystander ===  false) {
+            // Only update health if we don't have a pending collision
+            const pendingCollision = this.pendingCollisions.get(this.selfId);
+            if (!pendingCollision) {
+                this.self.setHealth(selfData.hp);
+            }
+            
+            // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
+            // than our prediction, collision was confirmed
+            if (selfData.hp <= this.self.getPredictedHealth()) {
+                this.pendingCollisions.delete(this.selfId);
+                this.self.setHealth(selfData.hp);
+            }
         }
-
         this.self.syncPosition(selfData.x, selfData.y);
     }
 
     private setupGameLoop(): void {
         this.app.ticker.add(() => {
-            if (this.self && this.gameActive) {
-                // Only update self if it exists
+            
+            if (this.self) {
                 this.self.update(this.controller);
-                this.handleShooting();
+                this.sendPlayerState();
             }
+            
             this.updateOwnProjectiles();
-            this.cleanupPendingCollisions(); // Add cleanup to game loop
-            this.cleanupDestroyedProjectiles();
             this.updateEnemyProjectiles();
-            this.sendPlayerState();
-        });
 
+            if (this.gamePhase === 'active') {
+                // Only allow shooting if the game is active
+                this.handleShooting();
+
+            }
+
+            // Move cleanup code to a less frequent loop?
+            this.cleanupDestroyedProjectiles(); 
+            this.cleanupPendingCollisions(); 
+        });
     }
 
     private handleShooting(): void {
-        if (!this.self) return;
+        if (!this.self || this.self.getIsBystander() || this.gamePhase !== 'active') return;
         if (this.controller.mouse.justReleased) {
             this.controller.mouse.justReleased = false;
             const target = { 
@@ -405,9 +470,7 @@ export class GameManager {
                 PROJECTILE_GRAVITY,
                 this.app.screen.height
             );
-            console.log(`Player ${this.selfId} shot projectile at (${target.x}, ${target.y})`);
-            console.log(`Player location when shooting: (${this.self.x}, ${this.self.y})`);
-            console.log(`Projectile spawned at (${projectile.x}, ${projectile.y})`);
+
             target.id = projectile.getId();
             this.app.stage.addChild(projectile);
             this.ownProjectiles.push(projectile);
@@ -419,37 +482,33 @@ export class GameManager {
         for (let i = this.ownProjectiles.length - 1; i >= 0; i--) {
             const projectile = this.ownProjectiles[i];
             projectile.update();
+            // Check for collisions with enemy players
+            if (this.gamePhase === 'active') {
+                for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
+                    if (enemyGraphic.getIsBystander() === false && testForAABB(projectile, enemyGraphic)) {
+                        // Record collision prediction
+                        // This is required so we can reject stateUpdates that likely haven't computed
+                        // the collision yet due to network latency
+                        this.pendingCollisions.set(enemyId, {
+                            projectileId: projectile.getId(),
+                            timestamp: Date.now()
+                        });
 
+                        // Apply predicted damage (the server will confirm or correct this after a timeout)
+                        enemyGraphic.damage();
 
-        // Check for collisions with enemy players
-        for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
-            if (testForAABB(projectile, enemyGraphic)) {
-                const bounds = enemyGraphic.getBounds();
-                console.log(`projcetile ${projectile.getId()} hit enemy...`);
-                console.log(`victim data when shot: x: ${bounds.x}, y: ${bounds.y}, width: ${bounds.width}, height: ${bounds.height}`);
-                console.log(`victim location when shot: x: ${enemyGraphic.x}, y: ${enemyGraphic.y}`);
-                // Record collision prediction
-                // This is required so we can reject stateUpdates that likely haven't computed
-                // the collision yet due to network latency
-                this.totalCollisions.add(projectile.getId());
-                this.pendingCollisions.set(enemyId, {
-                    projectileId: projectile.getId(),
-                    timestamp: Date.now()
-                });
-
-                // Apply predicted damage (the server will confirm or correct this after a timeout)
-                enemyGraphic.damage();
-
-                // Mark projectile for cleanup
-                projectile.shouldBeDestroyed = true;
-                break; // Exit collision check loop once hit is found
+                        // Mark projectile for cleanup
+                        projectile.shouldBeDestroyed = true;
+                        break; // Exit collision check loop once hit is found
+                    }
+                }
             }
-        }
 
-        if (projectile.shouldBeDestroyed) {
-            this.ownProjectiles.splice(i, 1);
-            projectile.destroy();
-        }
+
+            if (projectile.shouldBeDestroyed) {
+                this.ownProjectiles.splice(i, 1);
+                projectile.destroy();
+            }
 
             
         }
@@ -458,41 +517,47 @@ export class GameManager {
     private updateEnemyProjectiles(): void {
         for (const [projectileId, projectile] of this.enemyProjectileGraphics.entries()) {
             projectile.update();
+            
+            if (this.gamePhase === 'active') {
+                // Check collision with self first
+                if (this.self && this.self.getIsBystander() === false && testForAABB(projectile, this.self)) {
+                    // Add projectile to destroyed list
+                    // to avoid respawning it on delayed stateUpdates
+                    this.destroyedProjectiles.set(projectileId, Date.now());
 
-            // Check collision with self first
-            if (this.self && testForAABB(projectile, this.self)) {
-                // Add projectile to destroyed list
-                // to avoid respawning it on delayed stateUpdates
-                this.destroyedProjectiles.set(projectileId, Date.now());
+                    // Record collision prediction
+                    this.pendingCollisions.set(this.selfId, {
+                        projectileId: projectileId,
+                        timestamp: Date.now()
+                    });
 
-                // Record collision prediction
-                this.pendingCollisions.set(this.selfId, {
-                    projectileId: projectileId,
-                    timestamp: Date.now()
-                });
+                    // Apply predicted damage to self
+                    this.self.damage();
+                    
+                    // Mark projectile for cleanup
+                    projectile.shouldBeDestroyed = true;
+                } else {
+                    // Check collisions with other enemies
+                    for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
+                        if (
+                            enemyId !== projectile.getOwnerId() 
+                            && testForAABB(projectile, enemyGraphic)
+                            && enemyGraphic.getIsBystander() === false
+                        ) {
+                            this.destroyedProjectiles.set(projectileId, Date.now());
+                            // Record collision prediction
+                            this.pendingCollisions.set(enemyId, {
+                                projectileId: projectileId,
+                                timestamp: Date.now()
+                            });
 
-                // Apply predicted damage to self
-                this.self.damage();
-                
-                // Mark projectile for cleanup
-                projectile.shouldBeDestroyed = true;
-            } else {
-                // Check collisions with other enemies
-                for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
-                    if (enemyId !== projectile.getOwnerId() && testForAABB(projectile, enemyGraphic)) {
-                        this.destroyedProjectiles.set(projectileId, Date.now());
-                        // Record collision prediction
-                        this.pendingCollisions.set(enemyId, {
-                            projectileId: projectileId,
-                            timestamp: Date.now()
-                        });
+                            // Apply predicted damage
+                            enemyGraphic.damage();
 
-                        // Apply predicted damage
-                        enemyGraphic.damage();
-
-                        // Mark projectile for cleanup
-                        projectile.shouldBeDestroyed = true;
-                        break;
+                            // Mark projectile for cleanup
+                            projectile.shouldBeDestroyed = true;
+                            break;
+                        }
                     }
                 }
             }

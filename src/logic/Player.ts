@@ -1,5 +1,6 @@
 import { Graphics, Container } from 'pixi.js';
 import { Controller } from './Controller'
+import type { Platform } from './Platform';
 
 export class Player extends Container {
   private speed = 4;
@@ -16,8 +17,8 @@ export class Player extends Container {
   private readonly HEALTH_BAR_HEIGHT = 5;
   private damageFlashTimeout?: NodeJS.Timeout;
   private healthBarContainer: Container;
-
-
+  private platforms: Platform[] = [];
+  private isBystander: boolean = true;
   private body: Graphics;
 
   private readonly FLOOR_Y: number;
@@ -53,44 +54,18 @@ export class Player extends Container {
     this.y = 100; // TODO: Might need to adjust this when finalizing player spawning positions.
   }
 
-  update(controller: Controller) {
-    // Horizontal movement
-    if (controller.keys.left.pressed) {
-      this.x -= this.speed;
-    }
-    if (controller.keys.right.pressed) {
-      this.x += this.speed;
-    }
-
-    // Jumping from ground
-    if ((controller.keys.space.pressed || controller.keys.up.pressed) && this.isOnGround) {
-      this.velocityY = -this.jumpStrength;
-      this.isOnGround = false;
-    }
-
-    // Double jump logic, utilizes doubleJump from the controller. 
-    // Might need to tweak the doubleJump time window in the controller depending on jump animation time duration. 
-    if ((controller.keys.space.doubleTap || controller.keys.up.doubleTap) && !this.isOnGround && this.canDoubleJump) {
-      this.velocityY = -this.jumpStrength;
-      this.canDoubleJump = false;
-    }
-
-
-    // Apply gravity
-    this.velocityY += this.gravity;
-    this.y += this.velocityY;
-
-    // Floor collision
-    const bottomY = this.y;
-    if (bottomY >= this.FLOOR_Y) {
-      this.y = this.FLOOR_Y;
-      this.velocityY = 0;
-      this.isOnGround = true;
-      this.canDoubleJump = true;
-    }
+  public setIsBystander(value: boolean): void {
+      this.isBystander = value;
+      // Change color based on bystander status
+      this.body.clear();
+      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : 0x228B22);
   }
 
-    private updateHealthBar(): void {
+  public getIsBystander(): boolean {
+      return this.isBystander;
+  }
+
+  private updateHealthBar(): void {
       this.healthBar.clear();
       const healthPercentage = this.predictedHealth / this.maxHealth;
       const barWidth = this.HEALTH_BAR_WIDTH * healthPercentage;
@@ -111,9 +86,78 @@ export class Player extends Container {
       this.updateHealthBar();
   }
 
+  public setPlatforms(platforms: Platform[]) {
+      this.platforms = platforms;
+  }
+
   syncPosition(x: number, y: number) {
     this.x = x;
     this.y = y;
+  }
+
+  update(controller: Controller) {
+    // Horizontal movement
+    if (controller.keys.left.pressed) {
+      this.x -= this.speed;
+    }
+    if (controller.keys.right.pressed) {
+      this.x += this.speed;
+    }
+
+    // Jumping from ground or platform
+    if ((controller.keys.space.pressed || controller.keys.up.pressed) && this.isOnGround) {
+      this.velocityY = -this.jumpStrength;
+      this.isOnGround = false;
+    }
+
+    // Double jump logic, utilizes doubleJump from the controller. 
+    // Might need to tweak the doubleJump time window in the controller depending on jump animation time duration. 
+    if ((controller.keys.space.doubleTap || controller.keys.up.doubleTap) && !this.isOnGround && this.canDoubleJump) {
+      this.velocityY = -this.jumpStrength;
+      this.canDoubleJump = false;
+    }
+
+
+    // Apply gravity
+    this.velocityY += this.gravity;
+    this.y += this.velocityY;
+
+    // Floor collision
+    const bottomY = this.y;
+    let isOnSurface = false;
+
+    if (bottomY >= this.FLOOR_Y) {
+      this.y = this.FLOOR_Y;
+      this.velocityY = 0;
+      this.isOnGround = true;
+      isOnSurface = true;
+      this.canDoubleJump = true;
+    }
+
+        // Check platform collisions
+    for (const platform of this.platforms) {
+        const platformBounds = platform.getBounds();
+        const playerBounds = this.body.getBounds();
+
+        // Only check collision if player is above platform and falling
+        if (this.velocityY > 0 && 
+            playerBounds.bottom >= platformBounds.top && 
+            playerBounds.bottom <= platformBounds.bottom &&
+            playerBounds.right > platformBounds.left && 
+            playerBounds.left < platformBounds.right) {
+            
+            this.y = platformBounds.top;
+            this.velocityY = 0;
+            isOnSurface = true;
+            break;
+        }
+    }
+
+    this.isOnGround = isOnSurface;
+    if (isOnSurface) {
+        this.canDoubleJump = true;
+    }
+
   }
 
   setHealth(updatedServerHealth: number): void {

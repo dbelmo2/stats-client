@@ -13,10 +13,6 @@ export class SocketManager {
       console.log('[SocketManager] Connected:', this.socket.id);
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('[SocketManager] Disconnected');
-    });
-
     this.socket.on('queued', ({ region }) => {
       console.log(`[SocketManager] Queued in region: ${region}`);
     });

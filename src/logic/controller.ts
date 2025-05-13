@@ -104,6 +104,15 @@ export class Controller {
     this.mouse.yR = _.clientY;
   }
 
+  public resetMouse(): void {
+    this.mouse.pressed = false;
+    this.mouse.x = undefined;
+    this.mouse.y = undefined;
+    this.mouse.justReleased = false;
+    this.mouse.xR = undefined;
+    this.mouse.yR = undefined;
+  }
+
   destroy(): void {
     window.removeEventListener('keydown', this.boundKeyDown);
     window.removeEventListener('keyup', this.boundKeyUp);

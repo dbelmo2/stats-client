@@ -11,14 +11,15 @@ export class EnemyPlayer extends Container {
   private readonly HEALTH_BAR_HEIGHT = 5;
   private damageFlashTimeout?: NodeJS.Timeout;
   private healthBarContainer: Container;
+  private isBystander: boolean;
 
 
-
-  constructor(id: string, spawnX: number, spawnY: number) {
+  constructor(id: string, spawnX: number, spawnY: number, isBystander: boolean) {
+    
     super();
 
     this.id = id;
-
+    this.isBystander = isBystander;
     // Create main body
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0xff9900);
     this.addChild(this.body);
@@ -65,6 +66,17 @@ export class EnemyPlayer extends Container {
       // Revert to server-authoritative health
       this.predictedHealth = this.serverHealth;
       this.updateHealthBar();
+  }
+
+  public setIsBystander(value: boolean): void {
+      this.isBystander = value;
+      // Change color based on bystander status
+      this.body.clear();
+      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : 0xff9900);
+  }
+  
+  public getIsBystander(): boolean {
+      return this.isBystander;
   }
 
   syncPosition(x: number, y: number) {
