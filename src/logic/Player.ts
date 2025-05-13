@@ -1,6 +1,6 @@
-import { Graphics, Container } from 'pixi.js';
+import { Graphics, Container, Text, TextStyle } from 'pixi.js';
 import { Controller } from './Controller'
-import type { Platform } from './Platform';
+import { Platform } from './Platform';
 
 export class Player extends Container {
   private speed = 4;
@@ -20,13 +20,13 @@ export class Player extends Container {
   private platforms: Platform[] = [];
   private isBystander: boolean = true;
   private body: Graphics;
+  private gameBounds: { left: number; right: number; top: number; bottom: number } | null = null;
+  private nameText: Text;
 
-  private readonly FLOOR_Y: number;
-
-  constructor(screenHeight: number, x: number, y: number) {
+  constructor(screenHeight: number, x: number, y: number, gameBounds: any, name: string) {
     super();
 
-    this.FLOOR_Y = screenHeight - 100;
+    this.gameBounds = gameBounds;
 
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.addChild(this.body);
@@ -34,6 +34,22 @@ export class Player extends Container {
     // Create separate container for UI elements
     this.healthBarContainer = new Container();
     this.addChild(this.healthBarContainer);
+
+    // Create name text
+    const nameStyle = new TextStyle({
+        fontFamily: 'Arial',
+        fontSize: 14,
+        fill: 0xFFFFFF,
+        align: 'center'
+    });
+
+
+    this.nameText = new Text({ text: name, style: nameStyle });
+    this.nameText.x = this.body.width / 2; // Center the text
+    this.nameText.anchor.set(0.5, 1); // Center horizontally, align bottom
+    this.nameText.y = -20; // Position above health bar
+    this.healthBarContainer.addChild(this.nameText);
+
 
     // Create health bar background
     const healthBarBg = new Graphics()
@@ -53,6 +69,7 @@ export class Player extends Container {
     this.x = x;
     this.y = y; 
   }
+
 
   public setIsBystander(value: boolean): void {
       this.isBystander = value;
@@ -96,12 +113,17 @@ export class Player extends Container {
   }
 
   update(controller: Controller) {
-    // Horizontal movement
+    // Update position based on input
     if (controller.keys.left.pressed) {
-      this.x -= this.speed;
+        let xPos = Math.max(this.gameBounds?.left ?? 0, this.x - this.speed);
+        console.log('xPos', xPos);
+        if (xPos <= 25) xPos = 25; // This is needed for cube sprites as their pivot is the center.
+        this.x = xPos;
     }
     if (controller.keys.right.pressed) {
-      this.x += this.speed;
+        let xPos = Math.min(this.gameBounds?.right ?? Infinity, this.x + this.speed);
+        if (xPos >= (this.gameBounds?.right ?? 0) - 25) xPos = (this.gameBounds?.right ?? 0) - 25; // This is needed for cube sprites as their pivot is the center.
+        this.x = xPos;
     }
 
     // Jumping from ground or platform
@@ -122,19 +144,29 @@ export class Player extends Container {
     this.velocityY += this.gravity;
     this.y += this.velocityY;
 
-    // Floor collision
-    const bottomY = this.y;
-    let isOnSurface = false;
+    // Check vertical bounds
+    if (this.gameBounds) {
+        // Floor collision
+        if (this.y >= this.gameBounds.bottom) {
+            this.y = this.gameBounds.bottom;
+            this.velocityY = 0;
+            this.isOnGround = true;
+            this.canDoubleJump = true; // Reset double jump when on ground
+        }
 
-    if (bottomY >= this.FLOOR_Y) {
-      this.y = this.FLOOR_Y;
-      this.velocityY = 0;
-      this.isOnGround = true;
-      isOnSurface = true;
-      this.canDoubleJump = true;
+        // Ceiling collision
+        if (this.y <= this.gameBounds.top) {
+            this.y = this.gameBounds.top;
+            this.velocityY = 0;
+        }
     }
 
-        // Check platform collisions
+
+    /*
+    // Floor collision
+    let isOnSurface = false;
+
+    // Check platform collisions
     for (const platform of this.platforms) {
         const platformBounds = platform.getBounds();
         const playerBounds = this.body.getBounds();
@@ -157,7 +189,7 @@ export class Player extends Container {
     if (isOnSurface) {
         this.canDoubleJump = true;
     }
-
+*/
   }
 
   setHealth(updatedServerHealth: number): void {
@@ -203,6 +235,7 @@ export class Player extends Container {
     // Clean up graphics
     this.body.destroy();
     this.healthBar.destroy();
+    this.nameText.destroy();
     this.healthBarContainer.destroy();
 
 

@@ -1,4 +1,4 @@
-import { Application, Container } from 'pixi.js';
+import { Application, Container, Graphics } from 'pixi.js';
 import { Player } from '../logic/Player';
 import { Controller } from '../logic/Controller';
 import { SocketManager } from '../network/SocketManager';
@@ -36,6 +36,7 @@ type PlayerState = {
   y: number;
   hp: number;
   isBystander: boolean;
+  name: string;
 }
 
 type ProjectileState = {
@@ -61,6 +62,8 @@ type PlayerScore = {
 
 // TODO: add a floor to the game world?
 
+// TODO: Fix stuttering player when moving left and right.. camera related?
+ 
 // TODO: Add powerups???
 // Ideas:
 //  Fat Love:
@@ -83,6 +86,7 @@ export class GameManager {
     private gameContainer: Container;     // Container for game objects
 
     // Game objects & state
+    private playerName: string = '';
     private self: Player | undefined;
     private selfId: string = '';
     private ownProjectiles: Projectile[] = [];
@@ -102,6 +106,13 @@ export class GameManager {
     private readonly PLAYER_SPAWN_X = 100; // X coordinate for player spawn
     private readonly PLAYER_SPAWN_Y = 100; // Y coordinate for player spawn
 
+    private readonly GAME_BOUNDS = {
+        left: 0,
+        right: this.GAME_WIDTH,
+        top: 0,
+        bottom: this.GAME_HEIGHT
+    };
+
     private constructor(app: Application) {
         this.controller = new Controller();
         this.socketManager = new SocketManager('http://localhost:3000');
@@ -111,8 +122,31 @@ export class GameManager {
         this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
         this.gameContainer = new Container();
 
+        // Create a background that extends beyond game bounds
+        const background = new Container();
+        const leftBg = new Graphics()
+            .rect(-this.GAME_WIDTH,  0, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
+            .fill(0x111111);  // Dark gray color
+        const rightBg = new Graphics()  
+            .rect(this.GAME_WIDTH, 0, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
+            .fill(0x111111);  // Dark gray color
+
+        const bottomBg = new Graphics()
+            .rect(0, this.GAME_HEIGHT, this.GAME_WIDTH * 2, 500)
+            .fill(0x111111);  // Dark gray color
+
+
+        background.addChild(bottomBg);
+        background.addChild(leftBg);
+        background.addChild(rightBg);
+        
+        // Add background first so it's behind everything
+        this.gameContainer.addChild(background);
+
+
+
         // Create ammo box at right side of screen
-        this.ammoBox = new AmmoBox(this.GAME_WIDTH - 100, this.GAME_HEIGHT - 150);
+        this.ammoBox = new AmmoBox(this.GAME_WIDTH - 100, this.GAME_HEIGHT - 50);
         this.gameContainer.addChild(this.ammoBox);
 
         this.camera.addChild(this.gameContainer);
@@ -140,26 +174,19 @@ export class GameManager {
 
     }
     
-    private centerView(): void {
-        // Center the canvas element in the window
-        const canvas = this.app.canvas as HTMLCanvasElement;
-        canvas.style.position = 'absolute';
-        canvas.style.left = '50%';
-
-        const floorOffset = Math.max(0, window.innerHeight - this.GAME_HEIGHT);
-        canvas.style.top = `${floorOffset}px`;
-        canvas.style.transform = 'translate(-50%)';
-        
-        // Prevent scrollbars
-        document.body.style.overflow = 'hidden';
-        document.body.style.margin = '0';
-        document.body.style.padding = '0';
-    }
 
 
     public static async initialize(app: Application): Promise<GameManager> {
         if (!GameManager.instance) {
             GameManager.instance = new GameManager(app);
+
+            // Get player name before proceeding
+            const name = await GameManager.instance.getPlayerName();
+            if (!name) {
+                throw new Error('Player name is required');
+            }
+            GameManager.instance.playerName = name;
+
             GameManager.instance.setupPlayer();
             GameManager.instance.setupGameLoop();
             await GameManager.instance.socketManager.waitForConnect();
@@ -169,13 +196,103 @@ export class GameManager {
         return GameManager.instance;
     }
 
+    // Add new method
+    private async getPlayerName(): Promise<string> {
+        return new Promise((resolve) => {
+            // Create modal container
+            const modalContainer = document.createElement('div');
+            modalContainer.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+            `;
+
+            // Create modal content
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background: #2c2c2c;
+                padding: 20px;
+                border-radius: 8px;
+                text-align: center;
+            `;
+
+            // Create input
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = 'Enter your name';
+            input.maxLength = 15;
+            input.style.cssText = `
+                margin: 10px;
+                padding: 8px;
+                font-size: 16px;
+                border: none;
+                border-radius: 4px;
+                background: #1c1c1c;
+                color: white;
+                outline: none;
+            `;
+
+            // Create button
+            const button = document.createElement('button');
+            button.textContent = 'Play';
+            button.style.cssText = `
+                margin: 10px;
+                padding: 8px 16px;
+                font-size: 16px;
+                border: none;
+                border-radius: 4px;
+                background: #4CAF50;
+                color: white;
+                cursor: pointer;
+            `;
+            button.disabled = true;
+
+            // Add input validation
+            input.addEventListener('input', () => {
+                const name = input.value.trim();
+                button.disabled = name.length < 3;
+            });
+
+            // Handle form submission
+            const handleSubmit = () => {
+                const name = input.value.trim();
+                if (name.length >= 3) {
+                    document.body.removeChild(modalContainer);
+                    resolve(name);
+                }
+            };
+
+            button.addEventListener('click', handleSubmit);
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleSubmit();
+            });
+
+            // Assemble and show modal
+            modal.appendChild(input);
+            modal.appendChild(button);
+            modalContainer.appendChild(modal);
+            document.body.appendChild(modalContainer);
+
+            // Focus input
+            input.focus();
+        });
+    }
+
+
     private async setupNetworking(): Promise<void> {
         const id = this.socketManager.getId();
         if (!id) throw new Error('Socket ID is undefined');
         this.selfId = id;
         
         // Join the queue
-        this.socketManager.joinQueue('NA');
+        this.socketManager.joinQueue('NA', this.playerName);
 
         // Set up state update handler - this is essential
         // Upon reveiving the first state update, we will render the initial players but ignore 
@@ -223,7 +340,14 @@ export class GameManager {
 
     
     private setupPlayer(): void {
-        this.self = new Player(this.GAME_HEIGHT, this.PLAYER_SPAWN_X, this.PLAYER_SPAWN_Y);
+        this.self = new Player(
+            this.GAME_HEIGHT, 
+            this.PLAYER_SPAWN_X, 
+            this.PLAYER_SPAWN_Y,
+            this.GAME_BOUNDS, 
+            this.playerName
+        );
+        
         // Set up platform references
         //this.self.setPlatforms([this.platform]);
         // Add to stage
@@ -373,7 +497,7 @@ export class GameManager {
             if (!this.enemyGraphics.has(enemyPlayer.id)) {
                 // This doesn't trigger when match ends and player respawns immediately
                 console.log(`Adding new enemy player ${enemyPlayer.id} to stage`);
-                const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.x, enemyPlayer.y, enemyPlayer.isBystander);
+                const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.x, enemyPlayer.y, enemyPlayer.isBystander, enemyPlayer.name);
                 this.gameContainer.addChild(graphic);
                 this.enemyGraphics.set(enemyPlayer.id, graphic);
             } else {
@@ -422,7 +546,7 @@ export class GameManager {
         if (!selfData) return;
         if (selfData && !this.self) {
             // create new self if it doesn't exist
-            this.self = new Player(this.GAME_HEIGHT, selfData.x, selfData.y);
+            this.self = new Player(this.GAME_HEIGHT, selfData.x, selfData.y, this.GAME_BOUNDS, selfData.name);
             this.self.setIsBystander(selfData.isBystander);
             this.gameContainer.addChild(this.self);
         }

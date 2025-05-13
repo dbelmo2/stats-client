@@ -1,4 +1,4 @@
-import { Graphics, Container } from 'pixi.js';
+import { Graphics, Container, TextStyle, Text } from 'pixi.js';
 
 export class EnemyPlayer extends Container {
   private id: string;
@@ -12,9 +12,10 @@ export class EnemyPlayer extends Container {
   private damageFlashTimeout?: NodeJS.Timeout;
   private healthBarContainer: Container;
   private isBystander: boolean;
+  private nameText: Text;
 
 
-  constructor(id: string, spawnX: number, spawnY: number, isBystander: boolean) {
+  constructor(id: string, spawnX: number, spawnY: number, isBystander: boolean, name: string) {
     
     super();
 
@@ -27,6 +28,21 @@ export class EnemyPlayer extends Container {
     // Create separate container for UI elements
     this.healthBarContainer = new Container();
     this.addChild(this.healthBarContainer);
+
+        // Create name text
+    const nameStyle = new TextStyle({
+        fontFamily: 'Arial',
+        fontSize: 14,
+        fill: 0xFFFFFF,
+        align: 'center'
+    });
+
+
+    this.nameText = new Text({ text: name, style: nameStyle });
+    this.nameText.x = this.body.width / 2; // Center the text
+    this.nameText.anchor.set(0.5, 1); // Center horizontally, align bottom
+    this.nameText.y = -20; // Position above health bar
+    this.healthBarContainer.addChild(this.nameText);
 
     // Create health bar background
     const healthBarBg = new Graphics()
@@ -134,6 +150,7 @@ export class EnemyPlayer extends Container {
     // Clean up graphics
     this.body.destroy();
     this.healthBar.destroy();
+    this.nameText.destroy();
     this.healthBarContainer.destroy();
 
     // Call parent destroy method
