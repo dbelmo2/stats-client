@@ -1,4 +1,4 @@
-import { Application } from 'pixi.js';
+import { Application, Container } from 'pixi.js';
 import { Player } from '../logic/Player';
 import { Controller } from '../logic/Controller';
 import { SocketManager } from '../network/SocketManager';
@@ -53,17 +53,21 @@ type PlayerScore = {
     deaths: number;
 }
 
-
-// TODO: When a player is repeatedly hit by a projectile, the health bar rubberbands. It eventually settles down,
-// it is a bad ux. This notably does not happen when the player hits an enemy with a projectile. Pending collision logic
-// needs to be added to the handleSelfUpdate method, similar to the one in updateEnemyPlayers.
-
-
-// TODO: Look into mismatch between server and client collisions. PRint total number of collisions for both client and server
-// Update: This improved after syncing start positons between server and client and waiting for the first stateUpdate 
-// before starting the game loop. However, it still happens abit in the beginning, thought less.
-
 // TODO: Implement death prediciton for enemies (and self) on client (with servber confirmation)??
+
+// TODO: Add name prompt 
+
+// TODO: Fix projectile spawn location (make dynamic based on mouse position)
+
+// TODO: add a floor to the game world?
+
+// TODO: Add powerups???
+// Ideas:
+//  Fat Love:
+// - Defense (fat love eats all projectiles)
+// - offense (fat love shoots every projectile he ate in the direction of the mouse)
+
+
 
 type GamePhase = 'initializing' | 'ready' | 'active' | 'ended';
 
@@ -72,6 +76,11 @@ export class GameManager {
     private app: Application;
     private socketManager: SocketManager;
     private controller: Controller;
+    private camera = new Container();
+
+    private readonly GAME_WIDTH = 1920;  // Fixed game width
+    private readonly GAME_HEIGHT = 1080; // Fixed game height
+    private gameContainer: Container;     // Container for game objects
 
     // Game objects & state
     private self: Player | undefined;
@@ -85,28 +94,39 @@ export class GameManager {
     private gamePhase: GamePhase = 'active';
 
     // Map displays &d
-    private scoreDisplay: ScoreDisplay;
     private gameOverDisplay: GameOverDisplay | null = null;
     private ammoBox: AmmoBox;
     //private platform: Platform;
     
     private readonly COLLISION_TIMEOUT = 2000; // ms to wait before considering server missed collision
+    private readonly PLAYER_SPAWN_X = 100; // X coordinate for player spawn
+    private readonly PLAYER_SPAWN_Y = 100; // Y coordinate for player spawn
 
     private constructor(app: Application) {
-        this.app = app;
         this.controller = new Controller();
         this.socketManager = new SocketManager('http://localhost:3000');
-        this.scoreDisplay = new ScoreDisplay();
-        this.app.stage.addChild(this.scoreDisplay);
+
+        this.app = app;
+
+        this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
+        this.gameContainer = new Container();
+
+        // Create ammo box at right side of screen
+        this.ammoBox = new AmmoBox(this.GAME_WIDTH - 100, this.GAME_HEIGHT - 150);
+        this.gameContainer.addChild(this.ammoBox);
+
+        this.camera.addChild(this.gameContainer);
+        this.app.stage.addChild(this.camera);
+
+
+
+
 
         // Create platform
         //this.platform = new Platform(300, this.app.screen.height - 600);
         //this.app.stage.addChild(this.platform);
 
 
-        // Create ammo box at right side of screen
-        this.ammoBox = new AmmoBox(this.app.screen.width - 100, this.app.screen.height - 150);
-        this.app.stage.addChild(this.ammoBox);
 
 
         // Add E key handler
@@ -117,23 +137,25 @@ export class GameManager {
             }
         });
 
-        // Handle resize
-        window.addEventListener('resize', () => {
-            this.handleResize();
-        });
 
     }
+    
+    private centerView(): void {
+        // Center the canvas element in the window
+        const canvas = this.app.canvas as HTMLCanvasElement;
+        canvas.style.position = 'absolute';
+        canvas.style.left = '50%';
 
-    private handleResize(): void {
-        // Update app dimensions
-        this.app.renderer.resize(window.innerWidth, window.innerHeight);
+        const floorOffset = Math.max(0, window.innerHeight - this.GAME_HEIGHT);
+        canvas.style.top = `${floorOffset}px`;
+        canvas.style.transform = 'translate(-50%)';
         
-        // Update game over display position if it exists
-        if (this.gameOverDisplay) {
-            this.gameOverDisplay.x = this.app.screen.width / 2;
-            this.gameOverDisplay.y = this.app.screen.height / 3;
-        }
+        // Prevent scrollbars
+        document.body.style.overflow = 'hidden';
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
     }
+
 
     public static async initialize(app: Application): Promise<GameManager> {
         if (!GameManager.instance) {
@@ -201,11 +223,11 @@ export class GameManager {
 
     
     private setupPlayer(): void {
-        this.self = new Player(this.app.screen.height);
+        this.self = new Player(this.GAME_HEIGHT, this.PLAYER_SPAWN_X, this.PLAYER_SPAWN_Y);
         // Set up platform references
         //this.self.setPlatforms([this.platform]);
         // Add to stage
-        this.app.stage.addChild(this.self);
+        this.gameContainer.addChild(this.self);
     }
 
     private handleStateUpdate({ players, projectiles, scores }: { 
@@ -215,7 +237,7 @@ export class GameManager {
     }): void {
         this.enemyPlayerStates = players.filter(player => player.id !== this.selfId);
         const selfData = players.find(player => player.id === this.selfId);
-        this.scoreDisplay.updateScores(scores, this.selfId);
+        //this.scoreDisplay.updateScores(scores, this.selfId);
         this.handleSelfUpdate(selfData);
         this.handleProjectileUpdates(projectiles);
         this.updateEnemyPlayers(); // TODO: Move? this cleans up pending collisions but is only called when stateUpdate is received
@@ -272,7 +294,7 @@ export class GameManager {
             } else if (!this.enemyProjectileGraphics.has(projectile.id) && !this.destroyedProjectiles.has(projectile.id)) {
                 // Only create new projectile if it hasn't been destroyed locally
                 const graphic = new EnemyProjectile(projectile.id, projectile.ownerId, projectile.x, projectile.y, projectile.vx, projectile.vy);
-                this.app.stage.addChild(graphic);
+                this.gameContainer.addChild(graphic);
                 this.enemyProjectileGraphics.set(projectile.id, graphic);
             }
         }
@@ -352,7 +374,7 @@ export class GameManager {
                 // This doesn't trigger when match ends and player respawns immediately
                 console.log(`Adding new enemy player ${enemyPlayer.id} to stage`);
                 const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.x, enemyPlayer.y, enemyPlayer.isBystander);
-                this.app.stage.addChild(graphic);
+                this.gameContainer.addChild(graphic);
                 this.enemyGraphics.set(enemyPlayer.id, graphic);
             } else {
                 const graphic = this.enemyGraphics.get(enemyPlayer.id);
@@ -400,11 +422,9 @@ export class GameManager {
         if (!selfData) return;
         if (selfData && !this.self) {
             // create new self if it doesn't exist
-            this.self = new Player(this.app.screen.height);
-            this.self.x = selfData.x;
-            this.self.y = selfData.y;
+            this.self = new Player(this.GAME_HEIGHT, selfData.x, selfData.y);
             this.self.setIsBystander(selfData.isBystander);
-            this.app.stage.addChild(this.self);
+            this.gameContainer.addChild(this.self);
         }
         if (!this.self) return;
 
@@ -430,9 +450,18 @@ export class GameManager {
 
     private setupGameLoop(): void {
         this.app.ticker.add(() => {
-            
             if (this.self) {
                 this.self.update(this.controller);
+                const targetX = -this.self.x + this.GAME_WIDTH / 2;
+                const targetY = (-this.self.y + this.GAME_HEIGHT / 2) + 250;
+
+                this.camera.x += (targetX - this.camera.x) * 0.1;
+                this.camera.y += (targetY - this.camera.y) * 0.1;
+                
+                // Optional: Add camera bounds to prevent seeing outside game world
+                //this.camera.x = Math.min(0, Math.max(-this.GAME_WIDTH + this.app.screen.width, targetX));
+                //this.camera.y = Math.min(0, Math.max(-this.GAME_HEIGHT + this.app.screen.height, targetY));
+                
                 this.sendPlayerState();
             }
             
@@ -455,11 +484,22 @@ export class GameManager {
         if (!this.self || this.self.getIsBystander() || this.gamePhase !== 'active') return;
         if (this.controller.mouse.justReleased) {
             this.controller.mouse.justReleased = false;
+
+            // Convert screen coordinates to world coordinates
+
+            
+            
+            console.log('Mouse coordinates:', this.controller.mouse.xR, this.controller.mouse.yR);
+            console.log('Camera coordinates:', this.camera.x, this.camera.y);
+            const worldX = (this.controller.mouse.xR ?? 0) - this.camera.x;
+            const worldY = (this.controller.mouse.yR ?? 0) - this.camera.y;
+
             const target = { 
-                x: this.controller.mouse.xR ?? 0,
-                y: this.controller.mouse.yR ?? 0,
+                x: worldX,
+                y: worldY,
                 id: ''
             };
+            console.log('Shooting at target:', target);
             const projectile = new Projectile(
                 this.self.x,
                 this.self.y,
@@ -472,7 +512,7 @@ export class GameManager {
             );
 
             target.id = projectile.getId();
-            this.app.stage.addChild(projectile);
+            this.gameContainer.addChild(projectile);
             this.ownProjectiles.push(projectile);
             this.socketManager.emit('shoot', target);
         }

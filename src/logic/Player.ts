@@ -23,7 +23,7 @@ export class Player extends Container {
 
   private readonly FLOOR_Y: number;
 
-  constructor(screenHeight: number) {
+  constructor(screenHeight: number, x: number, y: number) {
     super();
 
     this.FLOOR_Y = screenHeight - 100;
@@ -50,8 +50,8 @@ export class Player extends Container {
     this.pivot.set(25, 50); // half width, full height
 
     // Start on the floor
-    this.x = 100;
-    this.y = 100; // TODO: Might need to adjust this when finalizing player spawning positions.
+    this.x = x;
+    this.y = y; 
   }
 
   public setIsBystander(value: boolean): void {
@@ -180,7 +180,6 @@ export class Player extends Container {
   }
 
   damage(amount: number = 10) {
-    console.log(`Damaging player with predicted health: ${this.predictedHealth}. Doing ${amount} damage.`); 
     this.predictedHealth = Math.max(0, this.predictedHealth - amount);
     this.updateHealthBar();
 

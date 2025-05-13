@@ -3,7 +3,9 @@ import { GameManager } from './managers/GameManager';
 
 (async () => {
     const app = new Application();
-    await app.init({ background: '#202020', resizeTo: window });
+    await app.init({ 
+        background: '#202020'
+    });
     document.body.appendChild(app.canvas);
 
     // Initialize game manager
