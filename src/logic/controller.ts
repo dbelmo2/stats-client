@@ -66,7 +66,7 @@ export class Controller {
     const now = Date.now();
     const state = this.keys[key];
 
-    state.doubleTap = state.doubleTap || now - state.timestamp < 300;
+    state.doubleTap = state.doubleTap || now - state.timestamp < 500;
     state.pressed = true;
   }
 

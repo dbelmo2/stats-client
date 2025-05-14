@@ -2,7 +2,7 @@ import { Graphics, Container, Text, TextStyle } from 'pixi.js';
 
 export class AmmoBox extends Container {
     private body: Graphics;
-    private label: Text;
+    private boxLabel: Text;
     public readonly boxWidth = 35;
     public readonly boxHeight = 35;
 
@@ -14,8 +14,8 @@ export class AmmoBox extends Container {
             .rect(0, 0, this.boxWidth, this.boxHeight)
             .fill(0xFFD700); // Gold color
         
-        // Create label
-        const labelStyle = new TextStyle({
+        // Create boxLabel
+        const boxLabelStyle = new TextStyle({
             fontFamily: 'Arial',
             fontSize: 10,
             fontWeight: 'bold',
@@ -23,18 +23,18 @@ export class AmmoBox extends Container {
             align: 'center'
         });
 
-        this.label = new Text({
+        this.boxLabel = new Text({
             text: 'AMMO',
-            style: labelStyle
+            style: boxLabelStyle
         });
         
         // Center the text in the box
-        this.label.anchor.set(0.5);
-        this.label.x = this.boxWidth / 2;
-        this.label.y = this.boxHeight / 2;
+        this.boxLabel.anchor.set(0.5);
+        this.boxLabel.x = this.boxWidth / 2;
+        this.boxLabel.y = this.boxHeight / 2;
 
         this.addChild(this.body);
-        this.addChild(this.label);
+        this.addChild(this.boxLabel);
         
         this.x = x;
         this.y = y;
@@ -46,7 +46,7 @@ export class AmmoBox extends Container {
 
     destroy() {
         this.body.destroy();
-        this.label.destroy();
+        this.boxLabel.destroy();
         super.destroy();
     }
 }

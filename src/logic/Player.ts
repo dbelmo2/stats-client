@@ -3,7 +3,7 @@ import { Controller } from './Controller'
 import { Platform } from './Platform';
 
 export class Player extends Container {
-  private speed = 4;
+  private speed = 15;
   private jumpStrength = 15;
   private gravity = 0.6;
   private velocityY = 0;
@@ -22,6 +22,8 @@ export class Player extends Container {
   private body: Graphics;
   private gameBounds: { left: number; right: number; top: number; bottom: number } | null = null;
   private nameText: Text;
+
+  // TODO: Add max acceleration when falling 
 
   constructor(screenHeight: number, x: number, y: number, gameBounds: any, name: string) {
     super();
@@ -112,6 +114,8 @@ export class Player extends Container {
     this.y = y;
   }
 
+
+  public wasOnPlatForm = false;
   update(controller: Controller) {
     // Update position based on input
     if (controller.keys.left.pressed) {
@@ -162,34 +166,40 @@ export class Player extends Container {
     }
 
 
-    /*
+    
     // Floor collision
-    let isOnSurface = false;
+    let isOnSurface = this.isOnGround;
 
     // Check platform collisions
     for (const platform of this.platforms) {
-        const platformBounds = platform.getBounds();
-        const playerBounds = this.body.getBounds();
-
-        // Only check collision if player is above platform and falling
-        if (this.velocityY > 0 && 
-            playerBounds.bottom >= platformBounds.top && 
-            playerBounds.bottom <= platformBounds.bottom &&
-            playerBounds.right > platformBounds.left && 
-            playerBounds.left < platformBounds.right) {
-            
-            this.y = platformBounds.top;
-            this.velocityY = 0;
-            isOnSurface = true;
-            break;
-        }
+    const platformBounds = platform.getPlatformBounds();
+    const playerBounds = this.getPlayerBounds();
+    
+    // Calculate the previous position based on velocity
+    const prevBottom = playerBounds.bottom - this.velocityY;
+    
+    // Check for platform collision with tunneling prevention
+    const isGoingDown = this.velocityY > 0;
+    const wasAbovePlatform = prevBottom <= platformBounds.top;
+    const isWithinPlatformWidth = playerBounds.right > platformBounds.left && 
+    playerBounds.left < platformBounds.right;
+    const hasCollidedWithPlatform = playerBounds.bottom >= platformBounds.top;
+    
+    // Check if we're falling, were above platform last frame, and are horizontally aligned
+    if (isGoingDown && wasAbovePlatform && isWithinPlatformWidth && hasCollidedWithPlatform) {
+        this.y = platformBounds.top;
+        this.velocityY = 0;
+        isOnSurface = true;
+        this.wasOnPlatForm = true;
+        break;
+    }
     }
 
     this.isOnGround = isOnSurface;
     if (isOnSurface) {
         this.canDoubleJump = true;
     }
-*/
+
   }
 
   setHealth(updatedServerHealth: number): void {
@@ -245,6 +255,19 @@ export class Player extends Container {
         texture: true
     });
   }
+
+
+  getPlayerBounds() {
+    const localBounds = this.body.getBounds();
+    return {
+        left: this.x - this.pivot.x,
+        right: this.x - this.pivot.x + localBounds.width,
+        top: this.y - this.pivot.y,
+        bottom: this.y - this.pivot.y + localBounds.height,
+        width: localBounds.width,
+        height: localBounds.height
+    };
+}
 
   getBounds() {
     return this.body.getBounds();

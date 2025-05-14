@@ -52,17 +52,17 @@ type PlayerScore = {
     playerId: string;
     kills: number;
     deaths: number;
+    name: string;
 }
 
 // TODO: Implement death prediciton for enemies (and self) on client (with servber confirmation)??
 
-// TODO: Add name prompt 
-
 // TODO: Fix projectile spawn location (make dynamic based on mouse position)
 
-// TODO: add a floor to the game world?
+// TODO: Sync position based on server state, have server check boundaries? We can 
+// emit a forced sync if out of bounds, otherwise dont sync position
 
-// TODO: Fix stuttering player when moving left and right.. camera related?
+// TODO: Fix issue where if focus on the window is lost while the user is moving, they get stuck moving
  
 // TODO: Add powerups???
 // Ideas:
@@ -100,7 +100,7 @@ export class GameManager {
     // Map displays &d
     private gameOverDisplay: GameOverDisplay | null = null;
     private ammoBox: AmmoBox;
-    //private platform: Platform;
+    private platforms: Platform[] = [];
     
     private readonly COLLISION_TIMEOUT = 2000; // ms to wait before considering server missed collision
     private readonly PLAYER_SPAWN_X = 100; // X coordinate for player spawn
@@ -127,6 +127,9 @@ export class GameManager {
         const leftBg = new Graphics()
             .rect(-this.GAME_WIDTH,  0, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
             .fill(0x111111);  // Dark gray color
+        const leftBgTop = new Graphics()
+            .rect(-this.GAME_WIDTH,  this.GAME_HEIGHT, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
+            .fill(0x111111); //d  Dark gray color
         const rightBg = new Graphics()  
             .rect(this.GAME_WIDTH, 0, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
             .fill(0x111111);  // Dark gray color
@@ -135,13 +138,26 @@ export class GameManager {
             .rect(0, this.GAME_HEIGHT, this.GAME_WIDTH * 2, 500)
             .fill(0x111111);  // Dark gray color
 
-
+        background.addChild(leftBgTop);
         background.addChild(bottomBg);
         background.addChild(leftBg);
         background.addChild(rightBg);
         
         // Add background first so it's behind everything
         this.gameContainer.addChild(background);
+
+
+        // Create platforms
+
+
+        this.platforms.push(new Platform(250, this.GAME_HEIGHT - 250))
+        this.platforms.push(new Platform(this.GAME_WIDTH - 850, this.GAME_HEIGHT - 250))
+        this.platforms.push(new Platform(250, this.GAME_HEIGHT - 500))
+        this.platforms.push(new Platform(this.GAME_WIDTH - 850, this.GAME_HEIGHT - 500))
+
+        for (const platform of this.platforms) {
+            this.gameContainer.addChild(platform);
+        }
 
 
 
@@ -156,9 +172,6 @@ export class GameManager {
 
 
 
-        // Create platform
-        //this.platform = new Platform(300, this.app.screen.height - 600);
-        //this.app.stage.addChild(this.platform);
 
 
 
@@ -207,7 +220,7 @@ export class GameManager {
                 left: 0;
                 width: 100%;
                 height: 100%;
-                background: rgba(0, 0, 0, 0.5);
+                background: #111111;
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -349,7 +362,8 @@ export class GameManager {
         );
         
         // Set up platform references
-        //this.self.setPlatforms([this.platform]);
+        this.self.setPlatforms(this.platforms);
+
         // Add to stage
         this.gameContainer.addChild(this.self);
     }
@@ -484,6 +498,14 @@ export class GameManager {
             this.self = undefined;
         }
 
+        for (const platform of this.platforms) {
+            this.app.stage.removeChild(platform);
+            platform.destroy();
+        }
+
+        this.app.stage.removeChild(this.ammoBox);
+        this.ammoBox.destroy();
+
         // Clear all remaining state
         this.pendingCollisions.clear();
         this.destroyedProjectiles.clear();
@@ -579,8 +601,14 @@ export class GameManager {
                 const targetX = -this.self.x + this.GAME_WIDTH / 2;
                 const targetY = (-this.self.y + this.GAME_HEIGHT / 2) + 250;
 
-                this.camera.x += (targetX - this.camera.x) * 0.1;
-                this.camera.y += (targetY - this.camera.y) * 0.1;
+
+                // Lerp camera position to smooth out movement (causes stuttering)
+                //this.camera.x += (targetX - this.camera.x) * 0.1;
+                //this.camera.y += (targetY - this.camera.y) * 0.1;
+
+                // Set camera position immediately instead of lerping. This fixes the stuttering issue
+                this.camera.x = targetX;
+                this.camera.y = targetY;
                 
                 // Optional: Add camera bounds to prevent seeing outside game world
                 //this.camera.x = Math.min(0, Math.max(-this.GAME_WIDTH + this.app.screen.width, targetX));
