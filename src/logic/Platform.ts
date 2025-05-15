@@ -16,14 +16,15 @@ export class Platform extends Container {
         this.x = x;
         this.y = y;
     }
-    getPlatformBounds() {
-        return {
-            left: this.x,
-            right: this.x + this.platformWidth,
-            top: this.y,
-            bottom: this.y + this.platformHeight,
-            width: this.platformWidth,
-            height: this.platformHeight
-        };
-    }
+getPlatformBounds() {
+    // Use parent transform-aware position but compensate for camera movement
+    return {
+        left: this.x,
+        right: this.x + this.platformWidth,
+        top: this.y,
+        bottom: this.y + this.platformHeight,
+        width: this.platformWidth,
+        height: this.platformHeight
+    };
+}
 }

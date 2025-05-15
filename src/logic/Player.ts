@@ -3,7 +3,7 @@ import { Controller } from './Controller'
 import { Platform } from './Platform';
 
 export class Player extends Container {
-  private speed = 15;
+  private speed = 8;
   private jumpStrength = 15;
   private gravity = 0.6;
   private velocityY = 0;
@@ -22,10 +22,10 @@ export class Player extends Container {
   private body: Graphics;
   private gameBounds: { left: number; right: number; top: number; bottom: number } | null = null;
   private nameText: Text;
+  private maxAccelerationY: number = 9.8; // Max acceleration when moving left/right
 
-  // TODO: Add max acceleration when falling 
 
-  constructor(screenHeight: number, x: number, y: number, gameBounds: any, name: string) {
+  constructor(x: number, y: number, gameBounds: any, name: string) {
     super();
 
     this.gameBounds = gameBounds;
@@ -120,7 +120,6 @@ export class Player extends Container {
     // Update position based on input
     if (controller.keys.left.pressed) {
         let xPos = Math.max(this.gameBounds?.left ?? 0, this.x - this.speed);
-        console.log('xPos', xPos);
         if (xPos <= 25) xPos = 25; // This is needed for cube sprites as their pivot is the center.
         this.x = xPos;
     }
@@ -146,6 +145,7 @@ export class Player extends Container {
 
     // Apply gravity
     this.velocityY += this.gravity;
+    this.velocityY = Math.min(this.velocityY, this.maxAccelerationY); // Limit max fall speed
     this.y += this.velocityY;
 
     // Check vertical bounds
@@ -187,6 +187,7 @@ export class Player extends Container {
     
     // Check if we're falling, were above platform last frame, and are horizontally aligned
     if (isGoingDown && wasAbovePlatform && isWithinPlatformWidth && hasCollidedWithPlatform) {
+
         this.y = platformBounds.top;
         this.velocityY = 0;
         isOnSurface = true;
@@ -256,16 +257,19 @@ export class Player extends Container {
     });
   }
 
+getVelocityY() {
+    return this.velocityY;
+}
 
-  getPlayerBounds() {
-    const localBounds = this.body.getBounds();
+getPlayerBounds() {
+    // Use local coordinates that don't include camera movement
     return {
         left: this.x - this.pivot.x,
-        right: this.x - this.pivot.x + localBounds.width,
+        right: this.x - this.pivot.x + 50, // width
         top: this.y - this.pivot.y,
-        bottom: this.y - this.pivot.y + localBounds.height,
-        width: localBounds.width,
-        height: localBounds.height
+        bottom: this.y - this.pivot.y + 50, // height
+        width: 50,
+        height: 50
     };
 }
 

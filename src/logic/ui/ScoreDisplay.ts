@@ -1,0 +1,86 @@
+import { Container, Text, TextStyle } from 'pixi.js';
+
+export class ScoreDisplay extends Container {
+    private scores: Map<string, Text> = new Map();
+    private scoreContainer: Container;
+    private header: Text;
+    
+    constructor() {
+        super();
+        
+        // Create a container for the scores with fixed position relative to camera
+        this.scoreContainer = new Container();
+        this.addChild(this.scoreContainer);
+        
+        // Create header
+        const headerStyle = new TextStyle({
+            fontFamily: 'Arial',
+            fontSize: 16,
+            fontWeight: 'bold',
+            fill: '#FFFFFF',
+        });
+        
+        this.header = new Text({ text: 'PLAYERS - Free for all (10 kills)', style: headerStyle});
+        this.header.x = 10;
+        this.header.y = 10;
+        this.scoreContainer.addChild(this.header);
+        
+        // Ensure the ScoreDisplay is positioned in the top-left corner of the camera view
+        // and not affected by camera movement
+        this.position.set(0, 0);
+    }
+    
+    // Update scoreboard with new scores
+    updateScores(scores: Array<{ playerId: string, kills: number, deaths: number, name: string }>, selfId: string): void {
+        // Clear existing scores
+        for (const [_, text] of this.scores) {
+            this.scoreContainer.removeChild(text);
+            text.destroy();
+        }
+        this.scores.clear();
+        
+        // Sort scores by kills (descending)
+        const sortedScores = [...scores].sort((a, b) => b.kills - a.kills);
+        
+        let yOffset = 40; // Start below header
+        
+        for (const score of sortedScores) {
+            const isCurrentPlayer = score.playerId === selfId;
+            
+            // Style based on if it's the current player
+            const style = new TextStyle({
+                fontFamily: 'Arial',
+                fontSize: 14,
+                fill: isCurrentPlayer ? '#FFFF00' : '#FFFFFF', // Yellow for self
+                fontWeight: isCurrentPlayer ? 'bold' : 'normal',
+            });
+            
+            const text = new Text(
+                `${score.name}: ${score.kills} kills / ${score.deaths} deaths`,
+                style
+            );
+            
+            text.x = 10;
+            text.y = yOffset;
+            yOffset += 20;
+            
+            this.scoreContainer.addChild(text);
+            this.scores.set(score.playerId, text);
+        }
+    }
+    
+    // This fixes the position to always be in the top-left corner of the viewport
+    fixPosition(): void {
+        // Position is in camera space, not world space
+        this.x = 50;
+        this.y = 125;
+    }
+
+    destroy(): void {
+        for (const text of this.scores.values()) {
+            text.destroy();
+        }
+        this.scores.clear();
+        super.destroy();
+    }
+}

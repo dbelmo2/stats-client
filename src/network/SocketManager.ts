@@ -38,7 +38,7 @@ export class SocketManager {
   emit(event: string, payload?: any) {
     this.socket.emit(event, payload);
   }
-
+a 
   disconnect() {
     this.socket.disconnect();
   }

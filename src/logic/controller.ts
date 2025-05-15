@@ -27,6 +27,8 @@ export class Controller {
   };
   
 
+  private boundBlur: () => void;
+  private boundContextMenu: (event: MouseEvent) => void;
   private boundKeyDown: (event: KeyboardEvent) => void;
   private boundKeyUp: (event: KeyboardEvent) => void;
   private boundMouseDown: (event: MouseEvent) => void;
@@ -48,12 +50,16 @@ export class Controller {
     this.boundKeyUp = this.keyupHandler.bind(this);
     this.boundMouseDown = this.mouseDownHandler.bind(this);
     this.boundMouseUp = this.mouseUpHandler.bind(this);
+    this.boundBlur = this.handleBlur.bind(this);
+    this.boundContextMenu = this.contextMenuHandler.bind(this);
 
     // Register event listeners
     window.addEventListener('keydown', this.boundKeyDown);
     window.addEventListener('keyup', this.boundKeyUp);
     window.addEventListener('mousedown', this.boundMouseDown);
     window.addEventListener('mouseup', this.boundMouseUp);
+    window.addEventListener('blur', this.boundBlur);
+    window.addEventListener('contextmenu', this.boundContextMenu);
 
     // Register mouse click release event handler
     
@@ -113,10 +119,40 @@ export class Controller {
     this.mouse.yR = undefined;
   }
 
+    // Add a new method to handle window blur
+  private handleBlur(): void {
+    // Reset all key states when window loses focus
+    for (const key in this.keys) {
+      const keyName = key as keyof typeof this.keys;
+      this.keys[keyName].pressed = false;
+    }
+    
+    // Also reset mouse state
+    this.resetMouse();
+  }
+
+  
+  // Add handler for context menu (right-click)
+  private contextMenuHandler(event: MouseEvent): void {
+    // Prevent default context menu
+    event.preventDefault();
+    
+    // Reset key states (same as blur handler)
+    for (const key in this.keys) {
+      const keyName = key as keyof typeof this.keys;
+      this.keys[keyName].pressed = false;
+    }
+    
+    this.resetMouse();
+  }
+
   destroy(): void {
     window.removeEventListener('keydown', this.boundKeyDown);
     window.removeEventListener('keyup', this.boundKeyUp);
     window.removeEventListener('mousedown', this.boundMouseDown);
     window.removeEventListener('mouseup', this.boundMouseUp);
+    window.removeEventListener('blur', this.boundBlur);
+    window.removeEventListener('contextmenu', this.boundContextMenu);
+
   }
 }

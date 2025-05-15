@@ -7,28 +7,24 @@ import { Projectile } from '../logic/Projectile';
 import { EnemyProjectile } from '../logic/EnemyProjectile';
 
 import { testForAABB } from '../logic/collision';
-import { ScoreDisplay } from '../logic/ScoreDisplay';
-import { GameOverDisplay } from '../logic/GameOverDisplay';
+import { ScoreDisplay } from '../logic/ui/ScoreDisplay';
+import { GameOverDisplay } from '../logic/ui/GameOverDisplay';
 import { Platform } from '../logic/Platform';
 import { AmmoBox } from '../logic/objects/AmmoBox';
+import { KillIndicator } from '../logic/ui/KillIndicator';
 
 const PROJECTILE_SPEED = 30;
 const PROJECTILE_LIFESPAN = 5000;
 const PROJECTILE_GRAVITY = 0.05;
 
-// TODO: fix issue where while the player is dead, enemy projectiles spawn
-// but do not moved
 
-// Address y mismatch based on screen height
 
-// Address projectiles remaining on screen (motionless) after match ends
-
-// After a match ends, enemy projectiles and friendly ones should continue to move
-// but should not collide with players.
 
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
 // can start with low health. Once they take damage, the health bar updates to the correct value.
 // There seems to be an issue with projectiles stopping and then resuming after match ends and restarts
+// (serverside related)
+
 
 type PlayerState = {
   id: string;
@@ -59,11 +55,10 @@ type PlayerScore = {
 
 // TODO: Fix projectile spawn location (make dynamic based on mouse position)
 
-// TODO: Sync position based on server state, have server check boundaries? We can 
-// emit a forced sync if out of bounds, otherwise dont sync position
+// TODO: Look into having camera follow player with small width correctly. attempted but
+// faced issues with rendering friendly projectiles correctly  
 
-// TODO: Fix issue where if focus on the window is lost while the user is moving, they get stuck moving
- 
+
 // TODO: Add powerups???
 // Ideas:
 //  Fat Love:
@@ -96,6 +91,10 @@ export class GameManager {
     private destroyedProjectiles: Map<string, number> = new Map();
     private pendingCollisions: Map<string, { projectileId: string, timestamp: number }> = new Map();
     private gamePhase: GamePhase = 'active';
+    private currentScores: Map<string, number> = new Map();
+    private killIndicators: KillIndicator[] = [];
+
+    private scoreDisplay: ScoreDisplay;
 
     // Map displays &d
     private gameOverDisplay: GameOverDisplay | null = null;
@@ -147,9 +146,10 @@ export class GameManager {
         this.gameContainer.addChild(background);
 
 
+        // Create score display
+        this.scoreDisplay = new ScoreDisplay();
+
         // Create platforms
-
-
         this.platforms.push(new Platform(250, this.GAME_HEIGHT - 250))
         this.platforms.push(new Platform(this.GAME_WIDTH - 850, this.GAME_HEIGHT - 250))
         this.platforms.push(new Platform(250, this.GAME_HEIGHT - 500))
@@ -167,6 +167,7 @@ export class GameManager {
 
         this.camera.addChild(this.gameContainer);
         this.app.stage.addChild(this.camera);
+        this.app.stage.addChild(this.scoreDisplay);
 
 
 
@@ -354,7 +355,6 @@ export class GameManager {
     
     private setupPlayer(): void {
         this.self = new Player(
-            this.GAME_HEIGHT, 
             this.PLAYER_SPAWN_X, 
             this.PLAYER_SPAWN_Y,
             this.GAME_BOUNDS, 
@@ -375,12 +375,45 @@ export class GameManager {
     }): void {
         this.enemyPlayerStates = players.filter(player => player.id !== this.selfId);
         const selfData = players.find(player => player.id === this.selfId);
-        //this.scoreDisplay.updateScores(scores, this.selfId);
+        this.checkForKills(scores);
+        this.scoreDisplay.updateScores(scores, this.selfId);
         this.handleSelfUpdate(selfData);
         this.handleProjectileUpdates(projectiles);
-        this.updateEnemyPlayers(); // TODO: Move? this cleans up pending collisions but is only called when stateUpdate is received
+        this.updateEnemyPlayers(); 
+    }
+    
+    private checkForKills(scores: PlayerScore[]): void {
+        for (const score of scores) {
+            const previousKills = this.currentScores.get(score.playerId) || 0;
+            
+            // If player got a new kill
+            if (score.kills > previousKills) {
+                // Show kill indicator
+                this.showKillIndicator(score.playerId);
+            }
+            
+            // Update stored kills
+            this.currentScores.set(score.playerId, score.kills);
+        }
     }
 
+    private showKillIndicator(playerId: string): void {
+        // Show indicator above player who got the kill
+        if (playerId === this.selfId && this.self) {
+            // Player kill
+            const indicator = new KillIndicator(this.self.x, this.self.y - 50);
+            this.gameContainer.addChild(indicator);
+            this.killIndicators.push(indicator);
+        } else {
+            // Enemy kill
+            const enemyGraphic = this.enemyGraphics.get(playerId);
+            if (enemyGraphic) {
+                const indicator = new KillIndicator(enemyGraphic.x, enemyGraphic.y - 50);
+                this.gameContainer.addChild(indicator);
+                this.killIndicators.push(indicator);
+            }
+        }
+    }
     
     private handleAmmoBoxInteraction(): void {
         if (!this.self || !this.self.getIsBystander()) return;
@@ -503,6 +536,14 @@ export class GameManager {
             platform.destroy();
         }
 
+        // Clean up kill indicators
+        for (const indicator of this.killIndicators) {
+            this.gameContainer.removeChild(indicator);
+            indicator.destroy();
+        }
+        this.killIndicators = [];
+        this.currentScores.clear();
+
         this.app.stage.removeChild(this.ammoBox);
         this.ammoBox.destroy();
 
@@ -513,8 +554,6 @@ export class GameManager {
 
     }
     private updateEnemyPlayers(): void {
-        // TODO: Figure out why this isnt invoked after match ends
-
         for (const enemyPlayer of this.enemyPlayerStates) {
             if (!this.enemyGraphics.has(enemyPlayer.id)) {
                 // This doesn't trigger when match ends and player respawns immediately
@@ -568,7 +607,8 @@ export class GameManager {
         if (!selfData) return;
         if (selfData && !this.self) {
             // create new self if it doesn't exist
-            this.self = new Player(this.GAME_HEIGHT, selfData.x, selfData.y, this.GAME_BOUNDS, selfData.name);
+            this.self = new Player(selfData.x, selfData.y, this.GAME_BOUNDS, selfData.name);
+            this.self.setPlatforms(this.platforms);
             this.self.setIsBystander(selfData.isBystander);
             this.gameContainer.addChild(this.self);
         }
@@ -598,22 +638,31 @@ export class GameManager {
         this.app.ticker.add(() => {
             if (this.self) {
                 this.self.update(this.controller);
+
+
                 const targetX = -this.self.x + this.GAME_WIDTH / 2;
-                const targetY = (-this.self.y + this.GAME_HEIGHT / 2) + 250;
+                const targetY = (-this.self.y + this.GAME_HEIGHT / 2);
 
-
-                // Lerp camera position to smooth out movement (causes stuttering)
-                //this.camera.x += (targetX - this.camera.x) * 0.1;
-                //this.camera.y += (targetY - this.camera.y) * 0.1;
-
-                // Set camera position immediately instead of lerping. This fixes the stuttering issue
-                this.camera.x = targetX;
-                this.camera.y = targetY;
                 
-                // Optional: Add camera bounds to prevent seeing outside game world
-                //this.camera.x = Math.min(0, Math.max(-this.GAME_WIDTH + this.app.screen.width, targetX));
-                //this.camera.y = Math.min(0, Math.max(-this.GAME_HEIGHT + this.app.screen.height, targetY));
+                // Clamp camera position to stay within bounds + 250px buffer
+                // In order to fix issue with camera and small window width, 
+                // We need to somehow modify the 1000 value offsets here to be dynamic, based on the window width?
+                // old values were 250. 
+                // 1000 normal for 1920x1080 full screen
+                // 250, for small window width
+                // 5000 for hugeee world such as 5000x1080
+                const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
+                const maxX = this.GAME_BOUNDS.left + 5000;
+                const minY = -(this.GAME_BOUNDS.bottom + 250) + this.GAME_HEIGHT;
+                const maxY = this.GAME_BOUNDS.top + 250;
                 
+                // Apply clamping and set camera position
+                this.camera.x = Math.max(minX, Math.min(maxX, targetX));
+                this.camera.y = Math.max(minY, Math.min(maxY, targetY));
+            
+                this.scoreDisplay.fixPosition();
+
+
                 this.sendPlayerState();
             }
             
@@ -637,21 +686,36 @@ export class GameManager {
         if (this.controller.mouse.justReleased) {
             this.controller.mouse.justReleased = false;
 
-            // Convert screen coordinates to world coordinates
+            // Get the canvas element and its bounding rect
+            const canvas = this.app.canvas as HTMLCanvasElement;
+            const canvasRect = canvas.getBoundingClientRect();
+            
+            // Get mouse coordinates from the controller
+            const mouseX = this.controller.mouse.xR ?? 0;
+            const mouseY = this.controller.mouse.yR ?? 0;
+            
+            // 1. Convert mouse position to canvas-relative coordinates
+            const canvasX = mouseX - canvasRect.left;
+            const canvasY = mouseY - canvasRect.top;
+            
+            // 2. Calculate the scale ratio between the canvas display size and its internal size
+            const scaleRatioX = canvas.width / canvasRect.width;
+            const scaleRatioY = canvas.height / canvasRect.height;
+            
+            // 3. Scale the coordinates to the internal canvas coordinate system
+            const rendererX = canvasX * scaleRatioX;
+            const rendererY = canvasY * scaleRatioY;
+            
+            // 4. Convert to world coordinates by subtracting camera offset
+            const worldX = rendererX - this.camera.x;
+            const worldY = rendererY - this.camera.y;
 
-            
-            
-            console.log('Mouse coordinates:', this.controller.mouse.xR, this.controller.mouse.yR);
-            console.log('Camera coordinates:', this.camera.x, this.camera.y);
-            const worldX = (this.controller.mouse.xR ?? 0) - this.camera.x;
-            const worldY = (this.controller.mouse.yR ?? 0) - this.camera.y;
 
             const target = { 
                 x: worldX,
                 y: worldY,
                 id: ''
             };
-            console.log('Shooting at target:', target);
             const projectile = new Projectile(
                 this.self.x,
                 this.self.y,
@@ -767,7 +831,8 @@ export class GameManager {
         if (!this.self) return;
         this.socketManager.emit('playerInput', {
             x: this.self.x,
-            y: this.self.y
+            y: this.self.y,
+            vy: this.self.getVelocityY(),
         });
     }
 }
