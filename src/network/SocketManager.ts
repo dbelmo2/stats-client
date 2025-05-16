@@ -37,10 +37,10 @@ export class SocketManager {
     this.socket.on(event, callback);
   }
 
-  emit(event: string, payload?: any) {
+  emit(event: string, payload?: unknown) {
     this.socket.emit(event, payload);
   }
-a 
+
   disconnect() {
     this.socket.disconnect();
   }

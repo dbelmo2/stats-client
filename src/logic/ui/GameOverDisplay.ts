@@ -1,4 +1,4 @@
-import { Application, Container, Text, TextStyle } from 'pixi.js';
+import { Container, Text, TextStyle } from 'pixi.js';
 
 type PlayerScore = {
     playerId: string;
@@ -11,7 +11,7 @@ export class GameOverDisplay extends Container {
 
     private timerId: NodeJS.Timeout | null = null;
     
-    constructor(scores: PlayerScore[], selfId: string, app: Application) {
+    constructor(scores: PlayerScore[], selfId: string) {
         super();
 
         const winnerStyle = new TextStyle({

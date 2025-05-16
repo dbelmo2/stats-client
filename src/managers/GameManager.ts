@@ -320,7 +320,7 @@ export class GameManager {
             this.gamePhase = 'ended';
             this.pendingCollisions.clear(); // ????
             // Create and display game over screen
-            this.gameOverDisplay = new GameOverDisplay(scores, this.selfId, this.app);
+            this.gameOverDisplay = new GameOverDisplay(scores, this.selfId);
             this.gameOverDisplay.x = this.app.screen.width / 2;
             this.gameOverDisplay.y = this.app.screen.height / 3;
             this.app.stage.addChild(this.gameOverDisplay);
