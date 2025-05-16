@@ -1,6 +1,8 @@
 import { Application } from 'pixi.js';
 import { GameManager } from './managers/GameManager';
 
+console.log('Starting game...');
+
 (async () => {
     const app = new Application();
     await app.init({ 
