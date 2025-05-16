@@ -129,17 +129,29 @@ export class Player extends Container {
         this.x = xPos;
     }
 
+    const wasOnGround = this.isOnGround;
+
+
     // Jumping from ground or platform
     if ((controller.keys.space.pressed || controller.keys.up.pressed) && this.isOnGround) {
       this.velocityY = -this.jumpStrength;
       this.isOnGround = false;
+
+      // Reset double tap flags to prevent immediate double jump
+      controller.keys.space.doubleTap = false;
+      controller.keys.up.doubleTap = false;
     }
 
     // Double jump logic, utilizes doubleJump from the controller. 
     // Might need to tweak the doubleJump time window in the controller depending on jump animation time duration. 
-    if ((controller.keys.space.doubleTap || controller.keys.up.doubleTap) && !this.isOnGround && this.canDoubleJump) {
-      this.velocityY = -this.jumpStrength;
-      this.canDoubleJump = false;
+    if (!this.isOnGround && this.canDoubleJump) {
+      if (controller.keys.space.doubleTap || controller.keys.up.doubleTap) {
+        this.velocityY = -this.jumpStrength;
+        this.canDoubleJump = false;
+        // Clear double tap flags after use
+        controller.keys.space.doubleTap = false;
+        controller.keys.up.doubleTap = false;
+      }
     }
 
 
@@ -197,7 +209,7 @@ export class Player extends Container {
     }
 
     this.isOnGround = isOnSurface;
-    if (isOnSurface) {
+    if (isOnSurface && !wasOnGround) {
         this.canDoubleJump = true;
     }
 

@@ -114,7 +114,7 @@ export class GameManager {
 
     private constructor(app: Application) {
         this.controller = new Controller();
-        this.socketManager = new SocketManager('http://localhost:3000');
+        this.socketManager = new SocketManager();
 
         this.app = app;
 

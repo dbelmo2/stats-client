@@ -7,7 +7,9 @@ export class SocketManager {
   private socket: Socket;
 
   constructor(serverUrl: string) {
-    this.socket = io(serverUrl);
+    this.socket = io(serverUrl, {
+      transports: ['websocket', 'polling'] // Prefer WebSocket, fallback to polling
+  });
 
     this.socket.on('connect', () => {
       console.log('[SocketManager] Connected:', this.socket.id);
