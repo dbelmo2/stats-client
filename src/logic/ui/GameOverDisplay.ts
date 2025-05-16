@@ -72,7 +72,7 @@ export class GameOverDisplay extends Container {
                 return;
             }
             secondCount--;
-            nextRoundText.text = `Next round starting ${secondCount} seconds...`;
+            nextRoundText.text = `Next round starting in ${secondCount} seconds...`;
         }, 1000);
     }
 
