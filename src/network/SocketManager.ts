@@ -13,6 +13,13 @@ export class SocketManager {
 
     this.socket.on('connect', () => {
       console.log('[SocketManager] Connected:', this.socket.id);
+      console.log('[SocketManager] Connected:', this.socket.id);
+      console.log('[SocketManager] Transport:', this.socket.io.engine.transport.name);
+      
+      // Log when transport changes (e.g., from polling to websocket)
+      this.socket.io.engine.on('upgrade', (transport) => {
+        console.log(`[SocketManager] Transport upgraded from ${this.socket.io.engine.transport.name} to ${transport}`);
+      });
     });
 
     this.socket.on('queued', ({ region }) => {
