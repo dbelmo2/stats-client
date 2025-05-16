@@ -12,6 +12,8 @@ import { GameOverDisplay } from '../logic/ui/GameOverDisplay';
 import { Platform } from '../logic/Platform';
 import { AmmoBox } from '../logic/objects/AmmoBox';
 import { KillIndicator } from '../logic/ui/KillIndicator';
+import * as config from '../../public/config.json';
+
 
 const PROJECTILE_SPEED = 30;
 const PROJECTILE_LIFESPAN = 5000;
@@ -114,7 +116,7 @@ export class GameManager {
 
     private constructor(app: Application) {
         this.controller = new Controller();
-        this.socketManager = new SocketManager();
+        this.socketManager = new SocketManager(config.SERVER_URL ?? 'http://localhost:3000');
 
         this.app = app;
 
