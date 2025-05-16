@@ -116,8 +116,8 @@ export class GameManager {
 
     private constructor(app: Application) {
         this.controller = new Controller();
-        
-        this.socketManager = new SocketManager(config.SERVER_URL ?? 'http://localhost:3000');
+
+        this.socketManager = new SocketManager(config.SERVER_URL ?? 'https://yt-livestream-late-tracker-server.railway.internal');
 
         this.app = app;
 
