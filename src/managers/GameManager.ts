@@ -634,7 +634,7 @@ export class GameManager {
                 this.self.setHealth(selfData.hp);
             }
         }
-        this.self.syncPosition(selfData.x, selfData.y);
+       // this.self.syncPosition(selfData.x, selfData.y);
     }
 
     private setupGameLoop(): void {
