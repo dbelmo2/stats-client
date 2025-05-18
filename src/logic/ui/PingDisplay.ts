@@ -1,16 +1,21 @@
 import { Container, Text, Graphics } from 'pixi.js';
+import * as config from '../../config.json';
 
 export class PingDisplay extends Container {
-    private pingText: Text;
-    private background: Graphics;
+    private pingText: Text | undefined;
+    private background: Graphics | undefined;
+    private largestWidth: number = 1920; // make dynamic;
     
     constructor() {
         super();
-
+        if (config.DEV_MODE === false) return;
         // Create background
         this.background = new Graphics()
             .rect(0, 0, 80, 30)
-            .fill(0x000000);
+            .fill({
+                color: 0x000000,
+                alpha: 0.5
+            });
             
         this.addChild(this.background);
         
@@ -28,12 +33,14 @@ export class PingDisplay extends Container {
         this.addChild(this.pingText);
         
         // Position in top right corner (will be adjusted in fixPosition)
-        this.position.set(0, 0);
+        this.x = 50 + (this.largestWidth - window.innerWidth) / 2;
+        this.y = 250 // Right-aligned
       
     }
     
     public updatePing(ping: number): void {
-        
+        if (config.DEV_MODE === false) return;
+        if (!this.pingText) return;
         // Update text color based on ping quality
         let color = 0x00ff00; // Green for good ping
         if (ping > 100) color = 0xffff00; // Yellow for medium ping
@@ -43,16 +50,20 @@ export class PingDisplay extends Container {
         this.pingText.style.fill = color;
     }
     
-    // This fixes the position to always be in the top-left corner of the viewport
-    fixPosition(): void {
-        // Position is in camera space, not world space
-        this.x = 50;
-        this.y = 400;
+    public fixPosition(): void {
+        if (config.DEV_MODE === false) return;
+        // Position in top left corner with slight margin
+        const windowWidth = window.innerWidth;
+        const largestWidth = this.largestWidth;
+        const offset = -(windowWidth - largestWidth) / 2;
+        this.x = offset < 0 ? 50 : 50 + offset;
+        this.y = 250;
     }
     
     destroy(): void {
-        this.pingText.destroy();
-        this.background.destroy();
         super.destroy();
+        if (config.DEV_MODE === false) return;
+        if (this.pingText) this.pingText.destroy();
+        if (this.background) this.background.destroy();
     }
 }

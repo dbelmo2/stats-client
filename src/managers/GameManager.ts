@@ -14,6 +14,7 @@ import { AmmoBox } from '../logic/objects/AmmoBox';
 import { KillIndicator } from '../logic/ui/KillIndicator';
 import * as config from '../config.json';
 import { PingDisplay } from '../logic/ui/PingDisplay';
+import { FPSDisplay } from '../logic/ui/FPSDisplay';
 
 
 const PROJECTILE_SPEED = 30;
@@ -97,15 +98,15 @@ export class GameManager {
     private currentScores: Map<string, number> = new Map();
     private killIndicators: KillIndicator[] = [];
 
-    private scoreDisplay: ScoreDisplay;
 
     // Map displays &d
     private gameOverDisplay: GameOverDisplay | null = null;
     private ammoBox: AmmoBox;
     private platforms: Platform[] = [];
     private pingDisplay: PingDisplay;
+    private fpsDisplay: FPSDisplay;
+    private scoreDisplay: ScoreDisplay;
 
-    
     private readonly COLLISION_TIMEOUT = 2000; // ms to wait before considering server missed collision
     private readonly PLAYER_SPAWN_X = 100; // X coordinate for player spawn
     private readonly PLAYER_SPAWN_Y = 100; // Y coordinate for player spawn
@@ -153,7 +154,8 @@ export class GameManager {
 
         // Ping display
         this.pingDisplay = new PingDisplay();
-        
+        this.fpsDisplay = new FPSDisplay();
+
         // Create score display
         this.scoreDisplay = new ScoreDisplay();
 
@@ -177,7 +179,7 @@ export class GameManager {
         this.app.stage.addChild(this.camera);
         this.app.stage.addChild(this.scoreDisplay);
         this.app.stage.addChild(this.pingDisplay);
-
+        this.app.stage.addChild(this.fpsDisplay);
 
 
 
@@ -551,6 +553,11 @@ export class GameManager {
         this.app.stage.removeChild(this.pingDisplay);
         this.pingDisplay.destroy();
 
+        // Remove FPS display
+        this.app.stage.removeChild(this.fpsDisplay);
+        this.fpsDisplay.destroy();
+        
+
         // Clean up kill indicators
         for (const indicator of this.killIndicators) {
             this.gameContainer.removeChild(indicator);
@@ -654,13 +661,14 @@ export class GameManager {
         let pingUpdateCounter = 0;
 
         this.app.ticker.add((delta) => {
-            if (this.self) {
+            if (this.self) {        
+
+                this.fpsDisplay.update();
 
                 // Update ping display (every ~60 frames = ~1 second)
                 pingUpdateCounter += delta.deltaTime;
                 if (pingUpdateCounter >= 60) {
                     this.pingDisplay.updatePing(this.socketManager.getPing());
-                    this.pingDisplay.fixPosition();
                     pingUpdateCounter = 0;
                 }
 
@@ -687,6 +695,7 @@ export class GameManager {
                 this.camera.y = Math.max(minY, Math.min(maxY, targetY));
             
                 this.scoreDisplay.fixPosition();
+                this.fpsDisplay.fixPosition();
                 this.pingDisplay.fixPosition();
 
                 this.sendPlayerState();

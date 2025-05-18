@@ -1,9 +1,9 @@
 import { Container, Text, TextStyle } from 'pixi.js';
-
 export class ScoreDisplay extends Container {
     private scores: Map<string, Text> = new Map();
     private scoreContainer: Container;
     private header: Text;
+    private largestWidth: number = 1920; // make dynamic;
     
     constructor() {
         super();
@@ -27,9 +27,9 @@ export class ScoreDisplay extends Container {
         
         // Ensure the ScoreDisplay is positioned in the top-left corner of the camera view
         // and not affected by camera movement
-        this.position.set(0, 0);
+        this.x = 50 + (this.largestWidth - window.innerWidth) / 2;
+        this.y = 125; // Fixed position
     }
-    
     // Update scoreboard with new scores
     updateScores(scores: Array<{ playerId: string, kills: number, deaths: number, name: string }>, selfId: string): void {
         // Clear existing scores
@@ -69,13 +69,14 @@ export class ScoreDisplay extends Container {
         }
     }
     
-    // This fixes the position to always be in the top-left corner of the viewport
-    fixPosition(): void {
-        // Position is in camera space, not world space
-        this.x = 50;
+    public fixPosition(): void {
+        // Position in top left corner with slight margin
+        const windowWidth = window.innerWidth;
+        const largestWidth = this.largestWidth;
+        const offset = -(windowWidth - largestWidth) / 2;
+        this.x = offset < 0 ? 50 : 50 + offset;
         this.y = 125;
     }
-
     destroy(): void {
         for (const text of this.scores.values()) {
             text.destroy();
