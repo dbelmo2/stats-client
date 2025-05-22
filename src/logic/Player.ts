@@ -23,7 +23,6 @@ export class Player extends Container {
   private gameBounds: { left: number; right: number; top: number; bottom: number } | null = null;
   private nameText: Text;
   private maxAccelerationY: number = 9.8; // Max acceleration when moving left/right
-  private controller: Controller;
   private lastUpdateTime: number = Date.now();
   private TIME_STEP: number = 16.67; // 60 FPS
   private accumulator = 0;
@@ -33,7 +32,6 @@ export class Player extends Container {
     super();
 
     this.gameBounds = gameBounds;
-    this.controller = controller;
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.addChild(this.body);
 
@@ -296,6 +294,10 @@ export class Player extends Container {
     // Clear any pending timeouts
     if (this.damageFlashTimeout) {
         clearTimeout(this.damageFlashTimeout);
+    }
+
+    if (this.inputInterval) {
+        clearInterval(this.inputInterval);
     }
 
     // Clean up graphics
