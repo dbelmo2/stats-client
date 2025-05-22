@@ -1,4 +1,4 @@
 {
-    "SERVER_URL": "https://yt-livestream-late-tracker-server-production.up.railway.app/",
+    "SERVER_URL": "http://localhost:3000",
     "DEV_MODE": true
 }
