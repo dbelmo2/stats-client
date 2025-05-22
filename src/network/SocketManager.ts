@@ -11,10 +11,11 @@ export class SocketManager {
 
   constructor(serverUrl: string) {
     this.socket = io(serverUrl, {
-      transports: ['websocket', 'polling'], // Prefer WebSocket, fallback to polling
+      transports: ['websocket'], // Prefer WebSocket, fallback to polling
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-      timeout: 20000
+      timeout: 20000,
+      upgrade: false
     });
 
     this.setupPingMonitoring();
@@ -95,7 +96,10 @@ export class SocketManager {
   }
 
   emit(event: string, payload?: unknown) {
-    this.socket.emit(event, payload);
+    console.log(`[SocketManager] Emitting event: ${event}`, payload);
+    this.socket.emit(event, payload, () => {
+      console.log(`[SocketManager] Emitted event: ${event}`, payload);
+    });
   }
 
   disconnect() {

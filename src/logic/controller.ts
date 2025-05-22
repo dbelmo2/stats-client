@@ -33,6 +33,9 @@ export class Controller {
   private boundKeyUp: (event: KeyboardEvent) => void;
   private boundMouseDown: (event: MouseEvent) => void;
   private boundMouseUp: (event: MouseEvent) => void;
+  private customKeyHandler?: (event: KeyboardEvent) => void;
+  private customKeyUpHandler?: (event: KeyboardEvent) => void;
+  private customMouseUpHandler?: (event: MouseEvent) => void;
 
   constructor() {
     this.keys = {
@@ -65,12 +68,33 @@ export class Controller {
     
   }
 
+  public setCustomKeyDownHandler(handler: (event: KeyboardEvent) => void): void {
+    this.customKeyHandler = handler;
+  }
+  public setCustomKeyUpHandler(handler: (event: KeyboardEvent) => void): void {
+    this.customKeyUpHandler = handler;
+  }
+  public setCustomMouseUpHandler(handler: (event: MouseEvent) => void): void {
+    this.customMouseUpHandler = handler;
+  }
+
+  private downTime = 0;
+
   private keydownHandler(event: KeyboardEvent): void {
     const key = keyMap[event.code];
     if (!key) return;
 
-    const now = Date.now();
     const state = this.keys[key];
+    if (state.pressed) return; // Ignore if already pressed
+
+    // Call custom key handler if defined
+    if (this.customKeyHandler) {
+      this.customKeyHandler(event);
+    }
+
+
+    const now = Date.now();
+    this.downTime = now;
 
     state.doubleTap = state.doubleTap || now - state.timestamp < 500;
     state.pressed = true;
@@ -80,7 +104,16 @@ export class Controller {
     const key = keyMap[event.code];
     if (!key) return;
 
+    // Call custom key up handler if defined
+    if (this.customKeyUpHandler) {
+      this.customKeyUpHandler(event);
+    }
+    
+
     const now = Date.now();
+
+    const totalTime = now - this.downTime;
+    console.log(`Key ${key} was held down for ${totalTime} ms`);
     const state = this.keys[key];
 
     state.pressed = false;
@@ -104,6 +137,12 @@ export class Controller {
 
   private mouseUpHandler(_: MouseEvent): void {
     if (_.button !== 0) return;
+
+    // Call custom mouse up handler if defined
+    if (this.customMouseUpHandler) {
+      this.customMouseUpHandler(_);
+    }
+
     this.mouse.pressed = false;
     this.mouse.justReleased = true;
     this.mouse.xR = _.clientX;
@@ -127,7 +166,7 @@ export class Controller {
       this.keys[keyName].pressed = false;
     }
     
-    // Also reset mouse state
+    // Also reset mouse statea
     this.resetMouse();
   }
 

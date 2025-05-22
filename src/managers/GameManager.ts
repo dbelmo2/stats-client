@@ -24,6 +24,19 @@ const PROJECTILE_GRAVITY = 0.05;
 
 
 
+
+// Equivalent ASCII key codes for relevant keys
+const RELEVANT_KEY_CODES = new Set([
+    'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+]);
+
+// Helper function to check if a key should trigger a server update
+function isRelevantKey(key: string): boolean {
+  return RELEVANT_KEY_CODES.has(key);
+}
+
+
+
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
 // can start with low health. Once they take damage, the health bar updates to the correct value.
 // There seems to be an issue with projectiles stopping and then resuming after match ends and restarts
@@ -106,6 +119,8 @@ export class GameManager {
     private pingDisplay: PingDisplay;
     private fpsDisplay: FPSDisplay;
     private scoreDisplay: ScoreDisplay;
+
+
 
     private readonly COLLISION_TIMEOUT = 2000; // ms to wait before considering server missed collision
     private readonly PLAYER_SPAWN_X = 100; // X coordinate for player spawn
@@ -362,6 +377,28 @@ export class GameManager {
 
         this.socketManager.on('disconnect', () => this.cleanupSession());
 
+        this.controller.setCustomKeyDownHandler(((event: KeyboardEvent) => {
+            console.log('Key down:', event.code);
+            if (!isRelevantKey(event.code)) return;
+            this.socketManager.emit('keyDown', event.code);
+            console.log('Emitted keyDown:', event.code);
+        }));
+
+        this.controller.setCustomKeyUpHandler(((event: KeyboardEvent) => {
+            if (!isRelevantKey(event.code)) return;
+            this.socketManager.emit('keyUp', event.code);
+            console.log('Emitted keyUp:', event.code);  
+        }));
+        
+        this.controller.setCustomMouseUpHandler(((event: MouseEvent) => {
+            this.socketManager.emit('mouseUp', {
+                x: event.clientX,
+                y: event.clientY
+            });
+        }));
+
+        // TODO: Also emit blur and context menu events..
+
     }
 
     
@@ -370,7 +407,8 @@ export class GameManager {
             this.PLAYER_SPAWN_X, 
             this.PLAYER_SPAWN_Y,
             this.GAME_BOUNDS, 
-            this.playerName
+            this.playerName,
+            this.controller,
         );
         
         // Set up platform references
@@ -459,6 +497,9 @@ export class GameManager {
             
             // Only clean up projectiles that were previously acknowledged by server
             if (projectile.wasAcknowledged && !activeIds.has(projectileId)) {
+                console.log(`Cleaning up projectile ${projectileId}`);
+                console.log('Projectile was acknowledged:', projectile.wasAcknowledged);
+                console.log('Active IDs:', activeIds);
                 this.app.stage.removeChild(projectile);
                 projectile.destroy();
                 this.ownProjectiles.splice(i, 1);
@@ -467,6 +508,7 @@ export class GameManager {
     }
 
     private updateProjectiles(projectiles: ProjectileState[]): void {
+        console.log('length of projectiles', projectiles.length);
         for (const projectile of projectiles) {
             if (projectile.ownerId === this.selfId) {
                 // Mark own projectiles as acknowledged when they appear in server state
@@ -629,7 +671,7 @@ export class GameManager {
         if (!selfData) return;
         if (selfData && !this.self) {
             // create new self if it doesn't exist
-            this.self = new Player(selfData.x, selfData.y, this.GAME_BOUNDS, selfData.name);
+            this.self = new Player(selfData.x, selfData.y, this.GAME_BOUNDS, selfData.name, this.controller);
             this.self.setPlatforms(this.platforms);
             this.self.setIsBystander(selfData.isBystander);
             this.gameContainer.addChild(this.self);
@@ -657,22 +699,21 @@ export class GameManager {
     }
 
     private setupGameLoop(): void {
-
         let pingUpdateCounter = 0;
-
+        this.app.ticker.maxFPS = 60;
         this.app.ticker.add((delta) => {
             if (this.self) {        
 
                 this.fpsDisplay.update();
-
+                const deltaMS = delta.deltaMS;
                 // Update ping display (every ~60 frames = ~1 second)
-                pingUpdateCounter += delta.deltaTime;
+                pingUpdateCounter += deltaMS;
                 if (pingUpdateCounter >= 60) {
                     this.pingDisplay.updatePing(this.socketManager.getPing());
                     pingUpdateCounter = 0;
                 }
 
-                this.self.update(this.controller);
+                //his.self.update(this.controller, deltaMS);
 
                 const targetX = -this.self.x + this.GAME_WIDTH / 2;
                 const targetY = (-this.self.y + this.GAME_HEIGHT / 2);
@@ -698,7 +739,7 @@ export class GameManager {
                 this.fpsDisplay.fixPosition();
                 this.pingDisplay.fixPosition();
 
-                this.sendPlayerState();
+                //this.sendPlayerState();
             }
             
             this.updateOwnProjectiles();
@@ -714,6 +755,7 @@ export class GameManager {
             this.cleanupDestroyedProjectiles(); 
             this.cleanupPendingCollisions(); 
         });
+
     }
 
     private handleShooting(): void {

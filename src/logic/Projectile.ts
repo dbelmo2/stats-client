@@ -68,6 +68,9 @@ export class Projectile extends Container {
   }
 
   destroy() {
+
+    console.log('destroying projectile', this.id);
+
     // Remove the projectile from its parent container
     if (this.parent) {
         this.parent.removeChild(this);
