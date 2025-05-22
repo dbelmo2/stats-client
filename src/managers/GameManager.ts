@@ -739,7 +739,6 @@ export class GameManager {
                 this.fpsDisplay.fixPosition();
                 this.pingDisplay.fixPosition();
 
-                //this.sendPlayerState();
             }
             
             this.updateOwnProjectiles();
@@ -904,12 +903,5 @@ export class GameManager {
         }
     }
 
-    private sendPlayerState(): void {
-        if (!this.self) return;
-        this.socketManager.emit('playerInput', {
-            x: this.self.x,
-            y: this.self.y,
-            vy: this.self.getVelocityY(),
-        });
-    }
+
 }
