@@ -378,25 +378,25 @@ export class GameManager {
         this.socketManager.on('disconnect', () => this.cleanupSession());
 
         this.controller.setCustomKeyDownHandler(((event: KeyboardEvent) => {
-            console.log('Key down:', event.code);
             if (!isRelevantKey(event.code)) return;
-            this.socketManager.emit('keyDown', event.code);
-            console.log('Emitted keyDown:', event.code);
+            this.socketManager.emit('playerInput', { event: { type: 'keyDown', key: event.code } , seq: 10000 });
         }));
 
         this.controller.setCustomKeyUpHandler(((event: KeyboardEvent) => {
             if (!isRelevantKey(event.code)) return;
-            this.socketManager.emit('keyUp', event.code);
-            console.log('Emitted keyUp:', event.code);  
+            console.log(`Eimitting keyUp event: ${event.code}`);
+            this.socketManager.emit('playerInput', { event: { type: 'keyUp', key: event.code }, seq: 10000 });
         }));
         
+
+        /*
         this.controller.setCustomMouseUpHandler(((event: MouseEvent) => {
-            this.socketManager.emit('mouseUp', {
+            this.socketManager.emit('playerInput', {
                 x: event.clientX,
                 y: event.clientY
             });
         }));
-
+        */
         // TODO: Also emit blur and context menu events..
 
     }
@@ -424,6 +424,7 @@ export class GameManager {
         scores: PlayerScore[]
     }): void {
         this.enemyPlayerStates = players.filter(player => player.id !== this.selfId);
+        console.log(`Enemy player states: ${JSON.stringify(this.enemyPlayerStates)}`);
         const selfData = players.find(player => player.id === this.selfId);
         this.checkForKills(scores);
         this.scoreDisplay.updateScores(scores, this.selfId);
@@ -497,9 +498,6 @@ export class GameManager {
             
             // Only clean up projectiles that were previously acknowledged by server
             if (projectile.wasAcknowledged && !activeIds.has(projectileId)) {
-                console.log(`Cleaning up projectile ${projectileId}`);
-                console.log('Projectile was acknowledged:', projectile.wasAcknowledged);
-                console.log('Active IDs:', activeIds);
                 this.app.stage.removeChild(projectile);
                 projectile.destroy();
                 this.ownProjectiles.splice(i, 1);
@@ -508,7 +506,6 @@ export class GameManager {
     }
 
     private updateProjectiles(projectiles: ProjectileState[]): void {
-        console.log('length of projectiles', projectiles.length);
         for (const projectile of projectiles) {
             if (projectile.ownerId === this.selfId) {
                 // Mark own projectiles as acknowledged when they appear in server state
@@ -621,7 +618,6 @@ export class GameManager {
         for (const enemyPlayer of this.enemyPlayerStates) {
             if (!this.enemyGraphics.has(enemyPlayer.id)) {
                 // This doesn't trigger when match ends and player respawns immediately
-                console.log(`Adding new enemy player ${enemyPlayer.id} to stage`);
                 const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.x, enemyPlayer.y, enemyPlayer.isBystander, enemyPlayer.name);
                 this.gameContainer.addChild(graphic);
                 this.enemyGraphics.set(enemyPlayer.id, graphic);
@@ -651,7 +647,6 @@ export class GameManager {
         // Remove stale enemy players
         for (const [id, graphic] of this.enemyGraphics.entries()) {
             if (!this.enemyPlayerStates.some(player => player.id === id)) {
-                console.log(`Removing enemy player ${id} from stage`);
                 this.app.stage.removeChild(graphic);
                 graphic.destroy();
                 this.enemyGraphics.delete(id);
