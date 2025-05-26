@@ -68,6 +68,38 @@ type PlayerScore = {
     name: string;
 }
 
+// TODO: Reconciation...
+// How overwatch does it:
+// - Client sends input events to server
+// - Server processes input and sends back state updates
+// - Client receives state updates and reconciles with local 
+// Note: The client in this scenario keeps a local copy of the previou frame states, that is, the client input at that
+// point, the client position, etc. With this local copy, the client can compare the server state with its own.
+// When it receives a response to an old request, the client can check if the server and itself came to the same conclusion... 
+// if they did, the client can continue onto the next frame. If they did not, the client must then sync with the server state,
+// and then apply every local input that happened after that point so they can catch up with 'now'...
+// 
+// The problem with this approach is that it seems to require constant communication with the server,
+// which in our case, is not exactly happening right now. Currently the client only informs the 
+// server about a single keyDown and then keyUp event per keypress. We're not sending input the server every frame..
+// which seems to be what overwatch does inorder to achieve this reconciliation.
+//
+// Steps to implement:
+// Need to refactor GameManager to be similar to the server set up where:
+//   When a state update arrives, it is applied to latestServerSnapshot
+//   All the work currently done in handleStateUpdate should be moved to the app.ticker..
+//   processInput() should apply the state from the server, reconciling if needed. 
+//   update() would call the update() function of all players and projectiles...
+//   render() can then optionally be used for any interperlation... 
+// 
+// Note: the server is sending a serverTick. This in turn with the localTick can be used to 
+//   determine how many frames need to be resimulated when if reconciliation is needed.
+//   additionally, we need to implement a way of retrieving what the player's controller state was
+//   at a specific tick. Check chatGPT history for this as it provided some good suggestions already.
+//   
+
+
+
 // TODO: Implement death prediciton for enemies (and self) on client (with servber confirmation)??
 
 // TODO: Fix projectile spawn location (make dynamic based on mouse position)
@@ -110,7 +142,8 @@ export class GameManager {
     private gamePhase: GamePhase = 'active';
     private currentScores: Map<string, number> = new Map();
     private killIndicators: KillIndicator[] = [];
-
+    private localTick: number = 0; 
+    private latestServerSnapshot = null;
 
     // Map displays &d
     private gameOverDisplay: GameOverDisplay | null = null;
@@ -697,60 +730,53 @@ export class GameManager {
         let pingUpdateCounter = 0;
         this.app.ticker.maxFPS = 60;
         this.app.ticker.add((delta) => {
-            if (this.self) {        
+            const elapsedMS = delta.elapsedMS;
 
-                this.fpsDisplay.update();
-                const deltaMS = delta.deltaMS;
-                // Update ping display (every ~60 frames = ~1 second)
-                pingUpdateCounter += deltaMS;
-                if (pingUpdateCounter >= 60) {
-                    this.pingDisplay.updatePing(this.socketManager.getPing());
-                    pingUpdateCounter = 0;
-                }
-
-                //his.self.update(this.controller, deltaMS);
-
-                const targetX = -this.self.x + this.GAME_WIDTH / 2;
-                const targetY = (-this.self.y + this.GAME_HEIGHT / 2);
-
-                
-                // Clamp camera position to stay within bounds + 250px buffer
-                // In order to fix issue with camera and small window width, 
-                // We need to somehow modify the 1000 value offsets here to be dynamic, based on the window width?
-                // old values were 250. 
-                // 1000 normal for 1920x1080 full screen
-                // 250, for small window width
-                // 5000 for hugeee world such as 5000x1080
-                const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
-                const maxX = this.GAME_BOUNDS.left + 5000;
-                const minY = -(this.GAME_BOUNDS.bottom + 250) + this.GAME_HEIGHT;
-                const maxY = this.GAME_BOUNDS.top + 250;
-                
-                // Apply clamping and set camera position
-                this.camera.x = Math.max(minX, Math.min(maxX, targetX));
-                this.camera.y = Math.max(minY, Math.min(maxY, targetY));
             
+
+            if (this.self) {        
+                //his.self.update(this.controller, deltaMS);
+                this.updateCameraPosition();
+
                 this.scoreDisplay.fixPosition();
                 this.fpsDisplay.fixPosition();
                 this.pingDisplay.fixPosition();
 
             }
+
+
+
+
             
             this.updateOwnProjectiles();
             this.updateEnemyProjectiles();
 
             if (this.gamePhase === 'active') {
-                // Only allow shooting if the game is active
                 this.handleShooting();
-
             }
 
-            // Move cleanup code to a less frequent loop?
             this.cleanupDestroyedProjectiles(); 
             this.cleanupPendingCollisions(); 
+
+
+            this.updateFpsDisplay(delta.deltaMS, pingUpdateCounter);
+
+            this.localTick += 1;
         });
 
     }
+
+
+    private updateFpsDisplay(deltaMS: number, pingUpdateCounter: number): void {
+        this.fpsDisplay.update();
+        // Update ping display (every ~60 frames = ~1 second)
+        pingUpdateCounter += deltaMS;
+        if (pingUpdateCounter >= 60) {
+            this.pingDisplay.updatePing(this.socketManager.getPing());
+            pingUpdateCounter = 0;
+        }
+    }
+
 
     private handleShooting(): void {
         if (!this.self || this.self.getIsBystander() || this.gamePhase !== 'active') return;
@@ -803,6 +829,29 @@ export class GameManager {
             this.ownProjectiles.push(projectile);
             this.socketManager.emit('shoot', target);
         }
+    }
+
+    private updateCameraPosition(): void {
+        if (!this.self) return;
+        const targetX = -this.self.x + this.GAME_WIDTH / 2;
+        const targetY = (-this.self.y + this.GAME_HEIGHT / 2);
+
+        
+        // Clamp camera position to stay within bounds + 250px buffer
+        // In order to fix issue with camera and small window width, 
+        // We need to somehow modify the 1000 value offsets here to be dynamic, based on the window width?
+        // old values were 250. 
+        // 1000 normal for 1920x1080 full screen
+        // 250, for small window width
+        // 5000 for hugeee world such as 5000x1080
+        const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
+        const maxX = this.GAME_BOUNDS.left + 5000;
+        const minY = -(this.GAME_BOUNDS.bottom + 250) + this.GAME_HEIGHT;
+        const maxY = this.GAME_BOUNDS.top + 250;
+        
+        // Apply clamping and set camera position
+        this.camera.x = Math.max(minX, Math.min(maxX, targetX));
+        this.camera.y = Math.max(minY, Math.min(maxY, targetY));
     }
 
     private updateOwnProjectiles(): void {

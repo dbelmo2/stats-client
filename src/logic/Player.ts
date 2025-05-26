@@ -27,6 +27,7 @@ export class Player extends Container {
   private TIME_STEP: number = 16.67; // 60 FPS
   private accumulator = 0;
   private inputInterval: NodeJS.Timeout | null = null;
+  
 
   constructor(x: number, y: number, gameBounds: any, name: string, controller: Controller) {
     super();
@@ -249,11 +250,6 @@ export class Player extends Container {
 
       this.accumulator -= this.TIME_STEP;
     }
-
-
-
-
-
   }
 
   setHealth(updatedServerHealth: number): void {
