@@ -134,6 +134,7 @@ export class Controller {
     const now = Date.now();
 
     const totalTime = now - this.downTime;
+    console.log(`Key ${event.code} was held down for ${totalTime} ms`);
     const state = this.keys[key];
 
     state.pressed = false;
