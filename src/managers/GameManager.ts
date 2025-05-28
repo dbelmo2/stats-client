@@ -68,6 +68,13 @@ type PlayerScore = {
     name: string;
 }
 
+type ServerStateUpdate = {
+    players: PlayerState[];
+    projectiles: ProjectileState[];
+    scores: PlayerScore[];
+    serverTick: number;
+};
+
 // TODO: Reconciation...
 // How overwatch does it:
 // - Client sends input events to server
@@ -91,9 +98,11 @@ type PlayerScore = {
 //   processInput() should apply the state from the server, reconciling if needed. 
 //   update() would call the update() function of all players and projectiles...
 //   render() can then optionally be used for any interperlation... 
-// 
+// Also need to update controller (server one as well) to have getBitmask() and setFromBitmask() methods.
+// A history of bitmask changes along with when they occured will be stored locally. 
+// This will be used to get the bitmask at any given tick. Check chatGPT history for more details on this.
 // Note: the server is sending a serverTick. This in turn with the localTick can be used to 
-//   determine how many frames need to be resimulated when if reconciliation is needed.
+//   determine how many frames need to be resimulated when/if reconciliation is needed.
 //   additionally, we need to implement a way of retrieving what the player's controller state was
 //   at a specific tick. Check chatGPT history for this as it provided some good suggestions already.
 //   
@@ -127,6 +136,7 @@ export class GameManager {
 
     private readonly GAME_WIDTH = 1920;  // Fixed game width
     private readonly GAME_HEIGHT = 1080; // Fixed game height
+    private readonly TIME_STEP = 1000 / 60; // 60 FPS target
     private gameContainer: Container;     // Container for game objects
 
     // Game objects & state
@@ -143,7 +153,14 @@ export class GameManager {
     private currentScores: Map<string, number> = new Map();
     private killIndicators: KillIndicator[] = [];
     private localTick: number = 0; 
-    private latestServerSnapshot = null;
+    private latestServerSnapshot: ServerStateUpdate = {
+        players: [],
+        projectiles: [],
+        scores: [], 
+        serverTick: 0
+    }
+
+    private accumulator: number = 0; 
 
     // Map displays &d
     private gameOverDisplay: GameOverDisplay | null = null;
@@ -152,6 +169,7 @@ export class GameManager {
     private pingDisplay: PingDisplay;
     private fpsDisplay: FPSDisplay;
     private scoreDisplay: ScoreDisplay;
+    
 
 
 
@@ -371,7 +389,9 @@ export class GameManager {
         // Set up state update handler - this is essential
         // Upon reveiving the first state update, we will render the initial players but ignore 
         // Player input in app ticker
-        this.socketManager.on('stateUpdate', this.handleStateUpdate.bind(this));
+        this.socketManager.on('stateUpdate', (data: ServerStateUpdate) => {
+            this.latestServerSnapshot = data;
+        });
         
         this.socketManager.on('gameOver', (scores: PlayerScore[]) => {
             this.controller.resetMouse();
@@ -411,14 +431,16 @@ export class GameManager {
         this.socketManager.on('disconnect', () => this.cleanupSession());
 
         this.controller.setCustomKeyDownHandler(((event: KeyboardEvent) => {
-            if (!isRelevantKey(event.code)) return;
-            this.socketManager.emit('playerInput', { event: { type: 'keyDown', key: event.code } , seq: 10000 });
+            if (!isRelevantKey(event.code) || !this.self) return;
+            if (this.self) this.self.addPendingInput({ seq: 0, tick: this.localTick, mask: this.controller.getBitmask() });
+            this.socketManager.emit('playerInput', { event: { type: 'keyDown', key: event.code } , seq: 10000, tick: this.localTick });
         }));
 
         this.controller.setCustomKeyUpHandler(((event: KeyboardEvent) => {
-            if (!isRelevantKey(event.code)) return;
+            if (!isRelevantKey(event.code) || !this.self) return;
             console.log(`Eimitting keyUp event: ${event.code}`);
-            this.socketManager.emit('playerInput', { event: { type: 'keyUp', key: event.code }, seq: 10000 });
+            this.self.addPendingInput({ seq: 0, tick: this.localTick, mask: this.controller.getBitmask() });
+            this.socketManager.emit('playerInput', { event: { type: 'keyUp', key: event.code }, seq: 10000, tick: this.localTick });
         }));
         
 
@@ -451,19 +473,17 @@ export class GameManager {
         this.gameContainer.addChild(this.self);
     }
 
-    private handleStateUpdate({ players, projectiles, scores }: { 
-        players: PlayerState[], 
-        projectiles: ProjectileState[],
-        scores: PlayerScore[]
-    }): void {
+
+
+    private integrateStateUpdate(): void {
+        const { players, projectiles, serverTick } = this.latestServerSnapshot;
+        if (this.localTick === 0) this.localTick = serverTick;
         this.enemyPlayerStates = players.filter(player => player.id !== this.selfId);
-        console.log(`Enemy player states: ${JSON.stringify(this.enemyPlayerStates)}`);
         const selfData = players.find(player => player.id === this.selfId);
-        this.checkForKills(scores);
-        this.scoreDisplay.updateScores(scores, this.selfId);
-        this.handleSelfUpdate(selfData);
-        this.handleProjectileUpdates(projectiles);
-        this.updateEnemyPlayers(); 
+
+        this.integrateSelfUpdate(selfData, serverTick);
+        this.integrateProjectileUpdates(projectiles);
+        this.integrateEnemyPlayers();
     }
     
     private checkForKills(scores: PlayerScore[]): void {
@@ -508,7 +528,7 @@ export class GameManager {
     }
 
 
-    private handleProjectileUpdates(projectiles: ProjectileState[]): void {
+    private integrateProjectileUpdates(projectiles: ProjectileState[]): void {
         const activeProjectileIds = new Set(projectiles.map(p => p.id));
         this.cleanupProjectiles(activeProjectileIds);
         this.updateProjectiles(projectiles);
@@ -647,7 +667,9 @@ export class GameManager {
 
 
     }
-    private updateEnemyPlayers(): void {
+
+    // TODO: Update ot also integrate player controller states. 
+    private integrateEnemyPlayers(): void {
         for (const enemyPlayer of this.enemyPlayerStates) {
             if (!this.enemyGraphics.has(enemyPlayer.id)) {
                 // This doesn't trigger when match ends and player respawns immediately
@@ -671,7 +693,6 @@ export class GameManager {
                     this.pendingCollisions.delete(enemyPlayer.id);
                     graphic.setHealth(enemyPlayer.hp);
                 }
-
                 graphic?.syncPosition(enemyPlayer.x, enemyPlayer.y);
             }
         }
@@ -687,7 +708,7 @@ export class GameManager {
         }
     }
 
-    private handleSelfUpdate(selfData: PlayerState | undefined): void {
+    private integrateSelfUpdate(selfData: PlayerState | undefined, lastInputTick: number): void {
         if (!selfData && this.self) {
             // Clean up self graphics if no self data exists
             this.pendingCollisions.delete(this.selfId);
@@ -723,7 +744,23 @@ export class GameManager {
                 this.self.setHealth(selfData.hp);
             }
         }
-       // this.self.syncPosition(selfData.x, selfData.y);
+
+
+        // naively reconcile self position
+        this.self.syncPosition(selfData.x, selfData.y);
+
+        const ticksBehind = this.localTick - lastInputTick;
+        if (ticksBehind < 0) {
+            // Very rare: server has marched ahead (big pause on client)
+            // Fast‑forward instead of replaying negative steps
+            return;
+        }          
+        
+        for (let i = 0; i < ticksBehind; ++i) {
+            const tickNum = lastInputTick + 1 + i;
+            this.resimulatePlayerPhysics(tickNum);
+        }
+
     }
 
     private setupGameLoop(): void {
@@ -732,40 +769,59 @@ export class GameManager {
         this.app.ticker.add((delta) => {
             const elapsedMS = delta.elapsedMS;
 
+            this.processInput();
             
+            this.accumulator += elapsedMS;
 
-            if (this.self) {        
-                //his.self.update(this.controller, deltaMS);
-                this.updateCameraPosition();
-
-                this.scoreDisplay.fixPosition();
-                this.fpsDisplay.fixPosition();
-                this.pingDisplay.fixPosition();
-
+            while (this.accumulator >= this.TIME_STEP) {
+                this.updatePhysics();
+                this.accumulator -= this.TIME_STEP;
             }
 
-
-
-
-            
-            this.updateOwnProjectiles();
-            this.updateEnemyProjectiles();
-
-            if (this.gamePhase === 'active') {
-                this.handleShooting();
-            }
-
-            this.cleanupDestroyedProjectiles(); 
-            this.cleanupPendingCollisions(); 
-
-
-            this.updateFpsDisplay(delta.deltaMS, pingUpdateCounter);
+            this.render(elapsedMS, pingUpdateCounter);
 
             this.localTick += 1;
         });
 
     }
 
+
+
+    // Integrate latestServerSnapshot
+    private processInput(): void {
+        this.integrateStateUpdate();
+    }
+
+    // Update the physics of the game world by calling update on all game objects
+    private updatePhysics(): void {
+        if (this.self) this.self.update();
+        this.updateOwnProjectiles();
+
+        if (this.gamePhase === 'active') {
+            this.handleShooting();
+        }
+
+        this.updateEnemyProjectiles();
+        this.cleanupDestroyedProjectiles(); 
+        this.cleanupPendingCollisions(); 
+    }
+
+    private resimulatePlayerPhysics(tickNum: number): void {
+        if (!this.self) return;
+        this.self.applyMaskFromTick(tickNum); // rebuild from transition list
+        this.self.update(); // Resimulate player physics
+    }
+
+
+    // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)
+    private render(deltaMs: number, pingUpdateCounter: number): void {
+        this.updateCameraPosition();
+        this.checkForKills(this.latestServerSnapshot.scores);
+        this.scoreDisplay.updateScores(this.latestServerSnapshot.scores, this.selfId);
+        this.updateFpsDisplay(deltaMs, pingUpdateCounter);
+    }
+
+    
 
     private updateFpsDisplay(deltaMS: number, pingUpdateCounter: number): void {
         this.fpsDisplay.update();
@@ -852,6 +908,13 @@ export class GameManager {
         // Apply clamping and set camera position
         this.camera.x = Math.max(minX, Math.min(maxX, targetX));
         this.camera.y = Math.max(minY, Math.min(maxY, targetY));
+
+
+        // Update position of UI elements relative to the camera
+        this.scoreDisplay.fixPosition();
+        this.fpsDisplay.fixPosition();
+        this.pingDisplay.fixPosition();
+
     }
 
     private updateOwnProjectiles(): void {

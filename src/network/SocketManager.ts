@@ -22,7 +22,6 @@ export class SocketManager {
 
     this.socket.on('connect', () => {
       console.log('[SocketManager] Connected:', this.socket.id);
-      console.log('[SocketManager] Connected:', this.socket.id);
       console.log('[SocketManager] Transport:', this.socket.io.engine.transport.name);
       
       // Log when transport changes (e.g., from polling to websocket)
@@ -96,10 +95,7 @@ export class SocketManager {
   }
 
   emit(event: string, payload?: unknown) {
-    console.log(`[SocketManager] Emitting event: ${event}`, payload);
-    this.socket.emit(event, payload, () => {
-      console.log(`[SocketManager] Emitted event: ${event}`, payload);
-    });
+    this.socket.emit(event, payload);
   }
 
   disconnect() {
@@ -111,7 +107,6 @@ export class SocketManager {
   }
 
   public getId() {
-    console.log('returning this.socket.id', this.socket.id);
     return this.socket.id;
   }
   

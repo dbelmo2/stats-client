@@ -46,6 +46,8 @@ export class Controller {
       space: { pressed: false, doubleTap: false, timestamp: 0 },
     };
     
+
+
     this.mouse = { pressed: false, x: undefined, y: undefined, justReleased: false, xR: undefined, yR: undefined };
 
     // Bind all handlers
@@ -68,6 +70,24 @@ export class Controller {
     
   }
 
+  public updateFromBitmask(bitmask: number): void {
+    this.keys.up.pressed = (bitmask & (1 << 0)) !== 0; // 1
+    this.keys.down.pressed = (bitmask & (1 << 1)) !== 0; // 2
+    this.keys.left.pressed = (bitmask & (1 << 2)) !== 0; // 4
+    this.keys.right.pressed = (bitmask & (1 << 3)) !== 0; // 8
+    this.keys.space.pressed = (bitmask & (1 << 4)) !== 0; // 16
+  } 
+
+  public getBitmask(): number {
+    let bitmask = 0;
+    if (this.keys.up.pressed) bitmask |= 1 << 0; // 1
+    if (this.keys.down.pressed) bitmask |= 1 << 1; // 2
+    if (this.keys.left.pressed) bitmask |= 1 << 2; // 4
+    if (this.keys.right.pressed) bitmask |= 1 << 3; // 8
+    if (this.keys.space.pressed) bitmask |= 1 << 4; // 16
+    return bitmask;
+  }
+
   public setCustomKeyDownHandler(handler: (event: KeyboardEvent) => void): void {
     this.customKeyHandler = handler;
   }
@@ -87,17 +107,18 @@ export class Controller {
     const state = this.keys[key];
     if (state.pressed) return; // Ignore if already pressed
 
-    // Call custom key handler if defined
-    if (this.customKeyHandler) {
-      this.customKeyHandler(event);
-    }
-
-
     const now = Date.now();
     this.downTime = now;
 
     state.doubleTap = state.doubleTap || now - state.timestamp < 500;
     state.pressed = true;
+
+    // Call custom key handler if defined
+    // Note: This needs to happen after the state is updated.
+    if (this.customKeyHandler) {
+      this.customKeyHandler(event);
+    }
+
   }
 
   private keyupHandler(event: KeyboardEvent): void {
@@ -113,7 +134,6 @@ export class Controller {
     const now = Date.now();
 
     const totalTime = now - this.downTime;
-    console.log(`Key ${key} was held down for ${totalTime} ms`);
     const state = this.keys[key];
 
     state.pressed = false;

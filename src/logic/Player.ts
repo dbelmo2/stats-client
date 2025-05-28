@@ -2,6 +2,13 @@ import { Graphics, Container, Text, TextStyle } from 'pixi.js';
 import { Controller } from './Controller'
 import { Platform } from './Platform';
 
+
+export interface PendingInput {
+  seq: number; 
+  tick: number;
+  mask: number;
+}
+
 export class Player extends Container {
   private speed = 10;
   private jumpStrength = 15;
@@ -27,11 +34,12 @@ export class Player extends Container {
   private TIME_STEP: number = 16.67; // 60 FPS
   private accumulator = 0;
   private inputInterval: NodeJS.Timeout | null = null;
-  
+  private pendingInputs: PendingInput[] = [];
+  private controller: Controller;
 
   constructor(x: number, y: number, gameBounds: any, name: string, controller: Controller) {
     super();
-
+    this.controller = controller;
     this.gameBounds = gameBounds;
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.addChild(this.body);
@@ -56,6 +64,8 @@ export class Player extends Container {
     this.healthBarContainer.addChild(this.nameText);
 
 
+  
+
     // Create health bar background
     const healthBarBg = new Graphics()
       .rect(0, -15, this.HEALTH_BAR_WIDTH, this.HEALTH_BAR_HEIGHT)
@@ -75,11 +85,23 @@ export class Player extends Container {
     this.y = y;
 
 
-    // Set up player input ticker
-    this.inputInterval = setInterval(() => this.update(controller), this.TIME_STEP); // Update every 2 frames
-
   }
 
+  public applyMaskFromTick(tick: number) {
+    for (let i = this.pendingInputs.length - 1; i >= 0; i--) {
+      const input = this.pendingInputs[i];
+      if (input.tick <= tick) {
+        // Apply the mask to the controller
+        this.controller.updateFromBitmask(input.mask);
+        // Remove the input from pending inputs
+        this.pendingInputs.splice(i, 1);
+      }
+    }
+  }
+  
+  public addPendingInput(input: PendingInput): void {
+      this.pendingInputs.push(input);
+  }
 
   public setIsBystander(value: boolean): void {
       this.isBystander = value;
@@ -126,7 +148,7 @@ export class Player extends Container {
   public updatecount = 0;
   public isMoving = false;
 
-  update(controller: Controller) {
+  update() {
     const now = Date.now();
     const frameTime = now - this.lastUpdateTime;
     this.lastUpdateTime = now;
@@ -138,24 +160,22 @@ export class Player extends Container {
     this.accumulator += cappedFrameTime;
     
     while (this.accumulator >= this.TIME_STEP) {
-      if (!controller.keys.left.pressed && !controller.keys.right.pressed) {
+      if (!this.controller.keys.left.pressed && !this.controller.keys.right.pressed) {
         this.isMoving = false;
         if (this.updatecount > 0) { 
-        console.log(`Total updates: ${this.updatecount}`);
 
-        console.log(`End position: ${this.x}`);
         }
         this.updatecount = 0;
       }
 
       // Apply normalized movement
-      if (controller.keys.left.pressed) {
+      if (this.controller.keys.left.pressed) {
           let xPos = Math.max(this.gameBounds?.left ?? 0, this.x - this.speed);
           if (xPos <= 25) xPos = 25; // This is needed for cube sprites as their pivot is the center.
           this.x = xPos;
           this.isMoving = true;
       }
-      if (controller.keys.right.pressed) {
+      if (this.controller.keys.right.pressed) {
           let xPos = Math.min(this.gameBounds?.right ?? Infinity, this.x + this.speed);
           if (xPos >= (this.gameBounds?.right ?? 0) - 25) xPos = (this.gameBounds?.right ?? 0) - 25; // This is needed for cube sprites as their pivot is the center.
           this.x = xPos;
@@ -170,24 +190,24 @@ export class Player extends Container {
       const wasOnGround = this.isOnGround;
 
       // Jumping from ground or platform
-      if ((controller.keys.space.pressed || controller.keys.up.pressed) && this.isOnGround) {
+      if ((this.controller.keys.space.pressed || this.controller.keys.up.pressed) && this.isOnGround) {
         this.velocityY = -this.jumpStrength;
         this.isOnGround = false;
 
         // Reset double tap flags to prevent immediate double jump
-        controller.keys.space.doubleTap = false;
-        controller.keys.up.doubleTap = false;
+        this.controller.keys.space.doubleTap = false;
+        this.controller.keys.up.doubleTap = false;
       }
 
       // Double jump logic, utilizes doubleJump from the controller. 
       // Might need to tweak the doubleJump time window in the controller depending on jump animation time duration. 
       if (!this.isOnGround && this.canDoubleJump) {
-        if (controller.keys.space.doubleTap || controller.keys.up.doubleTap) {
+        if (this.controller.keys.space.doubleTap || this.controller.keys.up.doubleTap) {
           this.velocityY = -this.jumpStrength;
           this.canDoubleJump = false;
           // Clear double tap flags after use
-          controller.keys.space.doubleTap = false;
-          controller.keys.up.doubleTap = false;
+          this.controller.keys.space.doubleTap = false;
+          this.controller.keys.up.doubleTap = false;
         }
       }
 
