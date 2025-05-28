@@ -769,6 +769,7 @@ export class GameManager {
             //this.updateCameraPosition();
 
         }
+        this.self.applyTempPosition(); // Apply the latest position from the server
 
     }
 
@@ -818,8 +819,8 @@ export class GameManager {
     private resimulatePlayerPhysics(tickNum: number): void {
         if (!this.self) return;
         this.self.applyMaskFromTick(tickNum); // rebuild from transition list
-        this.self.update(); // Update player position based on input
-        //this.self.reUpdate(); // Resimulate player physics
+        //this.self.update(); // Update player position based on input
+        this.self.reUpdate(); // Resimulate player physics
     }
 
 
