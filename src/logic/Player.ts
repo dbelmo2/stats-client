@@ -31,7 +31,7 @@ export class Player extends Container {
   private nameText: Text;
   private maxAccelerationY: number = 9.8; // Max acceleration when moving left/right
   private lastUpdateTime: number = Date.now();
-  private TIME_STEP: number = 16.67; // 60 FPS
+  private TIME_STEP: number = 20; // 60 FPS
   private accumulator = 0;
   private inputInterval: NodeJS.Timeout | null = null;
   private pendingInputs: PendingInput[] = [];

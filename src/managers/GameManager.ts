@@ -708,7 +708,7 @@ export class GameManager {
         }
     }
 
-    private integrateSelfUpdate(selfData: PlayerState | undefined, lastInputTick: number): void {
+    private integrateSelfUpdate(selfData: PlayerState | undefined, serverTick: number): void {
         if (!selfData && this.self) {
             // Clean up self graphics if no self data exists
             this.pendingCollisions.delete(this.selfId);
@@ -747,18 +747,26 @@ export class GameManager {
 
 
         // naively reconcile self position
+        if (selfData.x === this.self.x && selfData.y === this.self.y) {
+            // No position change, no need to sync
+            return;
+        }
+
         this.self.syncPosition(selfData.x, selfData.y);
 
-        const ticksBehind = this.localTick - lastInputTick;
+        const ticksBehind = this.localTick - serverTick;
         if (ticksBehind < 0) {
             // Very rare: server has marched ahead (big pause on client)
             // Fast‑forward instead of replaying negative steps
+            
             return;
         }          
         
         for (let i = 0; i < ticksBehind; ++i) {
-            const tickNum = lastInputTick + 1 + i;
+            const tickNum = serverTick + 1 + i;
             this.resimulatePlayerPhysics(tickNum);
+            //this.updateCameraPosition();
+
         }
 
     }
@@ -776,11 +784,11 @@ export class GameManager {
             while (this.accumulator >= this.TIME_STEP) {
                 this.updatePhysics();
                 this.accumulator -= this.TIME_STEP;
+                this.localTick += 1;
             }
 
             this.render(elapsedMS, pingUpdateCounter);
 
-            this.localTick += 1;
         });
 
     }
