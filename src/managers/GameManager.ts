@@ -753,15 +753,19 @@ export class GameManager {
         }
 
         // use the local bitmask list to figure out if our predicition was correct
-
         this.self.syncPosition(selfData.x, selfData.y);
 
+
         const ticksBehind = this.localTick - serverTick;
+
+        console.log(`Resimulating ${ticksBehind} ticks behind server tick ${serverTick} (local tick: ${this.localTick})`);
         if (ticksBehind < 0) {
             // Very rare: server has marched ahead (big pause on client)
             // Fast‑forward instead of replaying negative steps
             return;
-        }          
+        }     
+        
+
         
         for (let i = 0; i < ticksBehind; ++i) {
             const tickNum = serverTick + 1 + i;
@@ -769,7 +773,7 @@ export class GameManager {
             //this.updateCameraPosition();
 
         }
-        this.self.applyTempPosition(); // Apply the latest position from the server
+        //this.self.applyTempPosition(); // Apply the latest position from the server
 
     }
 
@@ -820,7 +824,7 @@ export class GameManager {
         if (!this.self) return;
         this.self.applyMaskFromTick(tickNum); // rebuild from transition list
         //this.self.update(); // Update player position based on input
-        this.self.reUpdate(); // Resimulate player physics
+        this.self.update(); // Resimulate player physics
     }
 
 
@@ -898,46 +902,34 @@ export class GameManager {
         }
     }
 
-private cameraLerpFactor: number = 0.1; // Adjust between 0.01 (very slow) and 0.5 (very fast)
-private currentCameraX: number = 0;
-private currentCameraY: number = 0;
+    private updateCameraPosition(): void {
+        if (!this.self) return;
+        const targetX = -this.self.x + this.GAME_WIDTH / 2;
+        const targetY = (-this.self.y + this.GAME_HEIGHT / 2);
 
-private updateCameraPosition(): void {
-    if (!this.self) return;
-    
-    // Calculate target camera position (centered on player)
-    const targetX = -this.self.x + this.GAME_WIDTH / 2;
-    const targetY = -this.self.y + this.GAME_HEIGHT / 2;
+        
+        // Clamp camera position to stay within bounds + 250px buffer
+        // In order to fix issue with camera and small window width, 
+        // We need to somehow modify the 1000 value offsets here to be dynamic, based on the window width?
+        // old values were 250. 
+        // 1000 normal for 1920x1080 full screen
+        // 250, for small window width
+        // 5000 for hugeee world such as 5000x1080
+        const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
+        const maxX = this.GAME_BOUNDS.left + 5000;
+        const minY = -(this.GAME_BOUNDS.bottom + 250) + this.GAME_HEIGHT;
+        const maxY = this.GAME_BOUNDS.top + 250;
+        
+        // Apply clamping and set camera position
+        this.camera.x = Math.max(minX, Math.min(maxX, targetX));
+        this.camera.y = Math.max(minY, Math.min(maxY, targetY));
 
-    // Clamp camera position to stay within bounds + buffer
-    const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
-    const maxX = this.GAME_BOUNDS.left + 5000;
-    const minY = -(this.GAME_BOUNDS.bottom + 250) + this.GAME_HEIGHT;
-    const maxY = this.GAME_BOUNDS.top + 250;
-    
-    // Apply clamping to target position
-    const clampedTargetX = Math.max(minX, Math.min(maxX, targetX));
-    const clampedTargetY = Math.max(minY, Math.min(maxY, targetY));
-    
-    // Initialize camera position if not set
-    if (this.currentCameraX === 0 && this.currentCameraY === 0) {
-        this.currentCameraX = clampedTargetX;
-        this.currentCameraY = clampedTargetY;
+
+        // Update position of UI elements relative to the camera
+        this.scoreDisplay.fixPosition();
+        this.fpsDisplay.fixPosition();
+        this.pingDisplay.fixPosition();
     }
-    
-    // Smoothly interpolate between current position and target position
-    this.currentCameraX += (clampedTargetX - this.currentCameraX) * this.cameraLerpFactor;
-    this.currentCameraY += (clampedTargetY - this.currentCameraY) * this.cameraLerpFactor;
-    
-    // Apply the smoothed camera position
-    this.camera.x = this.currentCameraX;
-    this.camera.y = this.currentCameraY;
-
-    // Update position of UI elements relative to the camera
-    this.scoreDisplay.fixPosition();
-    this.fpsDisplay.fixPosition();
-    this.pingDisplay.fixPosition();
-}
 
 
     private updateOwnProjectiles(): void {

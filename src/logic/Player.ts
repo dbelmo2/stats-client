@@ -142,10 +142,10 @@ export class Player extends Container {
       this.platforms = platforms;
   }
 
-
+ // TODO: figure out why Use of tempX Nd tempY here along with reUpdate leads to desync...
   syncPosition(x: number, y: number) {
-    this.tempX = x; // Update temporary position for physics calculations
-    this.tempY = y; // Update temporary position for physics calculations
+    this.x = x; // Update temporary position for physics calculations
+    this.y = y; // Update temporary position for physics calculations
   }
 
 
