@@ -102,6 +102,18 @@ export class Player extends Container {
     }
   }
   
+
+
+
+  public setControllsFromBitmask(bitmask: number): void {
+    this.controller.updateFromBitmask(bitmask);
+  }
+
+  public getControllerBitmask(): number {
+    return this.controller.getBitmask();
+  }
+  
+
   public addPendingInput(input: PendingInput): void {
       this.pendingInputs.push(input);
   }
@@ -142,17 +154,14 @@ export class Player extends Container {
       this.platforms = platforms;
   }
 
- // TODO: figure out why Use of tempX Nd tempY here along with reUpdate leads to desync...
   syncPosition(x: number, y: number) {
-    this.x = x; // Update temporary position for physics calculations
-    this.y = y; // Update temporary position for physics calculations
+    this.tempX = x; // Update temporary position for physics calculations
+    this.tempY = y; // Update temporary position for physics calculations
   }
 
 
   public updatecount = 0;
   public isMoving = false;
-
-
 
   reUpdate() {
       if (!this.controller.keys.left.pressed && !this.controller.keys.right.pressed) {
@@ -306,7 +315,6 @@ export class Player extends Container {
           this.x = xPos;
           this.tempX = xPos;
           this.isMoving = true;
-
       }
 
       if (this.isMoving) {
