@@ -776,11 +776,10 @@ export class GameManager {
         selfData.position = new Vector2(selfData.position.x, selfData.position.y);
         let serverStateBufferIndex = tick % this.BUFFER_SIZE;
         let clientPosition = this.stateBuffer[serverStateBufferIndex]?.position;
-        console.log(`correct server position: ${selfData.position.x}, ${selfData.position.y} at tick ${tick}`);
-        
+
         // Temp fix for bug where this is undefined :()
         if (!clientPosition) return;
-        
+        console.log('here')
 
         const positionError = Vector2.subtract(selfData.position, clientPosition);
 
@@ -831,7 +830,7 @@ export class GameManager {
             // might need to modify this so that it doesnt send to the server if 
             // the player is in the air and tries to double jump but is not allowed to. 
             if (inputPayload.vector.x !== 0 
-                && inputPayload.vector.y !== 0 ) this.broadcastPlayerInput(inputPayload);
+                || inputPayload.vector.y !== 0 ) this.broadcastPlayerInput(inputPayload);
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
         }
 
@@ -862,6 +861,7 @@ export class GameManager {
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
+        console.log(`Broadcasting player input: ${inputPayload.vector.x}, ${inputPayload.vector.y} at tick ${inputPayload.tick}`);
         this.socketManager.emit('playerInput', inputPayload);
     }
 
