@@ -644,10 +644,11 @@ export class GameManager {
 
     // TODO: Update ot also integrate player controller states. 
     private integrateEnemyPlayers(): void {
-        for (const enemyPlayer of this.enemyPlayerStates) {
+        const enemyPlayers = this.latestServerSnapshot.players.filter(player => player.id !== this.selfId);
+        for (const enemyPlayer of enemyPlayers) {
             if (!this.enemyGraphics.has(enemyPlayer.id)) {
                 // This doesn't trigger when match ends and player respawns immediately
-                const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.x, enemyPlayer.y, enemyPlayer.isBystander, enemyPlayer.name);
+                const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.position.x, enemyPlayer.position.y, enemyPlayer.isBystander, enemyPlayer.name);
                 this.gameContainer.addChild(graphic);
                 this.enemyGraphics.set(enemyPlayer.id, graphic);
             } else {
@@ -667,14 +668,14 @@ export class GameManager {
                     this.pendingCollisions.delete(enemyPlayer.id);
                     graphic.setHealth(enemyPlayer.hp);
                 }
-                graphic?.syncPosition(enemyPlayer.x, enemyPlayer.y);
+                graphic?.syncPosition(enemyPlayer.position.x, enemyPlayer.position.y);
             }
         }
 
 
         // Remove stale enemy players
         for (const [id, graphic] of this.enemyGraphics.entries()) {
-            if (!this.enemyPlayerStates.some(player => player.id === id)) {
+            if (!enemyPlayers.some(player => player.id === id)) {
                 this.app.stage.removeChild(graphic);
                 graphic.destroy();
                 this.enemyGraphics.delete(id);
@@ -779,11 +780,11 @@ export class GameManager {
 
         // Temp fix for bug where this is undefined :()
         if (!clientPosition) return;
-        console.log('here')
 
         const positionError = Vector2.subtract(selfData.position, clientPosition);
-
-        if (positionError.len() > 0.1) {
+        console.log(`Position error: ${positionError.len()}`);
+        if (positionError.len() > 0.0001) {
+            console.log(`Server position: ${selfData.position.x}, ${selfData.position.y}, Client position: ${clientPosition.x}, ${clientPosition.y}`);
             this.self.syncPosition(selfData.position.x, selfData.position.y);
             this.stateBuffer[serverStateBufferIndex].position = selfData.position;
             let tickToResimulate = tick + 1;
@@ -834,6 +835,7 @@ export class GameManager {
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
         }
 
+        this.integrateEnemyPlayers();
         
 
         // Remove projectile logic for now
@@ -861,7 +863,6 @@ export class GameManager {
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
-        console.log(`Broadcasting player input: ${inputPayload.vector.x}, ${inputPayload.vector.y} at tick ${inputPayload.tick}`);
         this.socketManager.emit('playerInput', inputPayload);
     }
 
