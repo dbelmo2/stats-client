@@ -1,6 +1,6 @@
 import { Application, Container, Graphics } from 'pixi.js';
 import { Player } from '../logic/Player';
-import { Controller } from '../logic/Controller';
+import { Controller, type ControllerState } from '../logic/Controller';
 import { SocketManager } from '../network/SocketManager';
 import { EnemyPlayer } from '../logic/EnemyPlayer';
 import { Projectile } from '../logic/Projectile';
@@ -15,33 +15,17 @@ import { KillIndicator } from '../logic/ui/KillIndicator';
 import * as config from '../config.json';
 import { PingDisplay } from '../logic/ui/PingDisplay';
 import { FPSDisplay } from '../logic/ui/FPSDisplay';
+import { Vector2 } from '../logic/Vector';
 
 
 const PROJECTILE_SPEED = 30;
 const PROJECTILE_LIFESPAN = 5000;
 const PROJECTILE_GRAVITY = 0.05;
 
-
-
-
-
-// Equivalent ASCII key codes for relevant keys
-const RELEVANT_KEY_CODES = new Set([
-    'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-]);
-
-// Helper function to check if a key should trigger a server update
-function isRelevantKey(key: string): boolean {
-  return RELEVANT_KEY_CODES.has(key);
-}
-
-
-
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
 // can start with low health. Once they take damage, the health bar updates to the correct value.
 // There seems to be an issue with projectiles stopping and then resuming after match ends and restarts
 // (serverside related)
-
 
 type PlayerState = {
   id: string;
@@ -74,6 +58,17 @@ type ServerStateUpdate = {
     scores: PlayerScore[];
     serverTick: number;
 };
+
+type InputPayload = {
+    tick: number;
+    vector: Vector2;
+}
+
+type StatePayload = {
+    tick: number;
+    position: Vector2;
+}
+
 
 // TODO: Reconciation...
 // How overwatch does it:
@@ -123,6 +118,11 @@ type ServerStateUpdate = {
 // - Defense (fat love eats all projectiles)
 // - offense (fat love shoots every projectile he ate in the direction of the mouse)
 
+// update:
+// processInput() check controller, get bitmask, send to server?, server reconciliation
+// update() apply bitmask to update temp values of player. We dont want to render here
+// render() render player based on temp values, update camera, etc.
+
 
 
 type GamePhase = 'initializing' | 'ready' | 'active' | 'ended';
@@ -136,7 +136,8 @@ export class GameManager {
 
     private readonly GAME_WIDTH = 1920;  // Fixed game width
     private readonly GAME_HEIGHT = 1080; // Fixed game height
-    private readonly TIME_STEP = 16.67; // 60 FPS target
+    private readonly TIME_STEP_MS = 1000 / 120; // 60 FPS target
+    private readonly TIME_STEP_S = this.TIME_STEP_MS / 1000; // Convert to seconds
     private gameContainer: Container;     // Container for game objects
 
     // Game objects & state
@@ -153,12 +154,15 @@ export class GameManager {
     private currentScores: Map<string, number> = new Map();
     private killIndicators: KillIndicator[] = [];
     private localTick: number = 0; 
+
     private latestServerSnapshot: ServerStateUpdate = {
         players: [],
         projectiles: [],
         scores: [], 
         serverTick: 0
     }
+
+
 
     private accumulator: number = 0; 
 
@@ -190,7 +194,6 @@ export class GameManager {
         this.socketManager = new SocketManager(config.SERVER_URL ?? 'https://yt-livestream-late-tracker-server-production.up.railway.app/');
 
         this.app = app;
-
         this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
         this.gameContainer = new Container();
 
@@ -235,8 +238,6 @@ export class GameManager {
             this.gameContainer.addChild(platform);
         }
 
-
-
         // Create ammo box at right side of screen
         this.ammoBox = new AmmoBox(this.GAME_WIDTH - 100, this.GAME_HEIGHT - 50);
         this.gameContainer.addChild(this.ammoBox);
@@ -246,13 +247,6 @@ export class GameManager {
         this.app.stage.addChild(this.scoreDisplay);
         this.app.stage.addChild(this.pingDisplay);
         this.app.stage.addChild(this.fpsDisplay);
-
-
-
-
-
-
-
 
 
         // Add E key handler
@@ -266,6 +260,8 @@ export class GameManager {
 
     }
     
+
+
 
 
     public static async initialize(app: Application): Promise<GameManager> {
@@ -423,38 +419,12 @@ export class GameManager {
             });
     
             
-            // Force a render update
-            //this.app.renderer.render(this.app.stage);
-            
         });
 
         this.socketManager.on('disconnect', () => this.cleanupSession());
-
-        this.controller.setCustomKeyDownHandler(((event: KeyboardEvent) => {
-            if (!isRelevantKey(event.code) || !this.self) return;
-            if (this.self) this.self.addPendingInput({ seq: 0, tick: this.localTick, mask: this.controller.getBitmask() });
-            this.socketManager.emit('playerInput', { event: { type: 'keyDown', key: event.code } , seq: 10000, tick: this.localTick });
-        }));
-
-        this.controller.setCustomKeyUpHandler(((event: KeyboardEvent) => {
-            if (!isRelevantKey(event.code) || !this.self) return;
-            console.log(`Eimitting keyUp event: ${event.code}`);
-            this.self.addPendingInput({ seq: 0, tick: this.localTick, mask: this.controller.getBitmask() });
-            this.socketManager.emit('playerInput', { event: { type: 'keyUp', key: event.code }, seq: 10000, tick: this.localTick });
-        }));
-        
-
-        /*
-        this.controller.setCustomMouseUpHandler(((event: MouseEvent) => {
-            this.socketManager.emit('playerInput', {
-                x: event.clientX,
-                y: event.clientY
-            });
-        }));
-        */
-        // TODO: Also emit blur and context menu events..
-
     }
+
+
 
     
     private setupPlayer(): void {
@@ -463,7 +433,6 @@ export class GameManager {
             this.PLAYER_SPAWN_Y,
             this.GAME_BOUNDS, 
             this.playerName,
-            this.controller,
         );
         
         // Set up platform references
@@ -474,14 +443,9 @@ export class GameManager {
     }
 
 
-
     private integrateStateUpdate(): void {
         const { players, projectiles, serverTick } = this.latestServerSnapshot;
         
-        if (this.localTick === 0 && serverTick)  {
-            console.log(`Assigning this.localTick to serverTick: ${serverTick}`);
-            this.localTick = serverTick;
-        }
         this.enemyPlayerStates = players.filter(player => player.id !== this.selfId);
         const selfData = players.find(player => player.id === this.selfId);
 
@@ -530,7 +494,6 @@ export class GameManager {
             this.socketManager.emit('toggleBystander', false);
         }
     }
-
 
     private integrateProjectileUpdates(projectiles: ProjectileState[]): void {
         const activeProjectileIds = new Set(projectiles.map(p => p.id));
@@ -712,6 +675,7 @@ export class GameManager {
         }
     }
 
+    public sims = 0;
     private integrateSelfUpdate(selfData: PlayerState | undefined, serverTick: number): void {
         if (!selfData && this.self) {
             // Clean up self graphics if no self data exists
@@ -724,7 +688,7 @@ export class GameManager {
         if (!selfData) return;
         if (selfData && !this.self) {
             // create new self if it doesn't exist
-            this.self = new Player(selfData.x, selfData.y, this.GAME_BOUNDS, selfData.name, this.controller);
+            this.self = new Player(selfData.x, selfData.y, this.GAME_BOUNDS, selfData.name);
             this.self.setPlatforms(this.platforms);
             this.self.setIsBystander(selfData.isBystander);
             this.gameContainer.addChild(this.self);
@@ -749,72 +713,74 @@ export class GameManager {
             }
         }
 
+    
 
-        // naively reconcile self position
-        if (selfData.x === this.self.x && selfData.y === this.self.y) {
-            // No position change, no need to sync
-            return;
-        }
-
-        // use the local bitmask list to figure out if our predicition was correct
-        this.self.syncPosition(selfData.x, selfData.y);
-
-
-        const ticksBehind = this.localTick - serverTick;
-
-        console.log(`Resimulating ${ticksBehind} ticks behind server tick ${serverTick} (local tick: ${this.localTick})`);
-        if (ticksBehind < 0) {
-            // Very rare: server has marched ahead (big pause on client)
-            // Fast‑forward instead of replaying negative steps
-            //this.localTick = serverTick + 1;
-            this.localTick = serverTick; // Set local tick to server tick
-            return;
-        }     
-        
-
-        const oldBitMask = this.self.getControllerBitmask();
-
-        for (let i = 0; i < ticksBehind; ++i) {
-            const tickNum = serverTick + 1 + i;
-            this.resimulatePlayerPhysics(tickNum);
-            //this.updateCameraPosition();
-
-        }
-        this.self.applyTempPosition(); // Apply the latest position from the server
-        this.self.setControllsFromBitmask(oldBitMask)
     }
 
+
+    // Note: The visual jittering we see when the player moves seems to be
+    // caused by the game rendering slower or at the same rate as the game loop.
+    // When the render rate is set higher than the game loop, the jittering is reduced.
+    // For example, gameloop -> 60 FPS, render -> 120 FPS.
+    // Adding a log after the accumulator loop for the player position shows
+    // that high jitter corresponds to the player position not being updated...
+    
+    // Increasing the FPS of the game loop to 120 seems to help with this jittering.
+    // as well as a high FPS of the renderer. Might need to play with these values
+    // with the broadcast rate to the server in mind.
     private setupGameLoop(): void {
         let pingUpdateCounter = 0;
-        this.app.ticker.maxFPS = 60;
+        this.app.ticker.maxFPS = 120;
+
         this.app.ticker.add((delta) => {
             const elapsedMS = delta.elapsedMS;
 
-            this.processInput();
-            this.accumulator += elapsedMS;
 
-            while (this.accumulator >= this.TIME_STEP) {
-                this.updatePhysics();
-                this.accumulator -= this.TIME_STEP;
+            const cappedFrameTime = Math.min(elapsedMS, 250); 
+
+
+            this.accumulator += cappedFrameTime;
+
+            while (this.accumulator >= this.TIME_STEP_MS) {
+                this.handleTick(this.TIME_STEP_S);
+                
+
+                this.accumulator -= this.TIME_STEP_MS;
                 this.localTick += 1;
             }
 
+            // Note: Pixijs calls render() at the end of the ticker loop, sod we don't
+            // need to decouple rendering from the accumulator logic.
             this.render(elapsedMS, pingUpdateCounter);
 
         });
 
     }
 
+    
+    private handleTick(dt: number): void {
+        if (this.self) {
+            const controllerState = this.controller.getState();
+            const inputVector = Vector2.createFromControllerState(controllerState);
+            this.controller.keys.up.pressed = false; // Reset up key to prevent double jump
+            this.controller.keys.space.pressed = false; // Reset down key to prevent crouch
+            const inputPayload: InputPayload = {
+                tick: this.localTick,
+                vector: inputVector
+            };
 
 
-    // Integrate latestServerSnapshot
-    private processInput(): void {
-        this.integrateStateUpdate();
-    }
+            this.self.update(inputVector, dt);
+            //const statePayload: StatePayload = this.self.getState();
+            this.broadcastPlayerInput(inputPayload);
+            this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
 
-    // Update the physics of the game world by calling update on all game objects
-    private updatePhysics(): void {
-        if (this.self) this.self.update();
+        }
+
+        
+
+        // Remove projectile logic for now
+        /*
         this.updateOwnProjectiles();
 
         if (this.gamePhase === 'active') {
@@ -824,26 +790,22 @@ export class GameManager {
         this.updateEnemyProjectiles();
         this.cleanupDestroyedProjectiles(); 
         this.cleanupPendingCollisions(); 
+        */
     }
 
-    private resimulatePlayerPhysics(tickNum: number): void {
-        if (!this.self) return;
-
-        this.self.applyMaskFromTick(tickNum); // rebuild from transition list
-        //this.self.update(); // Update player position based on input
-        this.self.reUpdate(); // Resimulate player physics
-    }
 
 
     // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)
     private render(deltaMs: number, pingUpdateCounter: number): void {
-        this.updateCameraPosition();
+        //this.updateCameraPosition();
         this.checkForKills(this.latestServerSnapshot.scores);
         this.scoreDisplay.updateScores(this.latestServerSnapshot.scores, this.selfId);
         this.updateFpsDisplay(deltaMs, pingUpdateCounter);
     }
 
-    
+    private broadcastPlayerInput(inputPayload: InputPayload): void {
+        this.socketManager.emit('playerInput', inputPayload);
+    }
 
     private updateFpsDisplay(deltaMS: number, pingUpdateCounter: number): void {
         this.fpsDisplay.update();
@@ -909,46 +871,92 @@ export class GameManager {
         }
     }
 
-private cameraLerpFactor: number = 0.1; // Adjust between 0.01 (very slow) and 0.5 (very fast)
-private currentCameraX: number = 0;
-private currentCameraY: number = 0;
+    private cameraLerpFactor: number = 0.1; // Adjust between 0.01 (very slow) and 0.5 (very fast)
+    private currentCameraX: number = 0;
+    private currentCameraY: number = 0;
 
-private updateCameraPosition(): void {
-    if (!this.self) return;
-    
-    // Calculate target camera position (centered on player)
-    const targetX = -this.self.x + this.GAME_WIDTH / 2;
-    const targetY = -this.self.y + this.GAME_HEIGHT / 2;
 
-    // Clamp camera position to stay within bounds + buffer
-    const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
-    const maxX = this.GAME_BOUNDS.left + 5000;
-    const minY = -(this.GAME_BOUNDS.bottom + 250) + this.GAME_HEIGHT;
-    const maxY = this.GAME_BOUNDS.top + 250;
-    
-    // Apply clamping to target position
-    const clampedTargetX = Math.max(minX, Math.min(maxX, targetX));
-    const clampedTargetY = Math.max(minY, Math.min(maxY, targetY));
-    
-    // Initialize camera position if not set
-    if (this.currentCameraX === 0 && this.currentCameraY === 0) {
-        this.currentCameraX = clampedTargetX;
-        this.currentCameraY = clampedTargetY;
+    // Note: This is causing jitter.
+    private updateCameraPositionLERP(): void {
+        if (!this.self) return;
+        
+        // Calculate target camera position (centered on player)
+        const targetX = -this.self.x + this.GAME_WIDTH / 2;
+        const targetY = -this.self.y + this.GAME_HEIGHT / 2;
+
+        // Clamp camera position to stay within bounds + buffer
+        const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
+        const maxX = this.GAME_BOUNDS.left + 5000;
+        const minY = -(this.GAME_BOUNDS.bottom + 250) + this.GAME_HEIGHT;
+        const maxY = this.GAME_BOUNDS.top + 250;
+        
+        // Apply clamping to target position
+        const clampedTargetX = Math.max(minX, Math.min(maxX, targetX));
+        const clampedTargetY = Math.max(minY, Math.min(maxY, targetY));
+        
+        // Initialize camera position if not set
+        if (this.currentCameraX === 0 && this.currentCameraY === 0) {
+            this.currentCameraX = clampedTargetX;
+            this.currentCameraY = clampedTargetY;
+        }
+        
+        // Smoothly interpolate between current position and target position
+        this.currentCameraX += (clampedTargetX - this.currentCameraX) * this.cameraLerpFactor;
+        this.currentCameraY += (clampedTargetY - this.currentCameraY) * this.cameraLerpFactor;
+        
+        // Apply the smoothed camera position
+        this.camera.x = this.currentCameraX;
+        this.camera.y = this.currentCameraY;
+
+        // Update position of UI elements relative to the camera
+        this.scoreDisplay.fixPosition();
+        this.fpsDisplay.fixPosition();
+        this.pingDisplay.fixPosition();
     }
-    
-    // Smoothly interpolate between current position and target position
-    this.currentCameraX += (clampedTargetX - this.currentCameraX) * this.cameraLerpFactor;
-    this.currentCameraY += (clampedTargetY - this.currentCameraY) * this.cameraLerpFactor;
-    
-    // Apply the smoothed camera position
-    this.camera.x = this.currentCameraX;
-    this.camera.y = this.currentCameraY;
 
-    // Update position of UI elements relative to the camera
-    this.scoreDisplay.fixPosition();
-    this.fpsDisplay.fixPosition();
-    this.pingDisplay.fixPosition();
-}
+    private updateCameraPosition(): void {
+
+        // Center the camera in the game world
+        const centerX = -(this.GAME_WIDTH / 2) + (this.GAME_WIDTH / 2);
+        const centerY = -(this.GAME_HEIGHT / 2) + (this.GAME_HEIGHT / 2) - 500;
+
+        // Use the calculated center if there's no player, otherwise keep following the player
+        this.camera.x = centerX;
+        this.camera.y = centerY;
+        return;
+        
+
+
+        if (!this.self) return;
+        const targetX = -this.self.x + this.GAME_WIDTH / 2;
+        const targetY = (-this.self.y + this.GAME_HEIGHT / 2);
+
+        
+        // Clamp camera position to stay within bounds + 250px buffer
+        // In order to fix issue with camera and small window width, 
+        // We need to somehow modify the 1000 value offsets here to be dynamic, based on the window width?
+        // old values were 250. 
+        // 1000 normal for 1920x1080 full screen
+        // 250, for small window width
+        // 5000 for hugeee world such as 5000x1080
+        const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
+        const maxX = this.GAME_BOUNDS.left + 5000;
+        const minY = -(this.GAME_BOUNDS.bottom + 250) + this.GAME_HEIGHT;
+        const maxY = this.GAME_BOUNDS.top + 250;
+        
+        // Apply clamping and set camera position
+        this.camera.x = Math.max(minX, Math.min(maxX, targetX));
+        this.camera.y = Math.max(minY, Math.min(maxY, targetY));
+
+
+        // Update position of UI elements relative to the camera
+        this.scoreDisplay.fixPosition();
+        this.fpsDisplay.fixPosition();
+        this.pingDisplay.fixPosition();
+
+
+        
+    }
 
 
 

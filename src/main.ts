@@ -6,7 +6,8 @@ console.log('Starting game...');
 (async () => {
     const app = new Application();
     await app.init({ 
-        background: '#202020'
+        background: '#202020',
+
     });
     document.body.appendChild(app.canvas);
 

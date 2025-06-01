@@ -10,10 +10,23 @@ const keyMap: Record<string, keyof Controller['keys']> = {
   ArrowRight: 'right',
 };
 
+
+export type ControllerState = {
+  keys: Record<string, boolean>;
+  mouse: {
+    pressed: boolean;
+    x: number | undefined;
+    y: number | undefined;
+    xR: number | undefined;
+    yR: number | undefined;
+    justReleased: boolean;
+  };
+};
+
 export class Controller {
   public readonly keys: Record<
     'up' | 'down' | 'left' | 'right' | 'space',
-    { pressed: boolean; doubleTap: boolean; timestamp: number }
+    { pressed: boolean }
   >;
 
   public readonly mouse: {
@@ -39,11 +52,11 @@ export class Controller {
 
   constructor() {
     this.keys = {
-      up: { pressed: false, doubleTap: false, timestamp: 0 },
-      down: { pressed: false, doubleTap: false, timestamp: 0 },
-      left: { pressed: false, doubleTap: false, timestamp: 0 },
-      right: { pressed: false, doubleTap: false, timestamp: 0 },
-      space: { pressed: false, doubleTap: false, timestamp: 0 },
+      up: { pressed: false },
+      down: { pressed: false },
+      left: { pressed: false },
+      right: { pressed: false },
+      space: { pressed: false },
     };
     
 
@@ -70,23 +83,8 @@ export class Controller {
     
   }
 
-  public updateFromBitmask(bitmask: number): void {
-    this.keys.up.pressed = (bitmask & (1 << 0)) !== 0; // 1
-    this.keys.down.pressed = (bitmask & (1 << 1)) !== 0; // 2
-    this.keys.left.pressed = (bitmask & (1 << 2)) !== 0; // 4
-    this.keys.right.pressed = (bitmask & (1 << 3)) !== 0; // 8
-    this.keys.space.pressed = (bitmask & (1 << 4)) !== 0; // 16
-  } 
 
-  public getBitmask(): number {
-    let bitmask = 0;
-    if (this.keys.up.pressed) bitmask |= 1 << 0; // 1
-    if (this.keys.down.pressed) bitmask |= 1 << 1; // 2
-    if (this.keys.left.pressed) bitmask |= 1 << 2; // 4
-    if (this.keys.right.pressed) bitmask |= 1 << 3; // 8
-    if (this.keys.space.pressed) bitmask |= 1 << 4; // 16
-    return bitmask;
-  }
+
 
   public setCustomKeyDownHandler(handler: (event: KeyboardEvent) => void): void {
     this.customKeyHandler = handler;
@@ -98,7 +96,26 @@ export class Controller {
     this.customMouseUpHandler = handler;
   }
 
-  private downTime = 0;
+
+  public resetMouse(): void {
+    this.mouse.pressed = false;
+    this.mouse.x = undefined;
+    this.mouse.y = undefined;
+    this.mouse.justReleased = false;
+    this.mouse.xR = undefined;
+    this.mouse.yR = undefined;
+  }
+
+
+  public getState(): ControllerState {
+    return {
+      keys: Object.fromEntries(
+        Object.entries(this.keys).map(([key, value]) => [key, value.pressed])
+      ),
+      mouse: { ...this.mouse },
+    };
+  }
+
 
   private keydownHandler(event: KeyboardEvent): void {
     const key = keyMap[event.code];
@@ -107,10 +124,7 @@ export class Controller {
     const state = this.keys[key];
     if (state.pressed) return; // Ignore if already pressed
 
-    const now = Date.now();
-    this.downTime = now;
 
-    state.doubleTap = state.doubleTap || now - state.timestamp < 500;
     state.pressed = true;
 
     // Call custom key handler if defined
@@ -129,25 +143,13 @@ export class Controller {
     if (this.customKeyUpHandler) {
       this.customKeyUpHandler(event);
     }
-    
 
-    const now = Date.now();
-
-    const totalTime = now - this.downTime;
-    console.log(`Key ${event.code} was held down for ${totalTime} ms`);
     const state = this.keys[key];
 
     state.pressed = false;
 
-    if (state.doubleTap) {
-      state.doubleTap = false;
-    } else {
-      state.timestamp = now;
-    }
   }
-  
-
-  
+   
   private mouseDownHandler(_: MouseEvent): void {
     // Check if it's a left click (main button)
     if (_.button !== 0) return;
@@ -170,14 +172,7 @@ export class Controller {
     this.mouse.yR = _.clientY;
   }
 
-  public resetMouse(): void {
-    this.mouse.pressed = false;
-    this.mouse.x = undefined;
-    this.mouse.y = undefined;
-    this.mouse.justReleased = false;
-    this.mouse.xR = undefined;
-    this.mouse.yR = undefined;
-  }
+
 
     // Add a new method to handle window blur
   private handleBlur(): void {
