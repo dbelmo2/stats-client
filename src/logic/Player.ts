@@ -43,7 +43,7 @@ export class Player extends Container {
     this.velocity = new Vector2(0, 0);
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.addChild(this.body);
-
+    console.log('platforms', this.platforms);
     // Create separate container for UI elements
     this.healthBarContainer = new Container();
     this.addChild(this.healthBarContainer);
@@ -120,6 +120,7 @@ export class Player extends Container {
   public getPositionVector(): Vector2 {
       return new Vector2(this.x, this.y);
   }
+  
   
   public setPlatforms(platforms: Platform[]) {
       this.platforms = platforms;

@@ -1,6 +1,6 @@
-import { Application, Container, Graphics, State } from 'pixi.js';
+import { Application, Container, Graphics } from 'pixi.js';
 import { Player } from '../logic/Player';
-import { Controller, type ControllerState } from '../logic/Controller';
+import { Controller } from '../logic/Controller';
 import { SocketManager } from '../network/SocketManager';
 import { EnemyPlayer } from '../logic/EnemyPlayer';
 import { Projectile } from '../logic/Projectile';
@@ -159,7 +159,6 @@ export class GameManager {
     private self: Player | undefined;
     private selfId: string = '';
     private ownProjectiles: Projectile[] = [];
-    private enemyPlayerStates: PlayerState[] = [];
     private enemyGraphics: Map<string, EnemyPlayer> = new Map();
     private enemyProjectileGraphics: Map<string, EnemyProjectile> = new Map();
     private destroyedProjectiles: Map<string, number> = new Map();
@@ -451,12 +450,11 @@ export class GameManager {
 
 
     private integrateStateUpdate(): void {
-        const { players, projectiles, serverTick } = this.latestServerSnapshot;
+        const { players, projectiles } = this.latestServerSnapshot;
         
-        this.enemyPlayerStates = players.filter(player => player.id !== this.selfId);
         const selfData = players.find(player => player.id === this.selfId);
 
-        this.integrateSelfUpdate(selfData, serverTick);
+        this.integrateSelfUpdate(selfData);
         this.integrateProjectileUpdates(projectiles);
         this.integrateEnemyPlayers();
     }
@@ -684,7 +682,7 @@ export class GameManager {
     }
 
     public sims = 0;
-    private integrateSelfUpdate(selfData: PlayerState | undefined, serverTick: number): void {
+    private integrateSelfUpdate(selfData: PlayerState | undefined): void {
         if (!selfData && this.self) {
             // Clean up self graphics if no self data exists
             this.pendingCollisions.delete(this.selfId);
@@ -696,7 +694,7 @@ export class GameManager {
         if (!selfData) return;
         if (selfData && !this.self) {
             // create new self if it doesn't exist
-            this.self = new Player(selfData.x, selfData.y, this.GAME_BOUNDS, selfData.name);
+            this.self = new Player(selfData.position.x, selfData.position.y, this.GAME_BOUNDS, selfData.name);
             this.self.setPlatforms(this.platforms);
             this.self.setIsBystander(selfData.isBystander);
             this.gameContainer.addChild(this.self);
@@ -720,9 +718,6 @@ export class GameManager {
                 this.self.setHealth(selfData.hp);
             }
         }
-
-    
-
     }
 
 
@@ -835,11 +830,8 @@ export class GameManager {
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
         }
 
-        this.integrateEnemyPlayers();
-        
+        this.integrateStateUpdate();
 
-        // Remove projectile logic for now
-        /*
         this.updateOwnProjectiles();
 
         if (this.gamePhase === 'active') {
@@ -849,7 +841,7 @@ export class GameManager {
         this.updateEnemyProjectiles();
         this.cleanupDestroyedProjectiles(); 
         this.cleanupPendingCollisions(); 
-        */
+        
     }
 
 
@@ -973,18 +965,8 @@ export class GameManager {
         this.pingDisplay.fixPosition();
     }
 
+    /*
     private updateCameraPosition(): void {
-
-        // Center the camera in the game world
-        const centerX = -(this.GAME_WIDTH / 2) + (this.GAME_WIDTH / 2);
-        const centerY = -(this.GAME_HEIGHT / 2) + (this.GAME_HEIGHT / 2) - 500;
-
-        // Use the calculated center if there's no player, otherwise keep following the player
-        this.camera.x = centerX;
-        this.camera.y = centerY;
-        return;
-        
-
 
         if (!this.self) return;
         const targetX = -this.self.x + this.GAME_WIDTH / 2;
@@ -1017,7 +999,7 @@ export class GameManager {
         
     }
 
-
+*/
 
     private updateOwnProjectiles(): void {
         for (let i = this.ownProjectiles.length - 1; i >= 0; i--) {
