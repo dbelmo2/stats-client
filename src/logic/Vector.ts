@@ -47,6 +47,6 @@ export class Vector2 {
   static subtract(a: Vector2, b: Vector2): Vector2  { return a.clone().subtract(b); }
   static dot(a: Vector2, b: Vector2): number        { return a.x * b.x + a.y * b.y; }
 
-  clone(): Vector2      { return new Vector2(this.x, this.y); }
+  clone(): Vector2 { return new Vector2(this.x, this.y); }
   equals(v: Vector2): boolean { return this.x === v.x && this.y === v.y; }
 }

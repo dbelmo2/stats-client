@@ -117,6 +117,10 @@ export class Player extends Container {
       this.updateHealthBar();
   }
 
+  public getPositionVector(): Vector2 {
+      return new Vector2(this.x, this.y);
+  }
+  
   public setPlatforms(platforms: Platform[]) {
       this.platforms = platforms;
   }
@@ -167,7 +171,7 @@ export class Player extends Container {
 
       // 3. Now we clamp the position to the game bounds.
       if (this.gameBounds) {
-          this.x = Math.max(this.gameBounds.left, Math.min(newX, this.gameBounds.right)); // 50 is the width of the player
+          this.x = Math.max(this.gameBounds.left + 25, Math.min(newX, this.gameBounds.right - 25)); // 50 is the width of the player
           this.y = Math.max(this.gameBounds.top, Math.min(newY, this.gameBounds.bottom)); // 50 is the height of the player
       } else {
           this.x = newX;

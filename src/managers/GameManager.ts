@@ -1,4 +1,4 @@
-import { Application, Container, Graphics } from 'pixi.js';
+import { Application, Container, Graphics, State } from 'pixi.js';
 import { Player } from '../logic/Player';
 import { Controller, type ControllerState } from '../logic/Controller';
 import { SocketManager } from '../network/SocketManager';
@@ -29,11 +29,12 @@ const PROJECTILE_GRAVITY = 0.05;
 
 type PlayerState = {
   id: string;
-  x: number;
-  y: number;
+  vector: Vector2;
+  position: Vector2;
   hp: number;
   isBystander: boolean;
   name: string;
+  tick: number
 }
 
 type ProjectileState = {
@@ -81,7 +82,7 @@ type StatePayload = {
 // if they did, the client can continue onto the next frame. If they did not, the client must then sync with the server state,
 // and then apply every local input that happened after that point so they can catch up with 'now'...
 // 
-// The problem with this approach is that it seems to require constant communication with the server,
+// The problem with this approach is that it seems to frequire constant communication with the server,
 // which in our case, is not exactly happening right now. Currently the client only informs the 
 // server about a single keyDown and then keyUp event per keypress. We're not sending input the server every frame..
 // which seems to be what overwatch does inorder to achieve this reconciliation.
@@ -136,10 +137,23 @@ export class GameManager {
 
     private readonly GAME_WIDTH = 1920;  // Fixed game width
     private readonly GAME_HEIGHT = 1080; // Fixed game height
-    private readonly TIME_STEP_MS = 1000 / 120; // 60 FPS target
-    private readonly TIME_STEP_S = this.TIME_STEP_MS / 1000; // Convert to seconds
-    private gameContainer: Container;     // Container for game objects
+    private readonly SERVER_TICK_RATE = 120;
+    private readonly MIN_MS_BETWEEN_TICKS = 1000 / this.SERVER_TICK_RATE; // 60 FPS target
+    private readonly MIN_S_BETWEEN_TICKS = this.MIN_MS_BETWEEN_TICKS / 1000; // Convert to seconds
+    private readonly BUFFER_SIZE = 1024;
+    private readonly COLLISION_TIMEOUT = 2000; // ms to wait before considering server missed collision
+    private readonly PLAYER_SPAWN_X = 100; // X coordinate for player spawn
+    private readonly PLAYER_SPAWN_Y = 100; // Y coordinate for player spawn
 
+    private readonly GAME_BOUNDS = {
+        left: 0,
+        right: this.GAME_WIDTH,
+        top: 0,
+        bottom: this.GAME_HEIGHT
+    };
+
+
+    private gameContainer: Container;
     // Game objects & state
     private playerName: string = '';
     private self: Player | undefined;
@@ -153,7 +167,9 @@ export class GameManager {
     private gamePhase: GamePhase = 'active';
     private currentScores: Map<string, number> = new Map();
     private killIndicators: KillIndicator[] = [];
-    private localTick: number = 0; 
+    private localTick: number = 0;
+    private inputBuffer: InputPayload[] = [];
+    private stateBuffer: StatePayload[] = [];
 
     private latestServerSnapshot: ServerStateUpdate = {
         players: [],
@@ -162,8 +178,12 @@ export class GameManager {
         serverTick: 0
     }
 
-
-
+    private latestServerSnapshotProcessed: ServerStateUpdate = {
+        players: [],
+        projectiles: [],
+        scores: [], 
+        serverTick: 0
+    }
     private accumulator: number = 0; 
 
     // Map displays &d
@@ -174,19 +194,6 @@ export class GameManager {
     private fpsDisplay: FPSDisplay;
     private scoreDisplay: ScoreDisplay;
     
-
-
-
-    private readonly COLLISION_TIMEOUT = 2000; // ms to wait before considering server missed collision
-    private readonly PLAYER_SPAWN_X = 100; // X coordinate for player spawn
-    private readonly PLAYER_SPAWN_Y = 100; // Y coordinate for player spawn
-
-    private readonly GAME_BOUNDS = {
-        left: 0,
-        right: this.GAME_WIDTH,
-        top: 0,
-        bottom: this.GAME_HEIGHT
-    };
 
     private constructor(app: Application) {
         this.controller = new Controller();
@@ -741,11 +748,11 @@ export class GameManager {
 
             this.accumulator += cappedFrameTime;
 
-            while (this.accumulator >= this.TIME_STEP_MS) {
-                this.handleTick(this.TIME_STEP_S);
+            while (this.accumulator >= this.MIN_MS_BETWEEN_TICKS) {
+                this.handleTick(this.MIN_S_BETWEEN_TICKS);
                 
 
-                this.accumulator -= this.TIME_STEP_MS;
+                this.accumulator -= this.MIN_MS_BETWEEN_TICKS;
                 this.localTick += 1;
             }
 
@@ -758,23 +765,74 @@ export class GameManager {
     }
 
     
+    private handleReconciliation(): void {
+        this.latestServerSnapshotProcessed = this.latestServerSnapshot;
+        const selfData = this.latestServerSnapshotProcessed.players.find(player => player.id === this.selfId);
+        if (!selfData  || !this.self) {
+            console.log('Self data not found in latest server snapshot');
+            return;
+        }
+        const tick = selfData.tick;
+        selfData.position = new Vector2(selfData.position.x, selfData.position.y);
+        let serverStateBufferIndex = tick % this.BUFFER_SIZE;
+        let clientPosition = this.stateBuffer[serverStateBufferIndex]?.position;
+        console.log(`correct server position: ${selfData.position.x}, ${selfData.position.y} at tick ${tick}`);
+        
+        // Temp fix for bug where this is undefined :()
+        if (!clientPosition) return;
+        
+
+        const positionError = Vector2.subtract(selfData.position, clientPosition);
+
+        if (positionError.len() > 0.1) {
+            this.self.syncPosition(selfData.position.x, selfData.position.y);
+            this.stateBuffer[serverStateBufferIndex].position = selfData.position;
+            let tickToResimulate = tick + 1;
+            while (tickToResimulate < this.localTick) {
+                const bufferIndex = tickToResimulate % this.BUFFER_SIZE;
+                this.self.update(this.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS);
+                this.stateBuffer[bufferIndex].position = this.self.getPositionVector();
+                tickToResimulate++;
+
+            }
+        }
+    }
+
+
     private handleTick(dt: number): void {
         if (this.self) {
+            if (this.latestServerSnapshot.serverTick > this.latestServerSnapshotProcessed.serverTick) {
+                this.handleReconciliation();
+            }
+            const bufferIndex = this.localTick % this.BUFFER_SIZE;
             const controllerState = this.controller.getState();
+            this.controller.keys.up.pressed = false; // Reset up keys to prevent double jump
+            this.controller.keys.space.pressed = false; 
+
+            // Add input to buffer
             const inputVector = Vector2.createFromControllerState(controllerState);
-            this.controller.keys.up.pressed = false; // Reset up key to prevent double jump
-            this.controller.keys.space.pressed = false; // Reset down key to prevent crouch
             const inputPayload: InputPayload = {
                 tick: this.localTick,
                 vector: inputVector
             };
+            this.inputBuffer[bufferIndex] = inputPayload;
 
-
+            // We apply the input to the player
             this.self.update(inputVector, dt);
-            //const statePayload: StatePayload = this.self.getState();
-            this.broadcastPlayerInput(inputPayload);
-            this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
+            
+            // Add the updated state to the state buffer
+            const stateVector = this.self.getPositionVector();
+            this.stateBuffer[bufferIndex] = {
+                tick: this.localTick,
+                position: stateVector
+            };
 
+
+            // might need to modify this so that it doesnt send to the server if 
+            // the player is in the air and tries to double jump but is not allowed to. 
+            if (inputPayload.vector.x !== 0 
+                && inputPayload.vector.y !== 0 ) this.broadcastPlayerInput(inputPayload);
+            this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
         }
 
         
