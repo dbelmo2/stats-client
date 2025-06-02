@@ -740,7 +740,7 @@ export class GameManager {
             const elapsedMS = delta.elapsedMS;
 
 
-            const cappedFrameTime = Math.min(elapsedMS, 250); 
+            const cappedFrameTime = Math.min(elapsedMS, 100); 
 
 
             this.accumulator += cappedFrameTime;
