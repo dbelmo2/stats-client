@@ -178,6 +178,12 @@ export class GameManager {
         serverTick: 0
     }
 
+
+    // Idea: use the fact that we can expect a keyUp event after a keyDown event to 
+    // somehow account for empty input queue on server... Perphaps we
+    // can use the previous state for every frame with no new input since a keyDown, and no key up... and
+    // for every frame where we do this, we can discard a future input if the keyUp still hasnt arrived...
+    // This way we can distinguish between late inputs and the player simply not pressing any keys.
     private latestServerSnapshotProcessed: ServerStateUpdate = {
         players: [],
         projectiles: [],
@@ -773,23 +779,26 @@ export class GameManager {
         selfData.position = new Vector2(selfData.position.x, selfData.position.y);
 
         if (!this.serverSelf) {
-            this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name, true);
-            this.gameContainer.addChild(this.serverSelf);
+            //this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name, true);
+            //this.gameContainer.addChild(this.serverSelf);
 
         } else {
-            this.serverSelf.syncPosition(selfData.position.x, selfData.position.y);
-            this.serverSelf.setIsBystander(selfData.isBystander);
+            //this.serverSelf.syncPosition(selfData.position.x, selfData.position.y);
+           //this.serverSelf.setIsBystander(selfData.isBystander);
         }
         let serverStateBufferIndex = tick % this.BUFFER_SIZE;
         let clientPosition = this.stateBuffer[serverStateBufferIndex]?.position;
 
         // Temp fix for bug where this is undefined :()
-        if (!clientPosition) return;
+        if (!clientPosition){
+            console.warn(`bad!`);
+            return;
+        } 
 
         const positionError = Vector2.subtract(selfData.position, clientPosition);
-        console.log(`Position error: ${positionError.len()}`);
+        //console.log(`Position error: ${positionError.len()}`);
         if (positionError.len() > 0.0001) {
-            console.log(`Server position: ${selfData.position.x}, ${selfData.position.y}, Client position: ${clientPosition.x}, ${clientPosition.y}`);
+            //console.log(`Server position: ${selfData.position.x}, ${selfData.position.y}, Client position: ${clientPosition.x}, ${clientPosition.y}`);
             this.self.syncPosition(selfData.position.x, selfData.position.y);
             this.stateBuffer[serverStateBufferIndex].position = selfData.position;
             let tickToResimulate = tick + 1;
@@ -798,7 +807,6 @@ export class GameManager {
                 this.self.update(this.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS);
                 this.stateBuffer[bufferIndex].position = this.self.getPositionVector();
                 tickToResimulate++;
-
             }
         }
     }
@@ -865,6 +873,7 @@ export class GameManager {
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
+        console.log(`Broadcasting player input`);
         this.socketManager.emit('playerInput', inputPayload);
     }
 
