@@ -156,6 +156,7 @@ export class GameManager {
     private gameContainer: Container;
     // Game objects & state
     private playerName: string = '';
+    private serverSelf: EnemyPlayer | undefined; // Server-side self for reconciliation
     private self: Player | undefined;
     private selfId: string = '';
     private ownProjectiles: Projectile[] = [];
@@ -770,6 +771,15 @@ export class GameManager {
         }
         const tick = selfData.tick;
         selfData.position = new Vector2(selfData.position.x, selfData.position.y);
+
+        if (!this.serverSelf) {
+            this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name);
+            this.gameContainer.addChild(this.serverSelf);
+
+        } else {
+            this.serverSelf.syncPosition(selfData.position.x, selfData.position.y);
+            this.serverSelf.setIsBystander(selfData.isBystander);
+        }
         let serverStateBufferIndex = tick % this.BUFFER_SIZE;
         let clientPosition = this.stateBuffer[serverStateBufferIndex]?.position;
 
