@@ -13,16 +13,18 @@ export class EnemyPlayer extends Container {
   private healthBarContainer: Container;
   private isBystander: boolean;
   private nameText: Text;
+  private readonly isSelf: boolean;
 
 
-  constructor(id: string, spawnX: number, spawnY: number, isBystander: boolean, name: string) {
+  constructor(id: string, spawnX: number, spawnY: number, isBystander: boolean, name: string, isSelf = false) {
     
     super();
-
+    this.isSelf = isSelf;
     this.id = id;
     this.isBystander = isBystander;
     // Create main body
-    this.body = new Graphics().rect(0, 0, 50, 50).fill(0xff9900);
+    const bodyColor = isSelf ? 0x800080 : 0xff9900;
+    this.body = new Graphics().rect(0, 0, 50, 50).fill(bodyColor);
     this.addChild(this.body);
 
     // Create separate container for UI elements
@@ -87,8 +89,9 @@ export class EnemyPlayer extends Container {
   public setIsBystander(value: boolean): void {
       this.isBystander = value;
       // Change color based on bystander status
-      this.body.clear();
-      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : 0xff9900);
+      this.body.clear();  
+
+      this.body.rect(0, 0, 50, 50).fill(this.isSelf ? 0x800080 : this.isBystander ? 0x808080 : 0xff9900);
   }
   
   public getIsBystander(): boolean {

@@ -773,7 +773,7 @@ export class GameManager {
         selfData.position = new Vector2(selfData.position.x, selfData.position.y);
 
         if (!this.serverSelf) {
-            this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name);
+            this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name, true);
             this.gameContainer.addChild(this.serverSelf);
 
         } else {
