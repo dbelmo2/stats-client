@@ -134,7 +134,8 @@ export class Player extends Container {
 
   
 
-
+  private isJumping = false;
+  private indexPostJump = 0
 
   update(inputVector: Vector2, dt: number) {
       //const wasOnGround = this.isOnGround;
@@ -150,6 +151,8 @@ export class Player extends Container {
 
       // Jumping
       
+
+
       //console.log('inputVector.v < 0', inputVector.y < 0)
       //console.log('this.canDoubleJump', this.canDoubleJump);
       if ((inputVector.y < 0 && this.isOnGround) || (inputVector.y < 0 && this.canDoubleJump)) {
@@ -157,6 +160,7 @@ export class Player extends Container {
         this.velocity.y = inputVector.y * this.JUMP_STRENGTH;
         this.canDoubleJump = this.isOnGround;
         this.isOnGround = false;
+        this.isJumping = true; // Set jumping state
       }
 
 
@@ -183,8 +187,14 @@ export class Player extends Container {
           this.isOnGround = true;
           this.canDoubleJump = true; // Reset double jump when on ground
           this.velocity.y = 0; // Reset vertical velocity when on ground
+          this.isJumping = false; // Reset jumping state
+          this.indexPostJump = 0; // Reset post-jump index
       }
 
+      if (this.isJumping && inputVector.y === 0 && inputVector.x === 0) {
+        this.indexPostJump++;
+        console.log(`Player coordinates ${this.indexPostJump} ticks after jump: ${this.x}, ${this.y}`);
+      }
 
                         
       /*

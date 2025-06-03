@@ -288,7 +288,7 @@ export class GameManager {
             }
             GameManager.instance.playerName = name;
 
-            GameManager.instance.setupPlayer();
+           // GameManager.instance.setupPlayer();
             GameManager.instance.setupGameLoop();
             await GameManager.instance.socketManager.waitForConnect();
             await GameManager.instance.setupNetworking();
@@ -695,6 +695,7 @@ export class GameManager {
             this.pendingCollisions.delete(this.selfId);
             this.app.stage.removeChild(this.self);
             this.self.destroy();
+            console.log('Self data not found, removing self graphics');
             this.self = undefined;
             return;
         }
@@ -753,9 +754,8 @@ export class GameManager {
 
             while (this.accumulator >= this.MIN_MS_BETWEEN_TICKS) {
                 this.handleTick(this.MIN_S_BETWEEN_TICKS);
-                
-
                 this.accumulator -= this.MIN_MS_BETWEEN_TICKS;
+                console.log(`Incrementing local tick: ${this.localTick}`);
                 this.localTick += 1;
             }
 
@@ -779,12 +779,12 @@ export class GameManager {
         selfData.position = new Vector2(selfData.position.x, selfData.position.y);
 
         if (!this.serverSelf) {
-            //this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name, true);
-            //this.gameContainer.addChild(this.serverSelf);
+            this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name, true);
+            this.gameContainer.addChild(this.serverSelf);
 
         } else {
-            //this.serverSelf.syncPosition(selfData.position.x, selfData.position.y);
-           //this.serverSelf.setIsBystander(selfData.isBystander);
+            this.serverSelf.syncPosition(selfData.position.x, selfData.position.y);
+           this.serverSelf.setIsBystander(selfData.isBystander);
         }
         let serverStateBufferIndex = tick % this.BUFFER_SIZE;
         let clientPosition = this.stateBuffer[serverStateBufferIndex]?.position;
@@ -804,6 +804,7 @@ export class GameManager {
             let tickToResimulate = tick + 1;
             while (tickToResimulate < this.localTick) {
                 const bufferIndex = tickToResimulate % this.BUFFER_SIZE;
+                console.log(`At localTick: ${this.localTick}, Buffer size: ${this.inputBuffer.length}, Buffer index: ${bufferIndex}, Tick to resimulate: ${tickToResimulate}`);
                 this.self.update(this.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS);
                 this.stateBuffer[bufferIndex].position = this.self.getPositionVector();
                 tickToResimulate++;
@@ -813,6 +814,7 @@ export class GameManager {
 
 
     private handleTick(dt: number): void {
+        console.log('this.self is defined?', this.self !== undefined);
         if (this.self) {
             if (this.latestServerSnapshot.serverTick > this.latestServerSnapshotProcessed.serverTick) {
                 this.handleReconciliation();
@@ -828,6 +830,7 @@ export class GameManager {
                 tick: this.localTick,
                 vector: inputVector
             };
+            console.log(`Processing input for tick ${this.localTick}: ${inputVector.x}, ${inputVector.y}. Added at index ${bufferIndex}`);
             this.inputBuffer[bufferIndex] = inputPayload;
 
             // We apply the input to the player
@@ -843,8 +846,7 @@ export class GameManager {
 
             // might need to modify this so that it doesnt send to the server if 
             // the player is in the air and tries to double jump but is not allowed to. 
-            if (inputPayload.vector.x !== 0 
-                || inputPayload.vector.y !== 0 ) this.broadcastPlayerInput(inputPayload);
+            this.broadcastPlayerInput(inputPayload);
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
         }
 
