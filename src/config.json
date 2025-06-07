@@ -1,4 +1,4 @@
 {
-    "SERVER_URL": "https://yt-livestream-late-tracker-server-production.up.railway.app/",
+    "SERVER_URL": "https://game-server-dev.up.railway.app/",
     "DEV_MODE": true
 }

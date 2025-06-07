@@ -104,6 +104,12 @@ type StatePayload = {
 //   
 
 
+// TOP TODO: 
+// Desync still exists when player jumps and moves, moreso with double jumps. Log the tick where the player
+// jumps on both the client and server, as well as every tick afer that until they land.
+// Compare the ticks and positions to identify the cause of the desync.
+
+
 
 // TODO: Implement death prediciton for enemies (and self) on client (with servber confirmation)??
 
@@ -137,13 +143,13 @@ export class GameManager {
 
     private readonly GAME_WIDTH = 1920;  // Fixed game width
     private readonly GAME_HEIGHT = 1080; // Fixed game height
-    private readonly SERVER_TICK_RATE = 120;
+    private readonly SERVER_TICK_RATE = 60;
     private readonly MIN_MS_BETWEEN_TICKS = 1000 / this.SERVER_TICK_RATE; // 60 FPS target
     private readonly MIN_S_BETWEEN_TICKS = this.MIN_MS_BETWEEN_TICKS / 1000; // Convert to seconds
     private readonly BUFFER_SIZE = 1024;
     private readonly COLLISION_TIMEOUT = 2000; // ms to wait before considering server missed collision
-    private readonly PLAYER_SPAWN_X = 100; // X coordinate for player spawn
-    private readonly PLAYER_SPAWN_Y = 100; // Y coordinate for player spawn
+    //private readonly PLAYER_SPAWN_X = 100; // X coordinate for player spawn
+    //private readonly PLAYER_SPAWN_Y = 100; // Y coordinate for player spawn
 
     private readonly GAME_BOUNDS = {
         left: 0,
@@ -151,7 +157,6 @@ export class GameManager {
         top: 0,
         bottom: this.GAME_HEIGHT
     };
-
 
     private gameContainer: Container;
     // Game objects & state
@@ -170,6 +175,8 @@ export class GameManager {
     private localTick: number = 0;
     private inputBuffer: InputPayload[] = [];
     private stateBuffer: StatePayload[] = [];
+    private pingUpdateCounter: number = 0;
+
 
     private latestServerSnapshot: ServerStateUpdate = {
         players: [],
@@ -203,6 +210,7 @@ export class GameManager {
 
     private constructor(app: Application) {
         this.controller = new Controller();
+        console.log('latest version...')
 
         this.socketManager = new SocketManager(config.SERVER_URL ?? 'https://yt-livestream-late-tracker-server-production.up.railway.app/');
 
@@ -274,7 +282,7 @@ export class GameManager {
     }
     
 
-
+    
 
 
     public static async initialize(app: Application): Promise<GameManager> {
@@ -439,7 +447,7 @@ export class GameManager {
 
 
 
-    
+    /*
     private setupPlayer(): void {
         this.self = new Player(
             this.PLAYER_SPAWN_X, 
@@ -454,7 +462,7 @@ export class GameManager {
         // Add to stage
         this.gameContainer.addChild(this.self);
     }
-
+*/
 
     private integrateStateUpdate(): void {
         const { players, projectiles } = this.latestServerSnapshot;
@@ -740,28 +748,23 @@ export class GameManager {
     // as well as a high FPS of the renderer. Might need to play with these values
     // with the broadcast rate to the server in mind.
     private setupGameLoop(): void {
-        let pingUpdateCounter = 0;
-        this.app.ticker.maxFPS = 120;
+        this.app.ticker.maxFPS = 60;
 
         this.app.ticker.add((delta) => {
             const elapsedMS = delta.elapsedMS;
-
-
             const cappedFrameTime = Math.min(elapsedMS, 100); 
-
 
             this.accumulator += cappedFrameTime;
 
             while (this.accumulator >= this.MIN_MS_BETWEEN_TICKS) {
                 this.handleTick(this.MIN_S_BETWEEN_TICKS);
                 this.accumulator -= this.MIN_MS_BETWEEN_TICKS;
-                console.log(`Incrementing local tick: ${this.localTick}`);
                 this.localTick += 1;
             }
 
             // Note: Pixijs calls render() at the end of the ticker loop, sod we don't
             // need to decouple rendering from the accumulator logic.
-            this.render(elapsedMS, pingUpdateCounter);
+            this.render(elapsedMS);
 
         });
 
@@ -779,12 +782,12 @@ export class GameManager {
         selfData.position = new Vector2(selfData.position.x, selfData.position.y);
 
         if (!this.serverSelf) {
-            this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name, true);
-            this.gameContainer.addChild(this.serverSelf);
+            //this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name, true);
+            //this.gameContainer.addChild(this.serverSelf);
 
         } else {
-            this.serverSelf.syncPosition(selfData.position.x, selfData.position.y);
-           this.serverSelf.setIsBystander(selfData.isBystander);
+            //this.serverSelf.syncPosition(selfData.position.x, selfData.position.y);
+           //this.serverSelf.setIsBystander(selfData.isBystander);
         }
         let serverStateBufferIndex = tick % this.BUFFER_SIZE;
         let clientPosition = this.stateBuffer[serverStateBufferIndex]?.position;
@@ -796,16 +799,16 @@ export class GameManager {
         } 
 
         const positionError = Vector2.subtract(selfData.position, clientPosition);
+        
         //console.log(`Position error: ${positionError.len()}`);
         if (positionError.len() > 0.0001) {
-            //console.log(`Server position: ${selfData.position.x}, ${selfData.position.y}, Client position: ${clientPosition.x}, ${clientPosition.y}`);
+            console.log(`Server position at tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at tick ${ this.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
             this.self.syncPosition(selfData.position.x, selfData.position.y);
             this.stateBuffer[serverStateBufferIndex].position = selfData.position;
             let tickToResimulate = tick + 1;
             while (tickToResimulate < this.localTick) {
                 const bufferIndex = tickToResimulate % this.BUFFER_SIZE;
-                console.log(`At localTick: ${this.localTick}, Buffer size: ${this.inputBuffer.length}, Buffer index: ${bufferIndex}, Tick to resimulate: ${tickToResimulate}`);
-                this.self.update(this.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS);
+                this.self.update(this.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS, true);
                 this.stateBuffer[bufferIndex].position = this.self.getPositionVector();
                 tickToResimulate++;
             }
@@ -814,7 +817,7 @@ export class GameManager {
 
 
     private handleTick(dt: number): void {
-        console.log('this.self is defined?', this.self !== undefined);
+        //console.log('this.self is defined?', this.self !== undefined);
         if (this.self) {
             if (this.latestServerSnapshot.serverTick > this.latestServerSnapshotProcessed.serverTick) {
                 this.handleReconciliation();
@@ -830,7 +833,7 @@ export class GameManager {
                 tick: this.localTick,
                 vector: inputVector
             };
-            console.log(`Processing input for tick ${this.localTick}: ${inputVector.x}, ${inputVector.y}. Added at index ${bufferIndex}`);
+            //console.log(`Processing input for tick ${this.localTick}: ${inputVector.x}, ${inputVector.y}. Added at index ${bufferIndex}`);
             this.inputBuffer[bufferIndex] = inputPayload;
 
             // We apply the input to the player
@@ -843,11 +846,17 @@ export class GameManager {
                 position: stateVector
             };
 
-
-            // might need to modify this so that it doesnt send to the server if 
-            // the player is in the air and tries to double jump but is not allowed to. 
-            this.broadcastPlayerInput(inputPayload);
+            const lastProcessedInputVector = this.self.getLastProcessedInputVector();
+            const justStoppedMoving = lastProcessedInputVector.x !== 0 || lastProcessedInputVector.y !== 0 // This is true when jump is pressed, but the player is not moving
+                && inputVector.x === 0 && inputVector.y === 0;
+            if (
+                this.self.y !== this.GAME_HEIGHT
+                || inputVector.x !== 0
+                || inputVector.y !== 0
+                || justStoppedMoving
+            ) this.broadcastPlayerInput(inputPayload);
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
+            this.self.setLastProcessedInputVector(inputVector);
         }
 
         this.integrateStateUpdate();
@@ -867,25 +876,25 @@ export class GameManager {
 
 
     // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)
-    private render(deltaMs: number, pingUpdateCounter: number): void {
+    private render(deltaMs: number): void {
         //this.updateCameraPosition();
         this.checkForKills(this.latestServerSnapshot.scores);
         this.scoreDisplay.updateScores(this.latestServerSnapshot.scores, this.selfId);
-        this.updateFpsDisplay(deltaMs, pingUpdateCounter);
+        this.updateFpsDisplay(deltaMs);
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
-        console.log(`Broadcasting player input`);
         this.socketManager.emit('playerInput', inputPayload);
     }
 
-    private updateFpsDisplay(deltaMS: number, pingUpdateCounter: number): void {
+    private updateFpsDisplay(deltaMS: number): void {
         this.fpsDisplay.update();
         // Update ping display (every ~60 frames = ~1 second)
-        pingUpdateCounter += deltaMS;
-        if (pingUpdateCounter >= 60) {
+        this.pingUpdateCounter += deltaMS;
+        if (this.pingUpdateCounter >= 1000) {
+            console.log(`Updating ping display`);
             this.pingDisplay.updatePing(this.socketManager.getPing());
-            pingUpdateCounter = 0;
+            this.pingUpdateCounter = 0;
         }
     }
 
