@@ -9,6 +9,7 @@ export interface PendingInput {
   mask: number;
 }
 
+
 export class Player extends Container {
   public readonly SPEED = 750;
   public readonly JUMP_STRENGTH = 750;
@@ -40,6 +41,7 @@ export class Player extends Container {
     this.gameBounds = gameBounds;
     this.velocity = new Vector2(0, 0);
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
+    console.log(this.platforms)
     this.addChild(this.body);
     // Create separate container for UI elements
     this.healthBarContainer = new Container();
@@ -142,7 +144,7 @@ export class Player extends Container {
   private isJumping = false;
   private indexPostJump = 0
 
-  update(inputVector: Vector2, dt: number, isResimulating: boolean = false): void {
+  update(inputVector: Vector2, dt: number, isResimulating: boolean = false, localTick: number): void {
       //const wasOnGround = this.isOnGround;
       if (isResimulating) {
         this.body.clear();
@@ -167,7 +169,7 @@ export class Player extends Container {
       //console.log('inputVector.v < 0', inputVector.y < 0)
       //console.log('this.canDoubleJump', this.canDoubleJump);
       if ((inputVector.y < 0 && this.isOnGround) || (inputVector.y < 0 && this.canDoubleJump)) {
-        console.log("Jumping");
+        console.log(`Jumping... Current coordinates: ${this.x}, ${this.y}. Input vector: ${JSON.stringify(inputVector)}. Local tick: ${localTick}`);
         this.velocity.y = inputVector.y * this.JUMP_STRENGTH;
         this.canDoubleJump = this.isOnGround;
         this.isOnGround = false;
@@ -204,7 +206,7 @@ export class Player extends Container {
 
       if (this.isJumping && inputVector.y === 0 && inputVector.x === 0) {
         this.indexPostJump++;
-        console.log(`Player coordinates ${this.indexPostJump} ticks after jump: ${this.x}, ${this.y}`);
+        console.log(`${isResimulating ? 'RES: ' : ''}Player coordinates ${this.indexPostJump} ticks after jump: ${this.x}, ${this.y}. Vy=${this.velocity.y}. local tick: ${localTick}`);
       }
 
                         

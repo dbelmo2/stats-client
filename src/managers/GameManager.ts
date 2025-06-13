@@ -104,13 +104,28 @@ type StatePayload = {
 //   
 
 
-// TOP TODO: 
-// Desync still exists when player jumps and moves, moreso with double jumps. Log the tick where the player
-// jumps on both the client and server, as well as every tick afer that until they land.
-// Compare the ticks and positions to identify the cause of the desync.
 
-
-
+// TODO: 6/12 Update:
+// A jump desync is occuring... When the player jumps, a server snapshot arrives...
+// This server snapshot has client tick of say 1045... yet the log on the client side for 
+// tick 1045 comes after the server snapshot. This might suggest that the server is predicting this tick...
+// Ex: "Server position at tick client tick 1045: 387.5, 986.2500000000001, Client position at local tick 21: 100, 163.75"
+// In this example log, tick 1045 is selfData.tick and 21 is this.stateBuffer[serverStateBufferIndex]?.tick..
+// These notably should match but do not... 
+// Is it possible the buffer is being overwitten?
+// For example, when this snapshot arrived, we got the statebufferIndex value by doing 1045 % 1024, which is 21..
+// This explains why client tick is 21.. As the tick gets bigger than the buffer size, the index will start to overwrite itself.
+// But in this case why didnt the client update that position in the state buffer when it processed tivck 1045?
+// Is this because it hadn't yet processed 1045 and rather the server predicted it?...
+// 
+// Possible fixes: 
+// 1. On server, if the tick being sent is greater than the last one sent by the client,
+//      Don't send the state for that latest tick the client said. 
+// 2. Depending on how common this is in a match in producton, we can simply teleport the player to 
+//     the server position when this happens. This is not ideal but it will work.
+//
+//
+//
 // TODO: Implement death prediciton for enemies (and self) on client (with servber confirmation)??
 
 // TODO: Fix projectile spawn location (make dynamic based on mouse position)
@@ -782,15 +797,25 @@ export class GameManager {
         selfData.position = new Vector2(selfData.position.x, selfData.position.y);
 
         if (!this.serverSelf) {
-            //this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name, true);
-            //this.gameContainer.addChild(this.serverSelf);
-
+            this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name, true);
+            this.gameContainer.addChild(this.serverSelf);
         } else {
-            //this.serverSelf.syncPosition(selfData.position.x, selfData.position.y);
-           //this.serverSelf.setIsBystander(selfData.isBystander);
+           this.serverSelf.syncPosition(selfData.position.x, selfData.position.y);
+           this.serverSelf.setIsBystander(selfData.isBystander);
         }
+
         let serverStateBufferIndex = tick % this.BUFFER_SIZE;
         let clientPosition = this.stateBuffer[serverStateBufferIndex]?.position;
+
+        if (tick >= this.localTick) {
+            console.warn(`Server tick ${tick} is ahead of client tick ${this.localTick}. Syncing client position.`);
+            // Server has marched ahead of the client...
+            // As a temporary fix, we will simply sync the clint position with the server position
+            this.self.syncPosition(selfData.position.x, selfData.position.y);
+            this.stateBuffer[serverStateBufferIndex] = selfData;
+            this.localTick = tick;
+            return;
+        }
 
         // Temp fix for bug where this is undefined :()
         if (!clientPosition){
@@ -800,15 +825,14 @@ export class GameManager {
 
         const positionError = Vector2.subtract(selfData.position, clientPosition);
         
-        //console.log(`Position error: ${positionError.len()}`);
         if (positionError.len() > 0.0001) {
-            console.log(`Server position at tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at tick ${ this.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
+            console.log(`Server position at tick client tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at local tick ${ this.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
             this.self.syncPosition(selfData.position.x, selfData.position.y);
             this.stateBuffer[serverStateBufferIndex].position = selfData.position;
             let tickToResimulate = tick + 1;
             while (tickToResimulate < this.localTick) {
                 const bufferIndex = tickToResimulate % this.BUFFER_SIZE;
-                this.self.update(this.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS, true);
+                this.self.update(this.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS, true, selfData.tick);
                 this.stateBuffer[bufferIndex].position = this.self.getPositionVector();
                 tickToResimulate++;
             }
@@ -835,9 +859,8 @@ export class GameManager {
             };
             //console.log(`Processing input for tick ${this.localTick}: ${inputVector.x}, ${inputVector.y}. Added at index ${bufferIndex}`);
             this.inputBuffer[bufferIndex] = inputPayload;
-
             // We apply the input to the player
-            this.self.update(inputVector, dt);
+            this.self.update(inputVector, dt, false, this.localTick);
             
             // Add the updated state to the state buffer
             const stateVector = this.self.getPositionVector();
@@ -892,7 +915,6 @@ export class GameManager {
         // Update ping display (every ~60 frames = ~1 second)
         this.pingUpdateCounter += deltaMS;
         if (this.pingUpdateCounter >= 1000) {
-            console.log(`Updating ping display`);
             this.pingDisplay.updatePing(this.socketManager.getPing());
             this.pingUpdateCounter = 0;
         }
