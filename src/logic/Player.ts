@@ -133,9 +133,12 @@ export class Player extends Container {
       this.platforms = platforms;
   }
 
-  syncPosition(x: number, y: number) {
+  syncPosition(x: number, y: number, vx: number, vy: number) {
     this.x = x; // Update temporary position for physics calculations
     this.y = y; // Update temporary position for physics calculations
+    this.velocity.y = vy;
+    this.velocity.x = vx; // Update velocity based on server data
+    console.log(`Syncing position to (${x}, ${y}) with velocity (${vx}, ${vy})`);
   }
 
 

@@ -34,7 +34,9 @@ type PlayerState = {
   hp: number;
   isBystander: boolean;
   name: string;
-  tick: number
+  tick: number;
+  vx: number;
+  vy: number;
 }
 
 type ProjectileState = {
@@ -811,7 +813,7 @@ export class GameManager {
             console.warn(`Server tick ${tick} is ahead of client tick ${this.localTick}. Syncing client position.`);
             // Server has marched ahead of the client...
             // As a temporary fix, we will simply sync the clint position with the server position
-            this.self.syncPosition(selfData.position.x, selfData.position.y);
+            this.self.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
             this.stateBuffer[serverStateBufferIndex] = selfData;
             this.localTick = tick;
             return;
@@ -827,7 +829,7 @@ export class GameManager {
         
         if (positionError.len() > 0.0001) {
             console.log(`Server position at tick client tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at local tick ${ this.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
-            this.self.syncPosition(selfData.position.x, selfData.position.y);
+            this.self.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
             this.stateBuffer[serverStateBufferIndex].position = selfData.position;
             let tickToResimulate = tick + 1;
             while (tickToResimulate < this.localTick) {
