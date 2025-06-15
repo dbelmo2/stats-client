@@ -191,6 +191,7 @@ export class GameManager {
     private killIndicators: KillIndicator[] = [];
     private localTick: number = 0;
     private inputBuffer: InputPayload[] = [];
+    private inputQueue: InputPayload[] = [];
     private stateBuffer: StatePayload[] = [];
     private pingUpdateCounter: number = 0;
 
@@ -828,7 +829,7 @@ export class GameManager {
         const positionError = Vector2.subtract(selfData.position, clientPosition);
         
         if (positionError.len() > 0.0001) {
-            console.log(`Server position at tick client tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at local tick ${ this.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
+            console.warn(`Server position at tick client tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at local tick ${ this.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
             this.self.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
             this.stateBuffer[serverStateBufferIndex].position = selfData.position;
             let tickToResimulate = tick + 1;
@@ -863,6 +864,7 @@ export class GameManager {
             this.inputBuffer[bufferIndex] = inputPayload;
             // We apply the input to the player
             this.self.update(inputVector, dt, false, this.localTick);
+
             
             // Add the updated state to the state buffer
             const stateVector = this.self.getPositionVector();
@@ -874,12 +876,13 @@ export class GameManager {
             const lastProcessedInputVector = this.self.getLastProcessedInputVector();
             const justStoppedMoving = lastProcessedInputVector.x !== 0 || lastProcessedInputVector.y !== 0 // This is true when jump is pressed, but the player is not moving
                 && inputVector.x === 0 && inputVector.y === 0;
+
             if (
-                this.self.y !== this.GAME_HEIGHT
-                || inputVector.x !== 0
-                || inputVector.y !== 0
-                || justStoppedMoving
-            ) this.broadcastPlayerInput(inputPayload);
+                this.self.y !== this.GAME_HEIGHT // If the player is in the air
+                || inputVector.x !== 0 // Has horizontal input
+                || inputVector.y !== 0 // Has verical input
+                || justStoppedMoving // Or was moving last input but stopped moving this input
+            ) this.bufferPlayerInput(inputPayload);
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
             this.self.setLastProcessedInputVector(inputVector);
         }
@@ -908,8 +911,20 @@ export class GameManager {
         this.updateFpsDisplay(deltaMs);
     }
 
-    private broadcastPlayerInput(inputPayload: InputPayload): void {
-        this.socketManager.emit('playerInput', inputPayload);
+    private broadcastPlayerInput(inputPayloads: InputPayload[]): void {
+        this.socketManager.emit('playerInput', inputPayloads);
+    }
+
+    private bufferPlayerInput(inputPayload: InputPayload): void {
+        // Buffer the input payload
+        console.log(`Adding input to buffer for tick ${inputPayload.tick}: ${inputPayload.vector.x}, ${inputPayload.vector.y}`);
+        this.inputQueue.push(inputPayload);
+        // If we have more than BUFFER_SIZE inputs, remove the oldest one
+        if (this.inputQueue.length >= 3) {
+            console.log(`Broadcasting ${this.inputQueue.length} inputs to server`);
+            this.broadcastPlayerInput(this.inputQueue);
+            this.inputQueue = []; // Clear the buffer after broadcasting
+        }
     }
 
     private updateFpsDisplay(deltaMS: number): void {
