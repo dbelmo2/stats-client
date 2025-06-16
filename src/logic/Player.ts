@@ -167,11 +167,6 @@ export class Player extends Container {
       }
 
       // Jumping
-      
-
-
-      //console.log('inputVector.v < 0', inputVector.y < 0)
-      //console.log('this.canDoubleJump', this.canDoubleJump);
       if ((inputVector.y < 0 && this.isOnGround) || (inputVector.y < 0 && this.canDoubleJump)) {
         //console.log(`Jumping... Current coordinates: ${this.x}, ${this.y}. Input vector: ${JSON.stringify(inputVector)}. Local tick: ${localTick}`);
         this.velocity.y = inputVector.y * this.JUMP_STRENGTH;
@@ -213,9 +208,23 @@ export class Player extends Container {
         //console.log(`${isResimulating ? 'RES: ' : ''}Player coordinates ${this.indexPostJump} ticks after jump: ${this.x}, ${this.y}. Vy=${this.velocity.y}. local tick: ${localTick}`);
       }
 
-                        
-      
       // Check platform collisions
+      const { isOnPlatform, platformTop } = this.checkPlatformCollisions();            
+      if (isOnPlatform && platformTop !== null) {
+          this.y = platformTop;
+          this.velocity.y = 0;
+          this.isOnSurface = true;
+      }
+    
+      this.isOnGround = this.isOnSurface;
+      if (this.isOnSurface && !wasOnGround) {
+          this.canDoubleJump = true;
+      }
+    
+  }
+
+
+  checkPlatformCollisions(): { isOnPlatform: boolean; platformTop: number | null } {
       for (const platform of this.platforms) {
         const platformBounds = platform.getPlatformBounds();
         const playerBounds = this.getPlayerBounds();
@@ -235,19 +244,13 @@ export class Player extends Container {
           
         // Check if we're falling, were above platform last frame, and are horizontally aligned
         if (isGoingDown && isWithinPlatformWidth && (isOnPlatform || isFallingThroughPlatform)) {
-            this.y = platformBounds.top;
-            this.velocity.y = 0;
-            this.isOnSurface = true;
-            break;
+            return { isOnPlatform: true, platformTop: platformBounds.top };
         }
       }
-
-      this.isOnGround = this.isOnSurface;
-      if (this.isOnSurface && !wasOnGround) {
-          this.canDoubleJump = true;
-      }
-    
+      
+      return { isOnPlatform: false, platformTop: null };  
   }
+
 
   setHealth(updatedServerHealth: number): void {
       this.serverHealth = updatedServerHealth;
@@ -282,6 +285,8 @@ export class Player extends Container {
         this.body.rect(0, 0, 50, 50).fill(0x228B22);
     }, 100);
   }
+
+
 
   destroy(): void {
     // Clear any pending timeouts
