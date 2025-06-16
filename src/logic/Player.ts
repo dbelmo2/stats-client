@@ -29,6 +29,7 @@ export class Player extends Container {
   private healthBarContainer: Container;
   private platforms: Platform[] = [];
   private isBystander: boolean = true;
+  private isOnSurface: boolean = false;
   private body: Graphics;
   private gameBounds: { left: number; right: number; top: number; bottom: number } | null = null;
   private nameText: Text;
@@ -36,12 +37,12 @@ export class Player extends Container {
   private lastProcessedInputVector: Vector2 = new Vector2(0, 0);
 
 
+
   constructor(x: number, y: number, gameBounds: any, name: string) {
     super();
     this.gameBounds = gameBounds;
     this.velocity = new Vector2(0, 0);
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
-    console.log(this.platforms)
     this.addChild(this.body);
     // Create separate container for UI elements
     this.healthBarContainer = new Container();
@@ -138,7 +139,7 @@ export class Player extends Container {
     this.y = y; // Update temporary position for physics calculations
     this.velocity.y = vy;
     this.velocity.x = vx; // Update velocity based on server data
-    console.log(`Syncing position to (${x}, ${y}) with velocity (${vx}, ${vy})`);
+    //console.log(`Syncing position to (${x}, ${y}) with velocity (${vx}, ${vy})`);
   }
 
 
@@ -148,7 +149,7 @@ export class Player extends Container {
   private indexPostJump = 0
 
   update(inputVector: Vector2, dt: number, isResimulating: boolean = false, localTick: number): void {
-      //const wasOnGround = this.isOnGround;
+      const wasOnGround = this.isOnGround;
       if (isResimulating) {
         this.body.clear();
         this.body.rect(0, 0, 50, 50).fill(0xff0000);
@@ -172,7 +173,7 @@ export class Player extends Container {
       //console.log('inputVector.v < 0', inputVector.y < 0)
       //console.log('this.canDoubleJump', this.canDoubleJump);
       if ((inputVector.y < 0 && this.isOnGround) || (inputVector.y < 0 && this.canDoubleJump)) {
-        console.log(`Jumping... Current coordinates: ${this.x}, ${this.y}. Input vector: ${JSON.stringify(inputVector)}. Local tick: ${localTick}`);
+        //console.log(`Jumping... Current coordinates: ${this.x}, ${this.y}. Input vector: ${JSON.stringify(inputVector)}. Local tick: ${localTick}`);
         this.velocity.y = inputVector.y * this.JUMP_STRENGTH;
         this.canDoubleJump = this.isOnGround;
         this.isOnGround = false;
@@ -209,41 +210,43 @@ export class Player extends Container {
 
       if (this.isJumping && inputVector.y === 0 && inputVector.x === 0) {
         this.indexPostJump++;
-        console.log(`${isResimulating ? 'RES: ' : ''}Player coordinates ${this.indexPostJump} ticks after jump: ${this.x}, ${this.y}. Vy=${this.velocity.y}. local tick: ${localTick}`);
+        //console.log(`${isResimulating ? 'RES: ' : ''}Player coordinates ${this.indexPostJump} ticks after jump: ${this.x}, ${this.y}. Vy=${this.velocity.y}. local tick: ${localTick}`);
       }
 
                         
-      /*
+      
       // Check platform collisions
       for (const platform of this.platforms) {
-      const platformBounds = platform.getPlatformBounds();
-      const playerBounds = this.getPlayerBounds();
-      
-      // Calculate the previous position based on velocity
-      const prevBottom = playerBounds.bottom - this.velocityY;
-      
-      // Check for platform collision with tunneling prevention
-      const isGoingDown = this.velocityY > 0;
-      const wasAbovePlatform = prevBottom <= platformBounds.top;
-      const isWithinPlatformWidth = playerBounds.right > platformBounds.left && 
-      playerBounds.left < platformBounds.right;
-      const hasCollidedWithPlatform = playerBounds.bottom >= platformBounds.top;
-      
-      // Check if we're falling, were above platform last frame, and are horizontally aligned
-      if (isGoingDown && wasAbovePlatform && isWithinPlatformWidth && hasCollidedWithPlatform) {
+        const platformBounds = platform.getPlatformBounds();
+        const playerBounds = this.getPlayerBounds();
+        
+        // Check for platform collision with tunneling prevention
+        const isGoingDown = this.velocity.y > 0;
+        const isOnPlatform = playerBounds.bottom === platformBounds.top;
+        const isFallingThroughPlatform = playerBounds.bottom > platformBounds.top && 
+          playerBounds.bottom < platformBounds.bottom;
 
-          this.y = platformBounds.top;
-          this.velocityY = 0;
-          isOnSurface = true;
-          break;
-      }
+        const isWithinPlatformWidth = playerBounds.right > platformBounds.left && 
+          playerBounds.left < platformBounds.right;
+        
+
+        console.log(`Player bottom ${playerBounds.bottom} Platform top ${platformBounds.top}, Velocity Y ${this.velocity.y}`);
+        // Check if we're falling, were above platform last frame, and are horizontally aligned
+          
+        // Check if we're falling, were above platform last frame, and are horizontally aligned
+        if (isGoingDown && isWithinPlatformWidth && (isOnPlatform || isFallingThroughPlatform)) {
+            this.y = platformBounds.top;
+            this.velocity.y = 0;
+            this.isOnSurface = true;
+            break;
+        }
       }
 
-      this.isOnGround = isOnSurface;
-      if (isOnSurface && !wasOnGround) {
+      this.isOnGround = this.isOnSurface;
+      if (this.isOnSurface && !wasOnGround) {
           this.canDoubleJump = true;
       }
-    */
+    
   }
 
   setHealth(updatedServerHealth: number): void {

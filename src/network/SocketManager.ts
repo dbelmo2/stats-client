@@ -86,7 +86,6 @@ export class SocketManager {
   }
 
   joinQueue(region: Region, name: string) {
-    console.log(`[SocketManager] Joining queue in ${region}...`);
     this.socket.emit('joinQueue', { region, name });
   }
 

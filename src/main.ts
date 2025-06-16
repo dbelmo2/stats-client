@@ -4,6 +4,8 @@ import { GameManager } from './managers/GameManager';
 console.log('Starting game...');
 
 (async () => {
+    localStorage.debug = '*';
+
     const app = new Application();
     await app.init({ 
         background: '#202020',
