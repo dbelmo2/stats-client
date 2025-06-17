@@ -149,8 +149,7 @@ export class Player extends Container {
   private indexPostJump = 0
 
   update(inputVector: Vector2, dt: number, isResimulating: boolean = false, localTick: number): void {
-      console.log('localTick', localTick, 'inputVector', inputVector);
-      const wasOnGround = this.isOnGround;
+      //console.log('localTick', localTick, 'inputVector', inputVector);
       if (isResimulating) {
         this.body.clear();
         this.body.rect(0, 0, 50, 50).fill(0xff0000);
@@ -168,10 +167,11 @@ export class Player extends Container {
       }
 
       // Jumping
-      if ((inputVector.y < 0 && this.isOnGround) || (inputVector.y < 0 && this.canDoubleJump)) {
-        //console.log(`Jumping... Current coordinates: ${this.x}, ${this.y}. Input vector: ${JSON.stringify(inputVector)}. Local tick: ${localTick}`);
+      if ((inputVector.y < 0 && this.isOnSurface) || (inputVector.y < 0 && this.canDoubleJump)) {
+        console.log(`Jumping... Current coordinates: ${this.x}, ${this.y}. Input vector: ${JSON.stringify(inputVector)}. Local tick: ${localTick}`);
         this.velocity.y = inputVector.y * this.JUMP_STRENGTH;
-        this.canDoubleJump = this.isOnGround;
+        this.canDoubleJump = this.isOnSurface;
+        this.isOnSurface = false; // Reset surface state when jumping
         this.isOnGround = false;
         this.isJumping = true; // Set jumping state
       }
@@ -202,6 +202,7 @@ export class Player extends Container {
           this.velocity.y = 0; // Reset vertical velocity when on ground
           this.isJumping = false; // Reset jumping state
           this.indexPostJump = 0; // Reset post-jump index
+          this.isOnSurface = true; // Set surface state when on ground
       }
 
       if (this.isJumping && inputVector.y === 0 && inputVector.x === 0) {
@@ -217,10 +218,6 @@ export class Player extends Container {
           this.isOnSurface = true;
       }
     
-      this.isOnGround = this.isOnSurface;
-      if (this.isOnSurface && !wasOnGround) {
-          this.canDoubleJump = true;
-      }
     
   }
 
@@ -240,7 +237,7 @@ export class Player extends Container {
           playerBounds.left < platformBounds.right;
         
 
-        console.log(`Player bottom ${playerBounds.bottom} Platform top ${platformBounds.top}, Velocity Y ${this.velocity.y}`);
+        //console.log(`Player bottom ${playerBounds.bottom} Platform top ${platformBounds.top}, Velocity Y ${this.velocity.y}`);
         // Check if we're falling, were above platform last frame, and are horizontally aligned
           
         // Check if we're falling, were above platform last frame, and are horizontally aligned

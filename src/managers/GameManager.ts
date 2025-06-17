@@ -157,7 +157,6 @@ export class GameManager {
 
     private constructor(app: Application) {
         this.controller = new Controller();
-        console.log('latest version...')
 
         this.socketManager = new SocketManager(config.SERVER_URL ?? 'https://yt-livestream-late-tracker-server-production.up.railway.app/');
 
