@@ -167,32 +167,22 @@ export class Player extends Container {
 
       // Jumping
       if ((inputVector.y < 0 && this.isOnSurface) || (inputVector.y < 0 && this.canDoubleJump)) {
-        console.log(`Jumping... Current coordinates: ${this.x}, ${this.y}. Input vector: ${JSON.stringify(inputVector)}. Local tick: ${localTick}`);
-        this.velocity.y = inputVector.y * this.JUMP_STRENGTH;
-        this.canDoubleJump = this.isOnSurface;
-        this.isOnSurface = false; // Reset surface state when jumping
-        this.isJumping = true; // Set jumping state
+          this.jump(inputVector);
       }
 
 
 
       // Gravity
-      this.velocity.y += this.GRAVITY * dt;
-      this.velocity.y = Math.min(this.velocity.y, this.MAX_FALL_SPEED); 
-
+      this.applyGravity(dt);
 
       // 2. Once the velocity is updated, we calculate the new position.
       const newX = this.x + (this.velocity.x * dt);
       const newY = this.y + (this.velocity.y * dt);
 
       // 3. Now we clamp the position to the game bounds.
-      if (this.gameBounds) {
-          this.x = Math.max(this.gameBounds.left + 25, Math.min(newX, this.gameBounds.right - 25)); // 50 is the width of the player
-          this.y = Math.max(this.gameBounds.top, Math.min(newY, this.gameBounds.bottom)); // 50 is the height of the player
-      } else {
-          this.x = newX;
-          this.y = newY;
-      }
+      const { clampedX, clampedY } = this.getClampedPosition(newX, newY);
+      this.x = clampedX;
+      this.y = clampedY;
 
       if (this.y === this.gameBounds?.bottom) {
           this.canDoubleJump = true; // Reset double jump when on ground
@@ -216,6 +206,33 @@ export class Player extends Container {
       }
     
     
+  }
+
+
+  applyGravity(dt: number): void {
+      this.velocity.y += this.GRAVITY * dt;
+      this.velocity.y = Math.min(this.velocity.y, this.MAX_FALL_SPEED); 
+  }
+
+  jump(inputVector: Vector2): void {
+      this.velocity.y = inputVector.y * this.JUMP_STRENGTH;
+      this.canDoubleJump = this.isOnSurface;
+      this.isOnSurface = false; // Player is no longer on the ground
+      this.isJumping = true; // Set jumping state
+  }
+
+  getClampedPosition(newX: number, newY: number): { clampedX: number; clampedY: number } {
+      if (this.gameBounds) {
+        return {
+          clampedX: Math.max(this.gameBounds.left + 25, Math.min(newX, this.gameBounds.right - 25)), // 50 is the width of the player
+          clampedY: Math.max(this.gameBounds.top, Math.min(newY, this.gameBounds.bottom)) // 50 is the height of the player
+        }
+      } else {
+        return {
+          clampedX: newX,
+          clampedY: newY
+        };
+      }
   }
 
 
