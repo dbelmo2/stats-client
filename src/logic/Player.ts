@@ -149,6 +149,7 @@ export class Player extends Container {
   private indexPostJump = 0
 
   update(inputVector: Vector2, dt: number, isResimulating: boolean = false, localTick: number): void {
+      console.log('localTick', localTick, 'inputVector', inputVector);
       const wasOnGround = this.isOnGround;
       if (isResimulating) {
         this.body.clear();

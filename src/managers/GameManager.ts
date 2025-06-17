@@ -71,82 +71,12 @@ type StatePayload = {
     tick: number;
     position: Vector2;
 }
-
-
-// TODO: Reconciation...
-// How overwatch does it:
-// - Client sends input events to server
-// - Server processes input and sends back state updates
-// - Client receives state updates and reconciles with local 
-// Note: The client in this scenario keeps a local copy of the previou frame states, that is, the client input at that
-// point, the client position, etc. With this local copy, the client can compare the server state with its own.
-// When it receives a response to an old request, the client can check if the server and itself came to the same conclusion... 
-// if they did, the client can continue onto the next frame. If they did not, the client must then sync with the server state,
-// and then apply every local input that happened after that point so they can catch up with 'now'...
-// 
-// The problem with this approach is that it seems to frequire constant communication with the server,
-// which in our case, is not exactly happening right now. Currently the client only informs the 
-// server about a single keyDown and then keyUp event per keypress. We're not sending input the server every frame..
-// which seems to be what overwatch does inorder to achieve this reconciliation.
-//
-// Steps to implement:
-// Need to refactor GameManager to be similar to the server set up where:
-//   When a state update arrives, it is applied to latestServerSnapshot
-//   All the work currently done in handleStateUpdate should be moved to the app.ticker..
-//   processInput() should apply the state from the server, reconciling if needed. 
-//   update() would call the update() function of all players and projectiles...
-//   render() can then optionally be used for any interperlation... 
-// Also need to update controller (server one as well) to have getBitmask() and setFromBitmask() methods.
-// A history of bitmask changes along with when they occured will be stored locally. 
-// This will be used to get the bitmask at any given tick. Check chatGPT history for more details on this.
-// Note: the server is sending a serverTick. This in turn with the localTick can be used to 
-//   determine how many frames need to be resimulated when/if reconciliation is needed.
-//   additionally, we need to implement a way of retrieving what the player's controller state was
-//   at a specific tick. Check chatGPT history for this as it provided some good suggestions already.
-//   
-
-
-
-// TODO: 6/12 Update:
-// A jump desync is occuring... When the player jumps, a server snapshot arrives...
-// This server snapshot has client tick of say 1045... yet the log on the client side for 
-// tick 1045 comes after the server snapshot. This might suggest that the server is predicting this tick...
-// Ex: "Server position at tick client tick 1045: 387.5, 986.2500000000001, Client position at local tick 21: 100, 163.75"
-// In this example log, tick 1045 is selfData.tick and 21 is this.stateBuffer[serverStateBufferIndex]?.tick..
-// These notably should match but do not... 
-// Is it possible the buffer is being overwitten?
-// For example, when this snapshot arrived, we got the statebufferIndex value by doing 1045 % 1024, which is 21..
-// This explains why client tick is 21.. As the tick gets bigger than the buffer size, the index will start to overwrite itself.
-// But in this case why didnt the client update that position in the state buffer when it processed tivck 1045?
-// Is this because it hadn't yet processed 1045 and rather the server predicted it?...
-// 
-// Possible fixes: 
-// 1. On server, if the tick being sent is greater than the last one sent by the client,
-//      Don't send the state for that latest tick the client said. 
-// 2. Depending on how common this is in a match in producton, we can simply teleport the player to 
-//     the server position when this happens. This is not ideal but it will work.
-//
-//
-//
 // TODO: Implement death prediciton for enemies (and self) on client (with servber confirmation)??
-
-// TODO: Fix projectile spawn location (make dynamic based on mouse position)
-
-// TODO: Look into having camera follow player with small width correctly. attempted but
-// faced issues with rendering friendly projectiles correctly  
-
-
 // TODO: Add powerups???
 // Ideas:
 //  Fat Love:
 // - Defense (fat love eats all projectiles)
 // - offense (fat love shoots every projectile he ate in the direction of the mouse)
-
-// update:
-// processInput() check controller, get bitmask, send to server?, server reconciliation
-// update() apply bitmask to update temp values of player. We dont want to render here
-// render() render player based on temp values, update camera, etc.
-
 
 
 type GamePhase = 'initializing' | 'ready' | 'active' | 'ended';
@@ -713,46 +643,69 @@ export class GameManager {
         }
     }
 
-    public sims = 0;
     private integrateSelfUpdate(selfData: PlayerState | undefined): void {
         if (!selfData && this.self) {
             // Clean up self graphics if no self data exists
-            this.pendingCollisions.delete(this.selfId);
-            this.app.stage.removeChild(this.self);
-            this.self.destroy();
-            console.log('Self data not found, removing self graphics');
-            this.self = undefined;
+            this.handlePlayerDeath();
             return;
         }
         if (!selfData) return;
         if (selfData && !this.self) {
             // create new self if it doesn't exist
-            this.self = new Player(selfData.position.x, selfData.position.y, this.GAME_BOUNDS, selfData.name);
-            this.self.setPlatforms(this.platforms);
-            this.self.setIsBystander(selfData.isBystander);
-            this.gameContainer.addChild(this.self);
+            this.spawnPlayer(selfData);
         }
         if (!this.self) return;
 
-        
         this.self.setIsBystander(selfData.isBystander);
-        
         if (this.self.getIsBystander() === false && selfData.isBystander ===  false) {
             // Only update health if we don't have a pending collision
-            const pendingCollision = this.pendingCollisions.get(this.selfId);
-            if (!pendingCollision) {
-                this.self.setHealth(selfData.hp);
-            }
-            
-            // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
-            // than our prediction, collision was confirmed
-            if (selfData.hp <= this.self.getPredictedHealth()) {
-                this.pendingCollisions.delete(this.selfId);
-                this.self.setHealth(selfData.hp);
-            }
+            this.updatePlayerHealth(selfData);
         }
     }
+    
+    private handlePlayerDeath() {
+        this.pendingCollisions.delete(this.selfId);
+        if (this.self) {
+            this.app.stage.removeChild(this.self);
+            this.self.destroy();
+        }
+        console.log('Self data not found, removing self graphics');
+        this.self = undefined;
+    }
 
+    private spawnPlayer(data: PlayerState): void {
+        if (this.self) {
+            console.warn('Self already exists, cannot spawn again');
+            return;
+        }
+        
+        this.self = new Player(
+            data.position.x,
+            data.position.y,
+            this.GAME_BOUNDS,
+            data.name
+        );
+        
+        this.self.setPlatforms(this.platforms);
+        this.self.setIsBystander(data.isBystander);
+        this.self.setLastProcessedInputVector(new Vector2(0, 0));
+        this.gameContainer.addChild(this.self);
+    }
+
+    private updatePlayerHealth(selfData: PlayerState): void {
+        if (!this.self) return;
+        const pendingCollision = this.pendingCollisions.get(this.selfId);
+        if (!pendingCollision) {
+            this.self.setHealth(selfData.hp);
+        }
+        
+        // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
+        // than our prediction, collision was confirmed
+        if (selfData.hp <= this.self.getPredictedHealth()) {
+            this.pendingCollisions.delete(this.selfId);
+            this.self.setHealth(selfData.hp);
+        }
+    }
 
     // Note: The visual jittering we see when the player moves seems to be
     // caused by the game rendering slower or at the same rate as the game loop.
@@ -843,64 +796,65 @@ export class GameManager {
 
 
     private handleTick(dt: number): void {
-        //console.log('this.self is defined?', this.self !== undefined);
         if (this.self) {
             if (this.latestServerSnapshot.serverTick > this.latestServerSnapshotProcessed.serverTick) {
                 this.handleReconciliation();
             }
-            const bufferIndex = this.localTick % this.BUFFER_SIZE;
-            const controllerState = this.controller.getState();
-            this.controller.keys.up.pressed = false; // Reset up keys to prevent double jump
-            this.controller.keys.space.pressed = false; 
-
-            // Add input to buffer
-            const inputVector = Vector2.createFromControllerState(controllerState);
-            const inputPayload: InputPayload = {
-                tick: this.localTick,
-                vector: inputVector
-            };
-            //console.log(`Processing input for tick ${this.localTick}: ${inputVector.x}, ${inputVector.y}. Added at index ${bufferIndex}`);
-            this.inputBuffer[bufferIndex] = inputPayload;
-            // We apply the input to the player
-            this.self.update(inputVector, dt, false, this.localTick);
-
-            
-            // Add the updated state to the state buffer
-            const stateVector = this.self.getPositionVector();
-            this.stateBuffer[bufferIndex] = {
-                tick: this.localTick,
-                position: stateVector
-            };
-
-            const lastProcessedInputVector = this.self.getLastProcessedInputVector();
-            const justStoppedMoving = lastProcessedInputVector.x !== 0 || lastProcessedInputVector.y !== 0 // This is true when jump is pressed, but the player is not moving
-                && inputVector.x === 0 && inputVector.y === 0;
-
-            if (
-                this.self.y !== this.GAME_HEIGHT // If the player is in the air
-                || inputVector.x !== 0 // Has horizontal input
-                || inputVector.y !== 0 // Has verical input
-                || justStoppedMoving // Or was moving last input but stopped moving this input
-            ) this.broadcastPlayerInput(inputPayload);
+            const playerInput = this.handlePlayerInput(dt);
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
-            this.self.setLastProcessedInputVector(inputVector);
+            if (playerInput) this.self.setLastProcessedInputVector(playerInput.vector);
         }
 
         this.integrateStateUpdate();
-
         this.updateOwnProjectiles();
-
-        if (this.gamePhase === 'active') {
-            this.handleShooting();
-        }
-
+        this.handleShooting();
         this.updateEnemyProjectiles();
         this.cleanupDestroyedProjectiles(); 
         this.cleanupPendingCollisions(); 
         
     }
 
+    private handlePlayerInput(dt: number): InputPayload | undefined {
+        if (!this.self) return; // No player to control
 
+        // Add input to buffer
+        const controllerState = this.controller.getState();
+        const inputVector = Vector2.createFromControllerState(controllerState);
+        const inputPayload: InputPayload = {
+            tick: this.localTick,
+            vector: inputVector
+        };
+
+        const bufferIndex = this.localTick % this.BUFFER_SIZE;
+        this.controller.keys.up.pressed = false; // Reset up keys to prevent double jump
+        this.controller.keys.space.pressed = false; 
+
+
+        //console.log(`Processing input for tick ${this.localTick}: ${inputVector.x}, ${inputVector.y}. Added at index ${bufferIndex}`);
+        this.inputBuffer[bufferIndex] = inputPayload;
+        // We apply the input to the player
+        this.self.update(inputVector, dt, false, this.localTick);
+
+        // Add the updated state to the state buffer
+        const stateVector = this.self.getPositionVector();
+        this.stateBuffer[bufferIndex] = {
+            tick: this.localTick,
+            position: stateVector
+        };
+
+        const lastProcessedInputVector = this.self.getLastProcessedInputVector();
+        const justStoppedMoving = lastProcessedInputVector.x !== 0 || lastProcessedInputVector.y !== 0 // This is true when jump is pressed, but the player is not moving
+            && inputVector.x === 0 && inputVector.y === 0;
+
+        if (
+            this.self.y !== this.GAME_HEIGHT // If the player is in the air
+            || inputVector.x !== 0 // Has horizontal input
+            || inputVector.y !== 0 // Has verical input
+            || justStoppedMoving // Or was moving last input but stopped moving this input
+        ) this.broadcastPlayerInput(inputPayload);
+
+        return inputPayload; // Return the input payload for further processing if needed
+    }
 
     // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)
     private render(deltaMs: number): void {
