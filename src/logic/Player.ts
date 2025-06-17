@@ -17,7 +17,6 @@ export class Player extends Container {
   public readonly MAX_FALL_SPEED = 1500
 
   private velocity: Vector2;
-  private isOnGround = false;
   private canDoubleJump = true;
   private healthBar: Graphics;
   private maxHealth: number = 100;
@@ -172,7 +171,6 @@ export class Player extends Container {
         this.velocity.y = inputVector.y * this.JUMP_STRENGTH;
         this.canDoubleJump = this.isOnSurface;
         this.isOnSurface = false; // Reset surface state when jumping
-        this.isOnGround = false;
         this.isJumping = true; // Set jumping state
       }
 
@@ -197,7 +195,6 @@ export class Player extends Container {
       }
 
       if (this.y === this.gameBounds?.bottom) {
-          this.isOnGround = true;
           this.canDoubleJump = true; // Reset double jump when on ground
           this.velocity.y = 0; // Reset vertical velocity when on ground
           this.isJumping = false; // Reset jumping state
