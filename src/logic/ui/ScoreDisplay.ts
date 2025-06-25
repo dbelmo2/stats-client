@@ -29,6 +29,7 @@ export class ScoreDisplay extends Container {
         // and not affected by camera movement
         this.x = 50 + (this.largestWidth - window.innerWidth) / 2;
         this.y = 125; // Fixed position
+        this.visible = false; // Initially hidden
     }
     // Update scoreboard with new scores
     updateScores(scores: Array<{ playerId: string, kills: number, deaths: number, name: string }>, selfId: string): void {
@@ -77,6 +78,17 @@ export class ScoreDisplay extends Container {
         this.x = offset < 0 ? 50 : 50 + offset;
         this.y = 125;
     }
+
+    public show() {
+        this.visible = true;
+    }
+
+    public hide() {
+        // Hide the score display by removing it from the stage
+        this.visible = false;
+    }
+
+
     destroy(): void {
         for (const text of this.scores.values()) {
             text.destroy();

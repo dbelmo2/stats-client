@@ -10,7 +10,7 @@ export class Platform extends Container {
         
         this.body = new Graphics()
             .rect(0, 0, this.platformWidth, this.platformHeight)
-            .fill(0x111111); 
+            .fill('#192328');
         
         this.addChild(this.body);
         this.x = x;

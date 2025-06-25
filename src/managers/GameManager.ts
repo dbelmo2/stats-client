@@ -1,4 +1,4 @@
-import { Application, Container, Graphics } from 'pixi.js';
+import { Application, Container, Graphics, Sprite } from 'pixi.js';
 import { Player } from '../logic/Player';
 import { Controller } from '../logic/Controller';
 import { SocketManager } from '../network/SocketManager';
@@ -16,6 +16,7 @@ import * as config from '../config.json';
 import { PingDisplay } from '../logic/ui/PingDisplay';
 import { FPSDisplay } from '../logic/ui/FPSDisplay';
 import { Vector2 } from '../logic/Vector';
+
 
 
 const PROJECTILE_SPEED = 30;
@@ -123,6 +124,7 @@ export class GameManager {
     private inputBuffer: InputPayload[] = [];
     private stateBuffer: StatePayload[] = [];
     private pingUpdateCounter: number = 0;
+    private backgroundAssets: { [key: string]: Sprite } = {};
 
 
     private latestServerSnapshot: ServerStateUpdate = {
@@ -161,6 +163,7 @@ export class GameManager {
         this.socketManager = new SocketManager(config.SERVER_URL ?? 'https://yt-livestream-late-tracker-server-production.up.railway.app/');
 
         this.app = app;
+        this.setupGameWorld()
         this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
         this.gameContainer = new Container();
 
@@ -171,19 +174,19 @@ export class GameManager {
             .fill(0x111111);  // Dark gray color
         const leftBgTop = new Graphics()
             .rect(-this.GAME_WIDTH,  this.GAME_HEIGHT, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
-            .fill(0x111111); //d  Dark gray color
+            .fill('#202b32');; //d  Dark gray color
         const rightBg = new Graphics()  
             .rect(this.GAME_WIDTH, 0, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
             .fill(0x111111);  // Dark gray color
 
         const bottomBg = new Graphics()
-            .rect(0, this.GAME_HEIGHT, this.GAME_WIDTH * 2, 500)
-            .fill(0x111111);  // Dark gray color
+          .rect(0, this.GAME_HEIGHT, this.GAME_WIDTH * 2, 500)
+          .fill('#202b32');  // Dark gray color
 
         background.addChild(leftBgTop);
         background.addChild(bottomBg);
-        background.addChild(leftBg);
-        background.addChild(rightBg);
+        //background.addChild(leftBg);
+        //background.addChild(rightBg);
         
         // Add background first so it's behind everything
         this.gameContainer.addChild(background);
@@ -229,8 +232,6 @@ export class GameManager {
     
 
     
-
-
     public static async initialize(app: Application): Promise<GameManager> {
         if (!GameManager.instance) {
             GameManager.instance = new GameManager(app);
@@ -241,15 +242,50 @@ export class GameManager {
                 throw new Error('Player name is required');
             }
             GameManager.instance.playerName = name;
-
+            GameManager.instance.setupEventListeners();
            // GameManager.instance.setupPlayer();
             GameManager.instance.setupGameLoop();
+
             await GameManager.instance.socketManager.waitForConnect();
             await GameManager.instance.setupNetworking();
             // After the first state update, we can start the game loop
         }
         return GameManager.instance;
     }
+
+    private async setupGameWorld() {
+        
+        const j1Sprite = Sprite.from('j1');
+        j1Sprite.x = 0 - this.GAME_WIDTH / 2;
+        j1Sprite.y = 0;
+
+        const j2Sprite = Sprite.from('j2');
+        j2Sprite.x = 0 - this.GAME_WIDTH / 2;
+        j2Sprite.y = 0;
+
+        const j3Sprite = Sprite.from('j3');
+        j3Sprite.x = 0 - this.GAME_WIDTH / 2;
+        j3Sprite.y = 0;
+
+        const j4Sprite = Sprite.from('j4');
+        j4Sprite.x = 0;
+        j4Sprite.y = 0;
+
+        localStorage.debug = '*';
+
+        this.app.stage.addChild(j4Sprite);
+        this.app.stage.addChild(j3Sprite);
+        this.app.stage.addChild(j2Sprite);
+        this.app.stage.addChild(j1Sprite);
+        this.backgroundAssets = {
+            j1: j1Sprite,
+            j2: j2Sprite,
+            j3: j3Sprite,
+            j4: j4Sprite
+        }
+        console.log(`Game world setup complete with player name: ${this.playerName}`);
+    }
+
 
     // Add new method
     private async getPlayerName(): Promise<string> {
@@ -341,6 +377,25 @@ export class GameManager {
     }
 
 
+    private setupEventListeners(): void {
+
+        // Add tab key event listener for spectator mode toggle
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault(); // Prevent default tab behavior (focus switching)
+                this.showScoreBoard();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault(); // Prevent default tab behavior (focus switching)
+                this.hideScoreBoard();
+            }
+        });
+
+    }
+
     private async setupNetworking(): Promise<void> {
         const id = this.socketManager.getId();
         if (!id) throw new Error('Socket ID is undefined');
@@ -390,8 +445,6 @@ export class GameManager {
 
         this.socketManager.on('disconnect', () => this.cleanupSession());
     }
-
-
 
     /*
     private setupPlayer(): void {
@@ -846,7 +899,7 @@ export class GameManager {
             && inputVector.x === 0 && inputVector.y === 0;
 
         if (
-            this.self.y !== this.GAME_HEIGHT // If the player is in the air
+            this.self.y !== this.GAME_HEIGHT // If the player is in the air TODO: Change this to isAFk === false?
             || inputVector.x !== 0 // Has horizontal input
             || inputVector.y !== 0 // Has verical input
             || justStoppedMoving // Or was moving last input but stopped moving this input
@@ -878,6 +931,13 @@ export class GameManager {
         }
     }
 
+    private showScoreBoard(): void {
+        this.scoreDisplay.show();
+    }
+
+    private hideScoreBoard(): void {
+        this.scoreDisplay.hide();
+    }
 
     private handleShooting(): void {
         if (!this.self || this.self.getIsBystander() || this.gamePhase !== 'active') return;
@@ -948,7 +1008,7 @@ export class GameManager {
         // Clamp camera position to stay within bounds + buffer
         const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
         const maxX = this.GAME_BOUNDS.left + 5000;
-        const minY = -(this.GAME_BOUNDS.bottom + 250) + this.GAME_HEIGHT;
+        const minY = -(this.GAME_BOUNDS.bottom + 175) + this.GAME_HEIGHT;
         const maxY = this.GAME_BOUNDS.top + 250;
         
         // Apply clamping to target position
@@ -965,14 +1025,42 @@ export class GameManager {
         this.currentCameraX += (clampedTargetX - this.currentCameraX) * this.cameraLerpFactor;
         this.currentCameraY += (clampedTargetY - this.currentCameraY) * this.cameraLerpFactor;
         
+
+
+        const xOffset = this.currentCameraX - this.camera.x;
+        const yOffset = this.currentCameraY - this.camera.y;
+        
         // Apply the smoothed camera position
         this.camera.x = this.currentCameraX;
         this.camera.y = this.currentCameraY;
+
+        this.updateBackground(xOffset, yOffset);
 
         // Update position of UI elements relative to the camera
         this.scoreDisplay.fixPosition();
         this.fpsDisplay.fixPosition();
         this.pingDisplay.fixPosition();
+    }
+
+    private updateBackground(offsetX: number, offsetY: number): void {
+        // Update background position based on camera offset
+        if (!this.backgroundAssets
+            || !this.backgroundAssets.j1
+            || !this.backgroundAssets.j2
+            || !this.backgroundAssets.j3
+            || !this.backgroundAssets.j4
+        ) return;
+        
+        this.backgroundAssets.j1.x += offsetX * 0.4;
+        this.backgroundAssets.j2.x += offsetX * 0.3;
+        this.backgroundAssets.j3.x += offsetX * 0.2;
+
+        this.backgroundAssets.j1.y += offsetY * 0.4;
+        this.backgroundAssets.j2.y += offsetY * 0.3;
+        this.backgroundAssets.j3.y += offsetY * 0.2;
+
+        console.log(`Updated x positions: j1: ${this.backgroundAssets.j1.x}, j2: ${this.backgroundAssets.j2.x}, j3: ${this.backgroundAssets.j3.x}, j4: ${this.backgroundAssets.j4.x}`);
+        //console.log('Updated background assets, offsetX:', offsetX, 'offsetY:', offsetY);
     }
 
     /*
