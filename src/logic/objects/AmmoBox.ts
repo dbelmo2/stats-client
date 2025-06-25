@@ -1,4 +1,4 @@
-import { Graphics, Container, Text, TextStyle, Sprite } from 'pixi.js';
+import { Container, Sprite } from 'pixi.js';
 
 export class AmmoBox extends Container {
     private body: Sprite;

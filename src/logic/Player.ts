@@ -161,7 +161,7 @@ export class Player extends Container {
   private indexPostJump = 0
 
   update(inputVector: Vector2, dt: number, isResimulating: boolean = false, localTick: number): void {
-      //console.log('localTick', localTick, 'inputVector', inputVector);
+      console.log('localTick', localTick, 'inputVector', inputVector);
       if (isResimulating) {
         this.body.clear();
         this.body.rect(0, 0, 50, 50).fill(0xff0000);

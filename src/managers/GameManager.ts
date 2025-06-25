@@ -169,15 +169,9 @@ export class GameManager {
 
         // Create a background that extends beyond game bounds
         const background = new Container();
-        const leftBg = new Graphics()
-            .rect(-this.GAME_WIDTH,  0, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
-            .fill(0x111111);  // Dark gray color
         const leftBgTop = new Graphics()
             .rect(-this.GAME_WIDTH,  this.GAME_HEIGHT, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
             .fill('#192328');; //d  Dark gray color
-        const rightBg = new Graphics()  
-            .rect(this.GAME_WIDTH, 0, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
-            .fill(0x111111);  // Dark gray color
 
         const bottomBg = new Graphics()
           .rect(0, this.GAME_HEIGHT, this.GAME_WIDTH * 2, 500)
@@ -185,8 +179,7 @@ export class GameManager {
 
         background.addChild(leftBgTop);
         background.addChild(bottomBg);
-        //background.addChild(leftBg);
-        //background.addChild(rightBg);
+
         
         // Add background first so it's behind everything
         this.gameContainer.addChild(background);
