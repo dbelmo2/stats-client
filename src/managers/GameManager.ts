@@ -174,14 +174,14 @@ export class GameManager {
             .fill(0x111111);  // Dark gray color
         const leftBgTop = new Graphics()
             .rect(-this.GAME_WIDTH,  this.GAME_HEIGHT, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
-            .fill('#202b32');; //d  Dark gray color
+            .fill('#192328');; //d  Dark gray color
         const rightBg = new Graphics()  
             .rect(this.GAME_WIDTH, 0, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
             .fill(0x111111);  // Dark gray color
 
         const bottomBg = new Graphics()
           .rect(0, this.GAME_HEIGHT, this.GAME_WIDTH * 2, 500)
-          .fill('#202b32');  // Dark gray color
+          .fill('#192328');  // Dark gray color
 
         background.addChild(leftBgTop);
         background.addChild(bottomBg);
@@ -209,7 +209,7 @@ export class GameManager {
         }
 
         // Create ammo box at right side of screen
-        this.ammoBox = new AmmoBox(this.GAME_WIDTH - 100, this.GAME_HEIGHT - 50);
+        this.ammoBox = new AmmoBox(150, this.GAME_HEIGHT - 80);
         this.gameContainer.addChild(this.ammoBox);
 
         this.camera.addChild(this.gameContainer);
@@ -1059,7 +1059,6 @@ export class GameManager {
         this.backgroundAssets.j2.y += offsetY * 0.3;
         this.backgroundAssets.j3.y += offsetY * 0.2;
 
-        console.log(`Updated x positions: j1: ${this.backgroundAssets.j1.x}, j2: ${this.backgroundAssets.j2.x}, j3: ${this.backgroundAssets.j3.x}, j4: ${this.backgroundAssets.j4.x}`);
         //console.log('Updated background assets, offsetX:', offsetX, 'offsetY:', offsetY);
     }
 

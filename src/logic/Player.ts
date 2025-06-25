@@ -1,4 +1,4 @@
-import { Graphics, Container, Text, TextStyle } from 'pixi.js';
+import { Graphics, Container, Text, TextStyle, Sprite } from 'pixi.js';
 import { Platform } from './Platform';
 import { Vector2 } from './Vector';
 
@@ -34,6 +34,7 @@ export class Player extends Container {
   private nameText: Text;
   private inputInterval: NodeJS.Timeout | null = null;
   private lastProcessedInputVector: Vector2 = new Vector2(0, 0);
+  private tomatoSprite: Sprite | null = null;
 
 
 
@@ -88,9 +89,21 @@ export class Player extends Container {
   public setIsBystander(value: boolean): void {
       this.isBystander = value;
       this.body.clear();
-      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : 0x228B22);
-  }
+      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#B069DB');
 
+      if (this.isBystander === false) {
+        this.tomatoSprite = Sprite.from('tomato');
+        this.tomatoSprite.width = 30;
+        this.tomatoSprite.height = 30;
+        // Set anchor to center the sprite horizontally
+        this.tomatoSprite.anchor.set(0, -0.5);
+        
+        // Set z-index of the tomato sprite itself
+        this.tomatoSprite.zIndex = 10;
+        this.addChild(this.tomatoSprite);
+      }
+  }
+  
   public getIsBystander(): boolean {
       return this.isBystander;
   }
