@@ -9,7 +9,7 @@ export class EnemyProjectile extends Container {
   private id: string;
   private ownerId: string;
   
-  constructor(id: string, ownerId: string, x: number, y: number, vx: number, vy: number, color: number = 0xffffff, lifespan: number = 5000) {
+  constructor(id: string, ownerId: string, x: number, y: number, vx: number, vy: number, lifespan: number = 5000) {
     super();
     this.id = id;
     this.ownerId = ownerId;
