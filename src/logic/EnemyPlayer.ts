@@ -1,4 +1,4 @@
-import { Graphics, Container, TextStyle, Text } from 'pixi.js';
+import { Graphics, Container, TextStyle, Text, Sprite } from 'pixi.js';
 
 export class EnemyPlayer extends Container {
   private id: string;
@@ -14,6 +14,7 @@ export class EnemyPlayer extends Container {
   private isBystander: boolean;
   private nameText: Text;
   private readonly isSelf: boolean;
+  private tomatoSprite: Sprite | null = null;
 
 
   constructor(id: string, spawnX: number, spawnY: number, isBystander: boolean, name: string, isSelf = false) {
@@ -92,6 +93,19 @@ export class EnemyPlayer extends Container {
       this.body.clear();  
 
       this.body.rect(0, 0, 50, 50).fill(this.isSelf ? 0x800080 : this.isBystander ? 0x808080 : 0xff9900);
+
+
+      if (this.isBystander === false) {
+        this.tomatoSprite = Sprite.from('tomato');
+        this.tomatoSprite.width = 30;
+        this.tomatoSprite.height = 30;
+        // Set anchor to center the sprite horizontally
+        this.tomatoSprite.anchor.set(0, -0.5);
+        
+        // Set z-index of the tomato sprite itself
+        this.tomatoSprite.zIndex = 10;
+        this.addChild(this.tomatoSprite);
+      }
   }
   
   public getIsBystander(): boolean {

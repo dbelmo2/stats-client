@@ -96,7 +96,7 @@ export class Player extends Container {
         this.tomatoSprite.width = 30;
         this.tomatoSprite.height = 30;
         // Set anchor to center the sprite horizontally
-        this.tomatoSprite.anchor.set(0, -0.5);
+        this.tomatoSprite.anchor.set(-0.25, -0.30);
         
         // Set z-index of the tomato sprite itself
         this.tomatoSprite.zIndex = 10;
