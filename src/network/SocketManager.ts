@@ -41,6 +41,14 @@ export class SocketManager {
     this.socket.on('movedToGlobalQueue', () => {
       console.log(`[SocketManager] Moved to global queue`);
     });
+    
+    this.socket.on('afkWarning', ({ message }) => {
+      console.warn(`[SocketManager] AFK Warning: ${message}`);
+    });
+
+    this.socket.on('afkRemoved', ({ message }) => {
+      console.warn(`[SocketManager] AFK Removed: ${message}`);
+    })
   }
 
   private setupPingMonitoring(): void {

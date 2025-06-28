@@ -1,7 +1,7 @@
-import { Graphics, Container } from 'pixi.js';
+import { Container, Sprite } from 'pixi.js';
 
 export class EnemyProjectile extends Container {
-  private body: Graphics;
+  private body: Sprite;
   private vx: number;
   private vy: number;
   public shouldBeDestroyed = false;
@@ -14,7 +14,10 @@ export class EnemyProjectile extends Container {
     this.id = id;
     this.ownerId = ownerId;
     this.lifespan = lifespan;
-    this.body = new Graphics().circle(0, 0, 5).fill(color);
+    // Create tomato sprite
+    this.body = Sprite.from('tomato');
+    this.body.width = 20;
+    this.body.height = 20;
     this.addChild(this.body);
 
     // Default position
@@ -22,7 +25,7 @@ export class EnemyProjectile extends Container {
     this.y = y;
     this.vx = vx;
     this.vy = vy;
-
+    console.log(`EnemyProjectile created with id: ${this.id}, ownerId: ${this.ownerId}, position: (${this.x}, ${this.y}), velocity: (${this.vx}, ${this.vy})`);
     this.age();
   }
   update() {

@@ -16,12 +16,10 @@ import * as config from '../config.json';
 import { PingDisplay } from '../logic/ui/PingDisplay';
 import { FPSDisplay } from '../logic/ui/FPSDisplay';
 import { Vector2 } from '../logic/Vector';
+import { ModalManager } from '../logic/ui/Modal';
 
 
 
-const PROJECTILE_SPEED = 30;
-const PROJECTILE_LIFESPAN = 5000;
-const PROJECTILE_GRAVITY = 0.05;
 
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
 // can start with low health. Once they take damage, the health bar updates to the correct value.
@@ -437,7 +435,37 @@ export class GameManager {
         });
 
         this.socketManager.on('disconnect', () => this.cleanupSession());
+    
+        this.socketManager.on('afkWarning', ({ message }) => {
+            console.warn(`[SocketManager] AFK Warning: ${message}`);
+            ModalManager.getInstance().showModal({
+                title: "AFK Warning",
+                message: "You have been inactive for too long. Please move or click to continue playing.",
+                buttonText: "OK",
+                buttonAction: () => {
+                    // Send a small movement to show the player is active
+
+                },
+                isWarning: true
+            });
+        });
+
+        this.socketManager.on('afkRemoved', ({ message }) => {
+            console.warn(`[SocketManager] AFK Removed: ${message}`);
+            ModalManager.getInstance().showModal({
+                title: "Removed for Inactivity",
+                message: "You have been removed from the game due to inactivity. Please reload the page to rejoin.",
+                buttonText: "Reload Page",
+                buttonAction: () => {
+                    this.cleanupSession();
+                    window.location.reload();
+                },
+                isWarning: false
+            });
+        });
+
     }
+
 
     /*
     private setupPlayer(): void {
@@ -808,7 +836,7 @@ export class GameManager {
         let clientPosition = this.stateBuffer[serverStateBufferIndex]?.position;
 
         if (tick >= this.localTick) {
-            console.warn(`Server tick ${tick} is ahead of client tick ${this.localTick}. Syncing client position.`);
+            //console.warn(`Server tick ${tick} is ahead of client tick ${this.localTick}. Syncing client position.`);
             // Server has marched ahead of the client...
             // As a temporary fix, we will simply sync the clint position with the server position
             this.self.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
@@ -832,7 +860,7 @@ export class GameManager {
             let tickToResimulate = tick + 1;
             while (tickToResimulate < this.localTick) {
                 const bufferIndex = tickToResimulate % this.BUFFER_SIZE;
-                this.self.update(this.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS, true, selfData.tick);
+                this.self.update(this.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS, true);
                 this.stateBuffer[bufferIndex].position = this.self.getPositionVector();
                 tickToResimulate++;
             }
@@ -841,18 +869,21 @@ export class GameManager {
 
 
     private handleTick(dt: number): void {
+
         if (this.self) {
             if (this.latestServerSnapshot.serverTick > this.latestServerSnapshotProcessed.serverTick) {
                 this.handleReconciliation();
             }
             const playerInput = this.handlePlayerInput(dt);
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
-            if (playerInput) this.self.setLastProcessedInputVector(playerInput.vector);
+            if (playerInput) {
+                this.handleShooting(playerInput);
+                this.self.setLastProcessedInputVector(playerInput.vector);
+            }            
         }
 
         this.integrateStateUpdate();
         this.updateOwnProjectiles();
-        this.handleShooting();
         this.updateEnemyProjectiles();
         this.cleanupDestroyedProjectiles(); 
         this.cleanupPendingCollisions(); 
@@ -865,9 +896,17 @@ export class GameManager {
         // Add input to buffer
         const controllerState = this.controller.getState();
         const inputVector = Vector2.createFromControllerState(controllerState);
+        //console.log(`Input vector: ${inputVector.x}, ${inputVector.y}, mouse: ${inputVector.mouse ? `${inputVector.mouse.x}, ${inputVector.mouse.y}` : 'none'}`);
+        this.controller.resetMouse();
+        if (inputVector.mouse) { // Convert camera to world coordinates
+            //console.log(`Mouse input detected: ${inputVector.mouse.x}, ${inputVector.mouse.y}, id: ${inputVector.mouse.id}`);
+            const { x, y } = this.convertCameraToWorldCoordinates(inputVector.mouse.x, inputVector.mouse.y);
+            inputVector.mouse.x = x;
+            inputVector.mouse.y = y;
+        }
         const inputPayload: InputPayload = {
             tick: this.localTick,
-            vector: inputVector
+            vector: inputVector,
         };
 
         const bufferIndex = this.localTick % this.BUFFER_SIZE;
@@ -878,7 +917,7 @@ export class GameManager {
         //console.log(`Processing input for tick ${this.localTick}: ${inputVector.x}, ${inputVector.y}. Added at index ${bufferIndex}`);
         this.inputBuffer[bufferIndex] = inputPayload;
         // We apply the input to the player
-        this.self.update(inputVector, dt, false, this.localTick);
+        this.self.update(inputVector, dt, false);
 
         // Add the updated state to the state buffer
         const stateVector = this.self.getPositionVector();
@@ -895,6 +934,7 @@ export class GameManager {
             this.self.y !== this.GAME_HEIGHT // If the player is in the air TODO: Change this to isAFk === false?
             || inputVector.x !== 0 // Has horizontal input
             || inputVector.y !== 0 // Has verical input
+            || inputVector.mouse // Has mouse input
             || justStoppedMoving // Or was moving last input but stopped moving this input
         ) this.broadcastPlayerInput(inputPayload);
 
@@ -931,58 +971,56 @@ export class GameManager {
     private hideScoreBoard(): void {
         this.scoreDisplay.hide();
     }
+    
 
-    private handleShooting(): void {
-        if (!this.self || this.self.getIsBystander() || this.gamePhase !== 'active') return;
-        if (this.controller.mouse.justReleased) {
-            this.controller.mouse.justReleased = false;
+    private convertCameraToWorldCoordinates(x: number, y: number): { x: number, y: number } {
+        // Get the canvas element and its bounding rect
+        const canvas = this.app.canvas as HTMLCanvasElement;
+        const canvasRect = canvas.getBoundingClientRect();
+        
+        // 1. Convert mouse position to canvas-relative coordinates
+        const canvasX = x - canvasRect.left;
+        const canvasY = y - canvasRect.top;
+        
+        // 2. Calculate the scale ratio between the canvas display size and its internal size
+        const scaleRatioX = canvas.width / canvasRect.width;
+        const scaleRatioY = canvas.height / canvasRect.height;
+        
+        // 3. Scale the coordinates to the internal canvas coordinate system
+        const rendererX = canvasX * scaleRatioX;
+        const rendererY = canvasY * scaleRatioY;
+        
+        // 4. Convert to world coordinates by subtracting camera offset
+        const worldX = rendererX - this.camera.x;
+        const worldY = rendererY - this.camera.y;
 
-            // Get the canvas element and its bounding rect
-            const canvas = this.app.canvas as HTMLCanvasElement;
-            const canvasRect = canvas.getBoundingClientRect();
-            
-            // Get mouse coordinates from the controller
-            const mouseX = this.controller.mouse.xR ?? 0;
-            const mouseY = this.controller.mouse.yR ?? 0;
-            
-            // 1. Convert mouse position to canvas-relative coordinates
-            const canvasX = mouseX - canvasRect.left;
-            const canvasY = mouseY - canvasRect.top;
-            
-            // 2. Calculate the scale ratio between the canvas display size and its internal size
-            const scaleRatioX = canvas.width / canvasRect.width;
-            const scaleRatioY = canvas.height / canvasRect.height;
-            
-            // 3. Scale the coordinates to the internal canvas coordinate system
-            const rendererX = canvasX * scaleRatioX;
-            const rendererY = canvasY * scaleRatioY;
-            
-            // 4. Convert to world coordinates by subtracting camera offset
-            const worldX = rendererX - this.camera.x;
-            const worldY = rendererY - this.camera.y;
-
-
-            const target = { 
-                x: worldX,
-                y: worldY,
-                id: ''
-            };
-            const projectile = new Projectile(
-                this.self.x,
-                this.self.y,
-                target.x,
-                target.y,
-                PROJECTILE_SPEED,
-                PROJECTILE_LIFESPAN,
-                PROJECTILE_GRAVITY,
-                this.app.screen.height
-            );
-
-            target.id = projectile.getId();
-            this.gameContainer.addChild(projectile);
-            this.ownProjectiles.push(projectile);
-            this.socketManager.emit('shoot', target);
+        return {
+            x: worldX,
+            y: worldY
         }
+}
+
+
+    private handleShooting(input: InputPayload): void {
+        if (
+            !this.self 
+            || this.self.getIsBystander() 
+            || this.gamePhase !== 'active'
+            || !input.vector.mouse
+        ) return;
+        console.log('Shooting!!!');
+        const projectile = new Projectile(
+            this.self.x,
+            this.self.y - 50,
+            input.vector.mouse.x,
+            input.vector.mouse.y,
+            this.app.screen.height,
+            input?.vector?.mouse?.id,
+        );
+
+        this.gameContainer.addChild(projectile);
+        this.ownProjectiles.push(projectile);
+
     }
 
     private cameraLerpFactor: number = 0.1; // Adjust between 0.01 (very slow) and 0.5 (very fast)
@@ -1098,7 +1136,7 @@ export class GameManager {
             // Check for collisions with enemy players
             if (this.gamePhase === 'active') {
                 for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
-                    if (enemyGraphic.getIsBystander() === false && testForAABB(projectile, enemyGraphic)) {
+                    if (enemyGraphic.getIsBystander() === false && testForAABB(projectile, enemyGraphic, this.convertCameraToWorldCoordinates.bind(this))) {
                         // Record collision prediction
                         // This is required so we can reject stateUpdates that likely haven't computed
                         // the collision yet due to network latency

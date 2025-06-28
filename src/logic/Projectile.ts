@@ -23,7 +23,6 @@ export class Projectile extends Container {
     const dirY = dy / mag;
     this.vx = dirX * this.speed;
     this.vy = dirY * this.speed;
-        console.log('Calculated velocity:', this.vx, this.vy);
 
   }
 
@@ -32,47 +31,45 @@ export class Projectile extends Container {
     spawnX: number, 
     spawnY: number, 
     targetX: number, 
-    targetY: number, 
-    speed = 5, 
-    lifespan = 2000, 
-    gravityEffect = 0.005, 
+    targetY: number,
     screenHeight: number,
-    id = Math.random().toString(36).substring(2, 15)
+    id = Math.random().toString(36).substring(2, 15),
+    speed = 30, 
+    lifespan = 5000, 
+    gravityEffect = 0.05, 
   ) {
     super();
 
     // Create blue background
     this.background = new Graphics()
-      .circle(15, 15, 10) // Create a circle with radius 20 centered at (15, 15)
+      .circle(15, 15, 5) // Create a circle with radius 20 centered at (15, 15)
       .fill(0x3498db); // Blue color
     
     // Add the background first (so it appears behind the tomato)
-    this.addChild(this.background);
+    //this.addChild(this.background);
 
     // Create tomato sprite
     this.body = Sprite.from('tomato');
-    this.body.width = 30;
-    this.body.height = 30;
+    this.body.width = 20;
+    this.body.height = 20;
     
     // Center the sprite on the background
-    this.body.anchor.set(0.5);
-    this.body.x = 15;
-    this.body.y = 15;
-    this.addChild(this.body);
 
     // initialize
     this.id = id;
-    console.log('Creating projectile at', spawnX, spawnY);
+    console.log(`Projectile created with id: ${this.id}, spawn position: (${spawnX}, ${spawnY}), target position: (${targetX}, ${targetY}), speed: ${speed}, lifespan: ${lifespan}, gravity effect: ${gravityEffect}`);
     this.x = spawnX;
     this.y = spawnY;
     this.speed = speed;
     this.lifespan = lifespan;
     this.gravityEffect = gravityEffect;
     this.screenHeight = screenHeight;
+    this.addChild(this.body);
 
     // Calculate direction vector
     this.calculateVelocity(spawnX, spawnY, targetX, targetY);
-    
+  
+    //this.pivot.set(10, 10); // Set pivot to center of the tomato sprite
 
     // Begin the age process (we dont want projetiles sticking around forever)
     this.age();
@@ -82,6 +79,7 @@ export class Projectile extends Container {
     this.vy += this.gravityEffect;
     this.x += this.vx;
     this.y += this.vy;
+    console.log(`Projectile ${this.id} position: (${this.x}, ${this.y}) with velocity (${this.vx}, ${this.vy})`);
     if (this.y > this.screenHeight + 100) {
       this.shouldBeDestroyed = true; // Is this causing the server to destroy it?
     }

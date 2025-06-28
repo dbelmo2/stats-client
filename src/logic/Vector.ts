@@ -5,6 +5,7 @@ export class Vector2 {
 
   public x: number;
   public y: number;
+  public mouse?: { x: number; y: number, id?: string }; // Optional mouse position with id
 
   constructor(x = 0, y = 0) {
     this.x = x;
@@ -24,6 +25,13 @@ export class Vector2 {
         vector.y -= 1;
     }
 
+    if (controllerState.mouse.justReleased === true && controllerState.mouse.xR !== undefined && controllerState.mouse.yR !== undefined) {
+      vector.mouse = {
+        x: controllerState.mouse.xR ?? 0,
+        y: controllerState.mouse.yR ?? 0,
+        id: Math.random().toString(36).substring(2, 15)
+      }
+    }
     return vector;
   }
 
