@@ -251,7 +251,7 @@ export class GameManager {
                 src: [h3Theme],
                 autoplay: true,
                 loop: false,
-                volume: 0.10
+                volume: 0.07
             });
 
             GameManager.instance.shootingSound = new Howl({
