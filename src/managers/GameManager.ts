@@ -17,14 +17,13 @@ import { PingDisplay } from '../logic/ui/PingDisplay';
 import { FPSDisplay } from '../logic/ui/FPSDisplay';
 import { Vector2 } from '../logic/Vector';
 import { ModalManager } from '../logic/ui/Modal';
-import { Howl } from 'howler';
 
 import h3Theme from '../h3-theme.mp3'
 import shootingAudio from '../shoot-sound.wav';
 import impactAudio from '../impact-sound.wav';
 import jumpAudio from '../swipe-sound.mp3';
 import walkingAudio from '../walking-grass-sound.flac'; 
-import { SettingsManager } from './SettingsManager';
+import { AudioManager } from './AudioManager';
 import { loginScreen } from '../logic/ui/LoginScreen';
 
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
@@ -129,10 +128,6 @@ export class GameManager {
     private stateBuffer: StatePayload[] = [];
     private pingUpdateCounter: number = 0;
     private backgroundAssets: { [key: string]: Sprite } = {};
-    private shootingSound: Howl | null = null; // Sound for shooting projectiles
-    private impactSound: Howl | null = null; // Sound for projectile impact
-    private jumpSound: Howl | null = null; // Sound for jumping (if needed)
-    private walkingSound: Howl | null = null; // Sound for walking (if needed)
 
     private latestServerSnapshot: ServerStateUpdate = {
         players: [],
@@ -141,12 +136,6 @@ export class GameManager {
         serverTick: 0
     }
 
-
-    // Idea: use the fact that we can expect a keyUp event after a keyDown event to 
-    // somehow account for empty input queue on server... Perphaps we
-    // can use the previous state for every frame with no new input since a keyDown, and no key up... and
-    // for every frame where we do this, we can discard a future input if the keyUp still hasnt arrived...
-    // This way we can distinguish between late inputs and the player simply not pressing any keys.
     private latestServerSnapshotProcessed: ServerStateUpdate = {
         players: [],
         projectiles: [],
@@ -243,52 +232,57 @@ export class GameManager {
             GameManager.instance.setupEventListeners();
            // GameManager.instance.setupPlayer();
             GameManager.instance.setupGameLoop();
+            GameManager.instance.initializeAudio();
 
             await GameManager.instance.socketManager.waitForConnect();
             await GameManager.instance.setupNetworking(region);
             // After the first state update, we can start the game loop
-            
-            const settingsManager = SettingsManager.getInstance();
-
-            new Howl({
-                src: [h3Theme],
-                autoplay: true,
-                loop: false,
-                volume: settingsManager.getMusicVolume(),
-            });
-
-            GameManager.instance.shootingSound = new Howl({
-                src: [shootingAudio],
-                volume: settingsManager.getSfxVolume(),
-                preload: true
-            });
-
-            GameManager.instance.impactSound = new Howl({
-                src: [impactAudio],
-                volume: settingsManager.getSfxVolume(),
-                preload: true
-            });
-
-            GameManager.instance.jumpSound = new Howl({
-                src: [jumpAudio],
-                volume: 0.50,
-                preload: true
-            });
-
-            GameManager.instance.walkingSound = new Howl({
-                src: [walkingAudio],
-                volume: 0.50,
-                preload: true,
-                loop: true // Loop the walking sound
-            });
             
         }
         return GameManager.instance;
     }
 
 
-    private async setupGameWorld() {
+    private initializeAudio(): void {
+        const audioManager = AudioManager.getInstance();
         
+        // Register game sounds
+        audioManager.registerSound('shoot', {
+            src: [shootingAudio],
+            volume: 0.5
+        }, 'sfx');
+        
+        audioManager.registerSound('impact', {
+            src: [impactAudio],
+            volume: 0.35
+        }, 'sfx');
+
+        audioManager.registerSound('jump', {
+            src: [jumpAudio],
+            volume: 0.70
+        }, 'sfx');
+        
+        audioManager.registerSound('walking', {
+            src: [walkingAudio],
+            volume: 0.50,
+            loop: true
+        }, 'sfx');
+
+        audioManager.registerSound('theme', {
+            src: [h3Theme],
+            loop: true,
+            volume: 0.7
+        }, 'music');
+        
+        // Preload all sounds
+        audioManager.preloadAll().then(() => {
+            console.log('Audio ready!');
+            // Start background music
+            audioManager.play('theme');
+        });
+    }
+
+private async setupGameWorld() {
         const j1Sprite = Sprite.from('j1');
         j1Sprite.x = 0 - this.GAME_WIDTH / 2;
         j1Sprite.y = 0;
@@ -418,23 +412,6 @@ export class GameManager {
 
     }
 
-
-    /*
-    private setupPlayer(): void {
-        this.self = new Player(
-            this.PLAYER_SPAWN_X, 
-            this.PLAYER_SPAWN_Y,
-            this.GAME_BOUNDS, 
-            this.playerName,
-        );
-        
-        // Set up platform references
-        this.self.setPlatforms(this.platforms);
-
-        // Add to stage
-        this.gameContainer.addChild(this.self);
-    }
-*/
 
     private integrateStateUpdate(): void {
         const { players, projectiles } = this.latestServerSnapshot;
@@ -709,8 +686,6 @@ export class GameManager {
             data.position.y,
             this.GAME_BOUNDS,
             data.name,
-            this.jumpSound ?? undefined,
-            this.walkingSound ?? undefined
         );
         
         this.self.setPlatforms(this.platforms);
@@ -972,7 +947,7 @@ export class GameManager {
             input?.vector?.mouse?.id,
         );
 
-        if (this.shootingSound) this.shootingSound.play();
+        AudioManager.getInstance().play('shoot');
         this.gameContainer.addChild(projectile);
         this.ownProjectiles.push(projectile);
 
@@ -1047,44 +1022,7 @@ export class GameManager {
         this.backgroundAssets.j2.y += offsetY * 0.3;
         this.backgroundAssets.j3.y += offsetY * 0.2;
 
-        //console.log('Updated background assets, offsetX:', offsetX, 'offsetY:', offsetY);
     }
-
-    /*
-    private updateCameraPosition(): void {
-
-        if (!this.self) return;
-        const targetX = -this.self.x + this.GAME_WIDTH / 2;
-        const targetY = (-this.self.y + this.GAME_HEIGHT / 2);
-
-        
-        // Clamp camera position to stay within bounds + 250px buffer
-        // In order to fix issue with camera and small window width, 
-        // We need to somehow modify the 1000 value offsets here to be dynamic, based on the window width?
-        // old values were 250. 
-        // 1000 normal for 1920x1080 full screen
-        // 250, for small window width
-        // 5000 for hugeee world such as 5000x1080
-        const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
-        const maxX = this.GAME_BOUNDS.left + 5000;
-        const minY = -(this.GAME_BOUNDS.bottom + 250) + this.GAME_HEIGHT;
-        const maxY = this.GAME_BOUNDS.top + 250;
-        
-        // Apply clamping and set camera position
-        this.camera.x = Math.max(minX, Math.min(maxX, targetX));
-        this.camera.y = Math.max(minY, Math.min(maxY, targetY));
-
-
-        // Update position of UI elements relative to the camera
-        this.scoreDisplay.fixPosition();
-        this.fpsDisplay.fixPosition();
-        this.pingDisplay.fixPosition();
-
-
-        
-    }
-
-*/
 
     private updateOwnProjectiles(): void {
         for (let i = this.ownProjectiles.length - 1; i >= 0; i--) {
@@ -1102,7 +1040,7 @@ export class GameManager {
                             timestamp: Date.now()
                         });
 
-                        if (this.impactSound) this.impactSound.play();
+                        AudioManager.getInstance().play('impact');
 
                         // Apply predicted damage (the server will confirm or correct this after a timeout)
                         enemyGraphic.damage();
@@ -1141,8 +1079,7 @@ export class GameManager {
                         timestamp: Date.now()
                     });
 
-                    if (this.impactSound) this.impactSound.play();
-
+                    AudioManager.getInstance().play('impact');
                     // Apply predicted damage to self
                     this.self.damage();
                     
@@ -1165,7 +1102,7 @@ export class GameManager {
                             });
 
 
-                            if (this.impactSound) this.impactSound.play();
+                            AudioManager.getInstance().play('impact');
 
                             // Apply predicted damage
                             enemyGraphic.damage();

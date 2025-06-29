@@ -1,6 +1,7 @@
 import { Graphics, Container, Text, TextStyle, Sprite } from 'pixi.js';
 import { Platform } from './Platform';
 import { Vector2 } from './Vector';
+import { AudioManager } from '../managers/AudioManager';
 
 
 export interface PendingInput {
@@ -35,15 +36,11 @@ export class Player extends Container {
   private inputInterval: NodeJS.Timeout | null = null;
   private lastProcessedInputVector: Vector2 = new Vector2(0, 0);
   private tomatoSprite: Sprite | null = null;
-  private jumpSound: Howl | undefined;
-  private walkingSound: Howl | undefined;
   private isWalking = false;
 
-  constructor(x: number, y: number, gameBounds: any, name: string, jumpSound?: Howl, walkingSound?: Howl) {
+  constructor(x: number, y: number, gameBounds: any, name: string) {
     super();
     this.gameBounds = gameBounds;
-    this.jumpSound = jumpSound;
-    this.walkingSound = walkingSound;
     this.velocity = new Vector2(0, 0);
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.addChild(this.body);
@@ -224,14 +221,10 @@ export class Player extends Container {
 
       if (this.isOnSurface && inputVector.x !== 0 && !this.isWalking) {
         this.isWalking = true;
-        if (this.walkingSound) {
-          this.walkingSound.play();
-        }
+        AudioManager.getInstance().play('walking');
       } else if (!this.isOnSurface || inputVector.x === 0) { 
         this.isWalking = false;
-        if (this.walkingSound) {
-          this.walkingSound.stop();
-        }
+        AudioManager.getInstance().stop('walking');
       }
     
   
@@ -248,7 +241,7 @@ export class Player extends Container {
       this.canDoubleJump = this.isOnSurface;
       this.isOnSurface = false; // Player is no longer on the ground
       this.isJumping = true; // Set jumping state
-      if (this.jumpSound) this.jumpSound.play(); // Play jump sound
+      AudioManager.getInstance().play('jump');
   }
 
   getClampedPosition(newX: number, newY: number): { clampedX: number; clampedY: number } {

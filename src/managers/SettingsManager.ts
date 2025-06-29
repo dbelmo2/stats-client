@@ -1,4 +1,3 @@
-import { Howler } from 'howler';
 import settingsIcon from '../settings-icon.png';
 
 export type Region = 'NA' | 'EU' | 'ASIA';
@@ -15,7 +14,7 @@ export class SettingsManager {
     private settings: GameSettings;
     private settingsButton: HTMLElement | null = null;
     private settingsModal: HTMLElement | null = null;
-    private onRegionChangeCallbacks: ((region: Region) => void)[] = [];
+    private onVolumeChangeCallback: any;
     
     private constructor() {
         // Load settings from localStorage or use defaults
@@ -31,10 +30,7 @@ export class SettingsManager {
             };
             this.saveSettings();
         }
-        
-        // Apply initial volume settings
-        this.applyVolumeSettings();
-    }
+            }
     
     public static getInstance(): SettingsManager {
         if (!SettingsManager.instance) {
@@ -62,30 +58,32 @@ export class SettingsManager {
     public setRegion(region: Region): void {
         this.settings.region = region;
         this.saveSettings();
-        
+    
         // Notify subscribers about region change
-        this.onRegionChangeCallbacks.forEach(callback => callback(region));
     }
     
     public setMusicVolume(volume: number): void {
         this.settings.musicVolume = Math.max(0, Math.min(1, volume)); // Clamp between 0-1
-        this.saveSettings();
-        this.applyVolumeSettings();
+        if (this.onVolumeChangeCallback) {
+            this.onVolumeChangeCallback('music', this.settings.musicVolume);
+        }
     }
     
     public setSfxVolume(volume: number): void {
         this.settings.sfxVolume = Math.max(0, Math.min(1, volume)); // Clamp between 0-1
-        this.saveSettings();
-        this.applyVolumeSettings();
-    }
-    
-    public onRegionChange(callback: (region: Region) => void): void {
-        this.onRegionChangeCallbacks.push(callback);
+        if (this.onVolumeChangeCallback) {
+            this.onVolumeChangeCallback('sfx', this.settings.sfxVolume);
+        }
     }
     
     public createSettingsUI(): void {
         this.createSettingsButton();
     }
+
+    public onVolumeChange(callback: any): void {
+        this.onVolumeChangeCallback = callback;
+    }
+
     
     private createSettingsButton(): void {
         // Remove existing button if it exists
@@ -361,11 +359,5 @@ export class SettingsManager {
         localStorage.setItem('gameSettings', JSON.stringify(this.settings));
     }
     
-    private applyVolumeSettings(): void {
-        // Set global Howler volume for music (assumes music uses Howler)
-        Howler.volume(this.settings.musicVolume);
-        
-        // SFX volume will be applied when individual sounds are played
-        // This would need game-specific implementation to differentiate music/sfx
-    }
+
 }
