@@ -12,12 +12,14 @@
     "deploy": "gh-pages -d dist"
   },
   "devDependencies": {
+    "@types/howler": "^2.2.12",
     "@types/node": "^22.15.17",
     "gh-pages": "^6.3.0",
     "typescript": "~5.8.3",
     "vite": "^6.3.5"
   },
   "dependencies": {
+    "howler": "^2.2.4",
     "pixi.js": "^8.9.2",
     "socket.io-client": "^4.8.1"
   }

@@ -107,6 +107,30 @@ export class ModalManager {
         
         // Store reference to active modal
         this.activeModal = modalContainer;
+
+
+        if (options.isWarning) {
+            // Create pulsing animation for warning
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes pulse {
+                    0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+                    70% { box-shadow: 0 0 0 15px rgba(255, 107, 107, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
+                }
+            `;
+            document.head.appendChild(style);
+            modal.style.animation = 'pulse 1.5s infinite';
+            
+            // Remove style element when modal is closed
+            const originalCloseModal = this.closeModal.bind(this);
+            this.closeModal = () => {
+                originalCloseModal();
+                document.head.removeChild(style);
+                this.closeModal = originalCloseModal;
+            };
+        }
+
     }
     
     public closeModal(): void {

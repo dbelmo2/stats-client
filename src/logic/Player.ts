@@ -35,12 +35,13 @@ export class Player extends Container {
   private inputInterval: NodeJS.Timeout | null = null;
   private lastProcessedInputVector: Vector2 = new Vector2(0, 0);
   private tomatoSprite: Sprite | null = null;
+  private jumpSound: Howl | undefined;
 
 
-
-  constructor(x: number, y: number, gameBounds: any, name: string) {
+  constructor(x: number, y: number, gameBounds: any, name: string, jumpSound?: Howl) {
     super();
     this.gameBounds = gameBounds;
+    this.jumpSound = jumpSound;
     this.velocity = new Vector2(0, 0);
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.addChild(this.body);
@@ -62,6 +63,7 @@ export class Player extends Container {
     this.nameText.anchor.set(0.5, 1); // Center horizontally, align bottom
     this.nameText.y = -20; // Position above health bar
     this.healthBarContainer.addChild(this.nameText);
+
 
 
   
@@ -232,6 +234,7 @@ export class Player extends Container {
       this.canDoubleJump = this.isOnSurface;
       this.isOnSurface = false; // Player is no longer on the ground
       this.isJumping = true; // Set jumping state
+      if (this.jumpSound) this.jumpSound.play(); // Play jump sound
   }
 
   getClampedPosition(newX: number, newY: number): { clampedX: number; clampedY: number } {

@@ -17,9 +17,12 @@ import { PingDisplay } from '../logic/ui/PingDisplay';
 import { FPSDisplay } from '../logic/ui/FPSDisplay';
 import { Vector2 } from '../logic/Vector';
 import { ModalManager } from '../logic/ui/Modal';
+import { Howl } from 'howler';
 
-
-
+import h3Theme from '../h3-theme.mp3'
+import shootingAudio from '../shoot-sound.wav';
+import impactAudio from '../impact-sound.wav';
+import jumpAudio from '../swipe-sound.mp3'; // If you have a jump sound
 
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
 // can start with low health. Once they take damage, the health bar updates to the correct value.
@@ -123,6 +126,9 @@ export class GameManager {
     private stateBuffer: StatePayload[] = [];
     private pingUpdateCounter: number = 0;
     private backgroundAssets: { [key: string]: Sprite } = {};
+    private shootingSound: Howl | null = null; // Sound for shooting projectiles
+    private impactSound: Howl | null = null; // Sound for projectile impact
+    private jumpSound: Howl | null = null; // Sound for jumping (if needed)
 
 
     private latestServerSnapshot: ServerStateUpdate = {
@@ -240,6 +246,32 @@ export class GameManager {
             await GameManager.instance.socketManager.waitForConnect();
             await GameManager.instance.setupNetworking();
             // After the first state update, we can start the game loop
+            
+            new Howl({
+                src: [h3Theme],
+                autoplay: true,
+                loop: false,
+                volume: 0.10
+            });
+
+            GameManager.instance.shootingSound = new Howl({
+                src: [shootingAudio],
+                volume: 0.05,
+                preload: true
+            });
+
+            GameManager.instance.impactSound = new Howl({
+                src: [impactAudio],
+                volume: 0.05,
+                preload: true
+            });
+
+            GameManager.instance.jumpSound = new Howl({
+                src: [jumpAudio],
+                volume: 0.50,
+                preload: true
+            });
+            
         }
         return GameManager.instance;
     }
@@ -756,7 +788,8 @@ export class GameManager {
             data.position.x,
             data.position.y,
             this.GAME_BOUNDS,
-            data.name
+            data.name,
+            this.jumpSound ?? undefined
         );
         
         this.self.setPlatforms(this.platforms);
@@ -1018,6 +1051,7 @@ export class GameManager {
             input?.vector?.mouse?.id,
         );
 
+        if (this.shootingSound) this.shootingSound.play();
         this.gameContainer.addChild(projectile);
         this.ownProjectiles.push(projectile);
 
@@ -1145,9 +1179,11 @@ export class GameManager {
                             timestamp: Date.now()
                         });
 
+                        if (this.impactSound) this.impactSound.play();
+
                         // Apply predicted damage (the server will confirm or correct this after a timeout)
                         enemyGraphic.damage();
-
+                        
                         // Mark projectile for cleanup
                         projectile.shouldBeDestroyed = true;
                         break; // Exit collision check loop once hit is found
@@ -1182,6 +1218,8 @@ export class GameManager {
                         timestamp: Date.now()
                     });
 
+                    if (this.impactSound) this.impactSound.play();
+
                     // Apply predicted damage to self
                     this.self.damage();
                     
@@ -1195,12 +1233,16 @@ export class GameManager {
                             && testForAABB(projectile, enemyGraphic)
                             && enemyGraphic.getIsBystander() === false
                         ) {
+                            
                             this.destroyedProjectiles.set(projectileId, Date.now());
                             // Record collision prediction
                             this.pendingCollisions.set(enemyId, {
                                 projectileId: projectileId,
                                 timestamp: Date.now()
                             });
+
+
+                            if (this.impactSound) this.impactSound.play();
 
                             // Apply predicted damage
                             enemyGraphic.damage();
