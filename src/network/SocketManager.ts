@@ -1,14 +1,11 @@
 // src/network/SocketManager.ts
 import { io, Socket } from 'socket.io-client';
-
-type Region = 'NA' | 'EU' | 'ASIA' | 'GLOBAL';
-
 export class SocketManager {
   private socket: Socket;
   private pingHistory: number[] = [];
   private currentPing: number = 0;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
-
+  
   constructor(serverUrl: string) {
     this.socket = io(serverUrl, {
       transports: ['websocket'], // Prefer WebSocket, fallback to polling
@@ -72,6 +69,15 @@ export class SocketManager {
       });
   }
 
+
+
+// Add this method to your SocketManager class
+public updateRegion(region: string): void {
+    // If you need to update the region on the server
+    console.log(`[SocketManager] Updating region to: ${region}`);
+}
+  
+
   private updatePing(latency: number): void {
       // Add to history (keep last 5 values)
       this.pingHistory.push(latency);
@@ -93,7 +99,7 @@ export class SocketManager {
       return this.currentPing;
   }
 
-  joinQueue(region: Region, name: string) {
+  joinQueue(name: string, region: string) {
     this.socket.emit('joinQueue', { region, name });
   }
 

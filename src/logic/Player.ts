@@ -36,12 +36,14 @@ export class Player extends Container {
   private lastProcessedInputVector: Vector2 = new Vector2(0, 0);
   private tomatoSprite: Sprite | null = null;
   private jumpSound: Howl | undefined;
+  private walkingSound: Howl | undefined;
+  private isWalking = false;
 
-
-  constructor(x: number, y: number, gameBounds: any, name: string, jumpSound?: Howl) {
+  constructor(x: number, y: number, gameBounds: any, name: string, jumpSound?: Howl, walkingSound?: Howl) {
     super();
     this.gameBounds = gameBounds;
     this.jumpSound = jumpSound;
+    this.walkingSound = walkingSound;
     this.velocity = new Vector2(0, 0);
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.addChild(this.body);
@@ -162,6 +164,7 @@ export class Player extends Container {
   private isJumping = false;
   private indexPostJump = 0
 
+
   update(inputVector: Vector2, dt: number, isResimulating: boolean = false): void {
     //console.log('Player position: ', this.x, this.y);
       if (isResimulating) {
@@ -184,8 +187,6 @@ export class Player extends Container {
       if ((inputVector.y < 0 && this.isOnSurface) || (inputVector.y < 0 && this.canDoubleJump)) {
           this.jump(inputVector);
       }
-
-
 
       // Gravity
       this.applyGravity(dt);
@@ -220,7 +221,20 @@ export class Player extends Container {
           this.isOnSurface = true;
       }
     
+
+      if (this.isOnSurface && inputVector.x !== 0 && !this.isWalking) {
+        this.isWalking = true;
+        if (this.walkingSound) {
+          this.walkingSound.play();
+        }
+      } else if (!this.isOnSurface || inputVector.x === 0) { 
+        this.isWalking = false;
+        if (this.walkingSound) {
+          this.walkingSound.stop();
+        }
+      }
     
+  
   }
 
 

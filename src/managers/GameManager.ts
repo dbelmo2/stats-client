@@ -22,7 +22,10 @@ import { Howl } from 'howler';
 import h3Theme from '../h3-theme.mp3'
 import shootingAudio from '../shoot-sound.wav';
 import impactAudio from '../impact-sound.wav';
-import jumpAudio from '../swipe-sound.mp3'; // If you have a jump sound
+import jumpAudio from '../swipe-sound.mp3';
+import walkingAudio from '../walking-grass-sound.flac'; 
+import { SettingsManager } from './SettingsManager';
+import { loginScreen } from '../logic/ui/LoginScreen';
 
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
 // can start with low health. Once they take damage, the health bar updates to the correct value.
@@ -129,7 +132,7 @@ export class GameManager {
     private shootingSound: Howl | null = null; // Sound for shooting projectiles
     private impactSound: Howl | null = null; // Sound for projectile impact
     private jumpSound: Howl | null = null; // Sound for jumping (if needed)
-
+    private walkingSound: Howl | null = null; // Sound for walking (if needed)
 
     private latestServerSnapshot: ServerStateUpdate = {
         players: [],
@@ -233,36 +236,36 @@ export class GameManager {
         if (!GameManager.instance) {
             GameManager.instance = new GameManager(app);
 
-            // Get player name before proceeding
-            const name = await GameManager.instance.getPlayerName();
-            if (!name) {
-                throw new Error('Player name is required');
-            }
+
+            const { name, region } = await loginScreen();
             GameManager.instance.playerName = name;
+            
             GameManager.instance.setupEventListeners();
            // GameManager.instance.setupPlayer();
             GameManager.instance.setupGameLoop();
 
             await GameManager.instance.socketManager.waitForConnect();
-            await GameManager.instance.setupNetworking();
+            await GameManager.instance.setupNetworking(region);
             // After the first state update, we can start the game loop
             
+            const settingsManager = SettingsManager.getInstance();
+
             new Howl({
                 src: [h3Theme],
                 autoplay: true,
                 loop: false,
-                volume: 0.07
+                volume: settingsManager.getMusicVolume(),
             });
 
             GameManager.instance.shootingSound = new Howl({
                 src: [shootingAudio],
-                volume: 0.05,
+                volume: settingsManager.getSfxVolume(),
                 preload: true
             });
 
             GameManager.instance.impactSound = new Howl({
                 src: [impactAudio],
-                volume: 0.05,
+                volume: settingsManager.getSfxVolume(),
                 preload: true
             });
 
@@ -271,10 +274,18 @@ export class GameManager {
                 volume: 0.50,
                 preload: true
             });
+
+            GameManager.instance.walkingSound = new Howl({
+                src: [walkingAudio],
+                volume: 0.50,
+                preload: true,
+                loop: true // Loop the walking sound
+            });
             
         }
         return GameManager.instance;
     }
+
 
     private async setupGameWorld() {
         
@@ -309,97 +320,6 @@ export class GameManager {
         console.log(`Game world setup complete with player name: ${this.playerName}`);
     }
 
-
-    // Add new method
-    private async getPlayerName(): Promise<string> {
-        return new Promise((resolve) => {
-            // Create modal container
-            const modalContainer = document.createElement('div');
-            modalContainer.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: #111111;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 1000;
-            `;
-
-            // Create modal content
-            const modal = document.createElement('div');
-            modal.style.cssText = `
-                background: #2c2c2c;
-                padding: 20px;
-                border-radius: 8px;
-                text-align: center;
-            `;
-
-            // Create input
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.placeholder = 'Enter your name';
-            input.maxLength = 15;
-            input.style.cssText = `
-                margin: 10px;
-                padding: 8px;
-                font-size: 16px;
-                border: none;
-                border-radius: 4px;
-                background: #1c1c1c;
-                color: white;
-                outline: none;
-            `;
-
-            // Create button
-            const button = document.createElement('button');
-            button.textContent = 'Play';
-            button.style.cssText = `
-                margin: 10px;
-                padding: 8px 16px;
-                font-size: 16px;
-                border: none;
-                border-radius: 4px;
-                background: #4CAF50;
-                color: white;
-                cursor: pointer;
-            `;
-            button.disabled = true;
-
-            // Add input validation
-            input.addEventListener('input', () => {
-                const name = input.value.trim();
-                button.disabled = name.length < 3;
-            });
-
-            // Handle form submission
-            const handleSubmit = () => {
-                const name = input.value.trim();
-                if (name.length >= 3) {
-                    document.body.removeChild(modalContainer);
-                    resolve(name);
-                }
-            };
-
-            button.addEventListener('click', handleSubmit);
-            input.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') handleSubmit();
-            });
-
-            // Assemble and show modal
-            modal.appendChild(input);
-            modal.appendChild(button);
-            modalContainer.appendChild(modal);
-            document.body.appendChild(modalContainer);
-
-            // Focus input
-            input.focus();
-        });
-    }
-
-
     private setupEventListeners(): void {
 
         // Add tab key event listener for spectator mode toggle
@@ -419,13 +339,13 @@ export class GameManager {
 
     }
 
-    private async setupNetworking(): Promise<void> {
+    private async setupNetworking(region: string): Promise<void> {
         const id = this.socketManager.getId();
         if (!id) throw new Error('Socket ID is undefined');
         this.selfId = id;
         
         // Join the queue
-        this.socketManager.joinQueue('NA', this.playerName);
+        this.socketManager.joinQueue(this.playerName, region);
 
         // Set up state update handler - this is essential
         // Upon reveiving the first state update, we will render the initial players but ignore 
@@ -789,7 +709,8 @@ export class GameManager {
             data.position.y,
             this.GAME_BOUNDS,
             data.name,
-            this.jumpSound ?? undefined
+            this.jumpSound ?? undefined,
+            this.walkingSound ?? undefined
         );
         
         this.self.setPlatforms(this.platforms);
@@ -1061,6 +982,8 @@ export class GameManager {
     private currentCameraX: number = 0;
     private currentCameraY: number = 0;
 
+
+    
 
     // Note: This is causing jitter.
     private updateCameraPositionLERP(): void {
