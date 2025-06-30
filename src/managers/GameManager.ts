@@ -81,9 +81,7 @@ interface CameraSettings {
 }
 
 
-
-
-type PlayerState = {
+type PlayerServerState = {
   id: string;
   vector: Vector2;
   position: Vector2;
@@ -95,7 +93,7 @@ type PlayerState = {
   vy: number;
 }
 
-type ProjectileState = {
+type ProjectileServerState = {
   id: string;
   x: number;
   y: number;
@@ -112,8 +110,8 @@ type PlayerScore = {
 }
 
 type ServerStateUpdate = {
-    players: PlayerState[];
-    projectiles: ProjectileState[];
+    players: PlayerServerState[];
+    projectiles: ProjectileServerState[];
     scores: PlayerScore[];
     serverTick: number;
 };
@@ -395,24 +393,18 @@ private async setupGameWorld() {
     }
 
     private async setupNetworking(region: string): Promise<void> {
-
         const id = this.socketManager.getId();
         if (!id) throw new Error('Socket ID is undefined');
         this.player.id = id;
 
         this.socketManager.joinQueue(this.player.name, region);
-
+        this.socketManager.on('gameOver', this.handleGameOver);
+        this.socketManager.on('disconnect', this.cleanupSession);
+        this.socketManager.on('afkWarning', this.handleAfkWarning);
+        this.socketManager.on('afkRemoved', this.handleAfkRemoved);
         this.socketManager.on('stateUpdate', (data: ServerStateUpdate) => {
             this.network.latestServerSnapshot = data;
         });
-        
-        this.socketManager.on('gameOver', this.handleGameOver);
-
-        this.socketManager.on('disconnect', this.cleanupSession);
-    
-        this.socketManager.on('afkWarning', this.handleAfkWarning);
-
-        this.socketManager.on('afkRemoved', this.handleAfkRemoved);
 
     }
 
@@ -516,7 +508,7 @@ private async setupGameWorld() {
         }
     }
 
-    private integrateProjectileUpdates(projectiles: ProjectileState[]): void {
+    private integrateProjectileUpdates(projectiles: ProjectileServerState[]): void {
         const activeProjectileIds = new Set(projectiles.map(p => p.id));
         this.cleanupProjectiles(activeProjectileIds);
         this.updateProjectiles(projectiles);
@@ -546,7 +538,7 @@ private async setupGameWorld() {
         }
     }
 
-    private updateProjectiles(projectiles: ProjectileState[]): void {
+    private updateProjectiles(projectiles: ProjectileServerState[]): void {
         const { enemyProjectiles } = this.entities;
         const { destroyedProjectiles } = this.gameState;
 
@@ -707,7 +699,7 @@ private async setupGameWorld() {
         }
     }
 
-    private integrateSelfUpdate(selfData: PlayerState | undefined): void {
+    private integrateSelfUpdate(selfData: PlayerServerState | undefined): void {
         console.log('Integrating self update...');
         if (!selfData && this.player.sprite) {
             // Clean up self graphics if no self data exists
@@ -739,7 +731,7 @@ private async setupGameWorld() {
         this.player.sprite = undefined;
     }
 
-    private spawnPlayer(data: PlayerState): void {
+    private spawnPlayer(data: PlayerServerState): void {
         if (this.player.sprite) {
             console.warn('Self already exists, cannot spawn again');
             return;
@@ -759,7 +751,7 @@ private async setupGameWorld() {
         this.gameContainer.addChild(this.player.sprite);
     }
 
-    private updatePlayerHealth(selfData: PlayerState): void {
+    private updatePlayerHealth(selfData: PlayerServerState): void {
         if (!this.player.sprite) return;
         const pendingCollision = this.gameState.pendingCollisions.get(this.player.id);
         if (!pendingCollision) {
@@ -993,7 +985,7 @@ private async setupGameWorld() {
             || this.gameState.phase !== 'active'
             || !input.vector.mouse
         ) return;
-        console.log('Shooting!!!');
+
         const projectile = new Projectile(
             this.player.sprite.x,
             this.player.sprite.y - 50,
@@ -1004,14 +996,10 @@ private async setupGameWorld() {
         );
 
         AudioManager.getInstance().play('shoot');
-        this.gameContainer.addChild(projectile);
         this.player.projectiles.push(projectile);
-
+        this.gameContainer.addChild(projectile);    
     }
 
-
-
-    
 
     // Note: This is causing jitter.
     private updateCameraPositionLERP(): void {
@@ -1176,37 +1164,5 @@ private async setupGameWorld() {
             }
         }
     }
-
-    // Helper utility methods
-    private addOwnProjectile(projectile: Projectile): void {
-        this.player.projectiles.push(projectile);
-        this.gameContainer.addChild(projectile);
-    }
-
-    private removeOwnProjectile(index: number): void {
-        const projectile = this.player.projectiles[index];
-        if (projectile) {
-            this.gameContainer.removeChild(projectile);
-            projectile.destroy();
-            this.player.projectiles.splice(index, 1);
-        }
-    }
-
-    private addEnemyPlayer(id: string, player: EnemyPlayer): void {
-        this.entities.enemies.set(id, player);
-        this.gameContainer.addChild(player);
-    }
-
-    private removeEnemyPlayer(id: string): void {
-        const player = this.entities.enemies.get(id);
-        if (player) {
-            this.gameContainer.removeChild(player);
-            player.destroy();
-            this.entities.enemies.delete(id);
-        }
-    }
-
-
-
 
 }
