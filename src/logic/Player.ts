@@ -16,26 +16,28 @@ export class Player extends Container {
   public readonly JUMP_STRENGTH = 750;
   public readonly GRAVITY = 1500;
   public readonly MAX_FALL_SPEED = 1500
+  private readonly HEALTH_BAR_WIDTH = 50;
+  private readonly HEALTH_BAR_HEIGHT = 5;
 
   private velocity: Vector2;
-  private canDoubleJump = true;
   private healthBar: Graphics;
   private maxHealth: number = 100;
   private serverHealth: number = 100;
   private predictedHealth: number = 100;
-  private readonly HEALTH_BAR_WIDTH = 50;
-  private readonly HEALTH_BAR_HEIGHT = 5;
+
   private damageFlashTimeout?: NodeJS.Timeout;
   private healthBarContainer: Container;
   private platforms: Platform[] = [];
-  private isBystander: boolean = true;
-  private isOnSurface: boolean = false;
   private body: Graphics;
   private gameBounds: { left: number; right: number; top: number; bottom: number } | null = null;
   private nameText: Text;
   private inputInterval: NodeJS.Timeout | null = null;
   private lastProcessedInputVector: Vector2 = new Vector2(0, 0);
   private tomatoSprite: Sprite | null = null;
+
+  private isBystander: boolean = true;
+  private isOnSurface: boolean = false;
+  private canDoubleJump = true;
   private isWalking = false;
 
   constructor(x: number, y: number, gameBounds: any, name: string) {
@@ -273,10 +275,6 @@ export class Player extends Container {
         const isWithinPlatformWidth = playerBounds.right > platformBounds.left && 
           playerBounds.left < platformBounds.right;
         
-
-        //console.log(`Player bottom ${playerBounds.bottom} Platform top ${platformBounds.top}, Velocity Y ${this.velocity.y}`);
-        // Check if we're falling, were above platform last frame, and are horizontally aligned
-          
         // Check if we're falling, were above platform last frame, and are horizontally aligned
         if (isGoingDown && isWithinPlatformWidth && (isOnPlatform || isFallingThroughPlatform)) {
             return { isOnPlatform: true, platformTop: platformBounds.top };
@@ -352,7 +350,6 @@ getVelocityY() {
 }
 
 getPlayerBounds() {
-    // Use local coordinates that don't include camera movement
     return {
         left: this.x - this.pivot.x,
         right: this.x - this.pivot.x + 50, // width
@@ -363,8 +360,8 @@ getPlayerBounds() {
     };
 }
 
-  getBounds() {
-    return this.body.getBounds();
-  }
+getBounds() {
+  return this.body.getBounds();
+}
 
 }

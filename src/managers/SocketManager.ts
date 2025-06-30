@@ -71,13 +71,6 @@ export class SocketManager {
 
 
 
-// Add this method to your SocketManager class
-public updateRegion(region: string): void {
-    // If you need to update the region on the server
-    console.log(`[SocketManager] Updating region to: ${region}`);
-}
-  
-
   private updatePing(latency: number): void {
       // Add to history (keep last 5 values)
       this.pingHistory.push(latency);

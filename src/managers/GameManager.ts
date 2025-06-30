@@ -1,7 +1,7 @@
 import { Application, Container, Graphics, Sprite } from 'pixi.js';
 import { Player } from '../logic/Player';
 import { Controller } from '../logic/Controller';
-import { SocketManager } from '../network/SocketManager';
+import { SocketManager } from './SocketManager';
 import { EnemyPlayer } from '../logic/EnemyPlayer';
 import { Projectile } from '../logic/Projectile';
 import { EnemyProjectile } from '../logic/EnemyProjectile';
@@ -338,84 +338,79 @@ private async setupGameWorld() {
         if (!id) throw new Error('Socket ID is undefined');
         this.selfId = id;
         
-        // Join the queue
         this.socketManager.joinQueue(this.playerName, region);
 
-        // Set up state update handler - this is essential
-        // Upon reveiving the first state update, we will render the initial players but ignore 
-        // Player input in app ticker
         this.socketManager.on('stateUpdate', (data: ServerStateUpdate) => {
             this.latestServerSnapshot = data;
         });
         
-        this.socketManager.on('gameOver', (scores: PlayerScore[]) => {
-            this.controller.resetMouse();
-            this.gamePhase = 'ended';
-            this.pendingCollisions.clear(); // ????
-            // Create and display game over screen
-            this.gameOverDisplay = new GameOverDisplay(scores, this.selfId);
-            this.gameOverDisplay.x = this.app.screen.width / 2;
-            this.gameOverDisplay.y = this.app.screen.height / 3;
-            this.app.stage.addChild(this.gameOverDisplay);
+        this.socketManager.on('gameOver', this.handleGameOver);
 
-                    
-            // Wait for next match signal
-            this.socketManager.once('matchReset', () => {
-                // Clear combat-related state
-                this.ownProjectiles = [];
-                this.enemyProjectileGraphics.clear();
-                this.pendingCollisions.clear();
-                this.destroyedProjectiles.clear();
-
-
-                // Remove game over display
-                if (this.gameOverDisplay) {
-                    this.app.stage.removeChild(this.gameOverDisplay);
-                    this.gameOverDisplay.destroy();
-                    this.gameOverDisplay = null;
-                }
-                this.gamePhase = 'active';
-            });
+        this.socketManager.on('disconnect', this.cleanupSession);
     
-            
-        });
+        this.socketManager.on('afkWarning', this.handleAfkWarning);
 
-        this.socketManager.on('disconnect', () => this.cleanupSession());
+        this.socketManager.on('afkRemoved', this.handleAfkRemoved);
+
+    }
+
+
+    private handleGameOver = (scores: PlayerScore[]) => {
+        this.controller.resetMouse();
+        this.gamePhase = 'ended';
+        this.pendingCollisions.clear();
+
+        this.gameOverDisplay = new GameOverDisplay(scores, this.selfId);
+        this.gameOverDisplay.x = this.app.screen.width / 2;
+        this.gameOverDisplay.y = this.app.screen.height / 3;
+        this.app.stage.addChild(this.gameOverDisplay);
+
+        this.socketManager.once('matchReset', () => {
+            this.ownProjectiles = [];
+            this.enemyProjectileGraphics.clear();
+            this.pendingCollisions.clear();
+            this.destroyedProjectiles.clear();
+
+            if (this.gameOverDisplay) {
+                this.app.stage.removeChild(this.gameOverDisplay);
+                this.gameOverDisplay.destroy();
+                this.gameOverDisplay = null;
+            }
+            this.gamePhase = 'active';
+        });        
+    }
     
-        this.socketManager.on('afkWarning', ({ message }) => {
-            console.warn(`[SocketManager] AFK Warning: ${message}`);
-            ModalManager.getInstance().showModal({
-                title: "AFK Warning",
-                message: "You have been inactive for too long. Please move or click to continue playing.",
-                buttonText: "OK",
-                buttonAction: () => {
-                    // Send a small movement to show the player is active
+    private handleAfkWarning = ({ message }: { message: string}) => {
+        console.warn(`[SocketManager] AFK Warning: ${message}`);
+        ModalManager.getInstance().showModal({
+            title: "AFK Warning",
+            message: "You have been inactive for too long. Please move or click to continue playing.",
+            buttonText: "OK",
+            buttonAction: () => {
+                // Send a small movement to show the player is active
 
-                },
-                isWarning: true
-            });
+            },
+            isWarning: true
         });
-
-        this.socketManager.on('afkRemoved', ({ message }) => {
-            console.warn(`[SocketManager] AFK Removed: ${message}`);
-            ModalManager.getInstance().showModal({
-                title: "Removed for Inactivity",
-                message: "You have been removed from the game due to inactivity. Please reload the page to rejoin.",
-                buttonText: "Reload Page",
-                buttonAction: () => {
-                    this.cleanupSession();
-                    window.location.reload();
-                },
-                isWarning: false
-            });
+    }
+    
+    private handleAfkRemoved = ({ message }: { message: string}) => {
+        console.warn(`[SocketManager] AFK Removed: ${message}`);
+        ModalManager.getInstance().showModal({
+            title: "Removed for Inactivity",
+            message: "You have been removed from the game due to inactivity. Please reload the page to rejoin.",
+            buttonText: "Reload Page",
+            buttonAction: () => {
+                this.cleanupSession();
+                window.location.reload();
+            },
+            isWarning: false
         });
-
     }
 
 
     private integrateStateUpdate(): void {
         const { players, projectiles } = this.latestServerSnapshot;
-        
         const selfData = players.find(player => player.id === this.selfId);
 
         this.integrateSelfUpdate(selfData);
@@ -427,19 +422,15 @@ private async setupGameWorld() {
         for (const score of scores) {
             const previousKills = this.currentScores.get(score.playerId) || 0;
             
-            // If player got a new kill
             if (score.kills > previousKills) {
-                // Show kill indicator
                 this.showKillIndicator(score.playerId);
             }
             
-            // Update stored kills
             this.currentScores.set(score.playerId, score.kills);
         }
     }
 
     private showKillIndicator(playerId: string): void {
-        // Show indicator above player who got the kill
         if (playerId === this.selfId && this.self) {
             // Player kill
             const indicator = new KillIndicator(this.self.x, this.self.y - 50);
@@ -458,7 +449,6 @@ private async setupGameWorld() {
     
     private handleAmmoBoxInteraction(): void {
         if (!this.self || !this.self.getIsBystander()) return;
-        // Check if player is near ammo box
         if (testForAABB(this.self, this.ammoBox)) {
             this.socketManager.emit('toggleBystander', false);
         }
@@ -604,7 +594,7 @@ private async setupGameWorld() {
 
     }
 
-    // TODO: Update ot also integrate player controller states. 
+    // TODO: Update to also integrate player controller states. 
     private integrateEnemyPlayers(): void {
         const enemyPlayers = this.latestServerSnapshot.players.filter(player => player.id !== this.selfId);
         for (const enemyPlayer of enemyPlayers) {
@@ -798,7 +788,6 @@ private async setupGameWorld() {
 
 
     private handleTick(dt: number): void {
-
         if (this.self) {
             if (this.latestServerSnapshot.serverTick > this.latestServerSnapshotProcessed.serverTick) {
                 this.handleReconciliation();
@@ -822,13 +811,10 @@ private async setupGameWorld() {
     private handlePlayerInput(dt: number): InputPayload | undefined {
         if (!this.self) return; // No player to control
 
-        // Add input to buffer
         const controllerState = this.controller.getState();
         const inputVector = Vector2.createFromControllerState(controllerState);
-        //console.log(`Input vector: ${inputVector.x}, ${inputVector.y}, mouse: ${inputVector.mouse ? `${inputVector.mouse.x}, ${inputVector.mouse.y}` : 'none'}`);
         this.controller.resetMouse();
         if (inputVector.mouse) { // Convert camera to world coordinates
-            //console.log(`Mouse input detected: ${inputVector.mouse.x}, ${inputVector.mouse.y}, id: ${inputVector.mouse.id}`);
             const { x, y } = this.convertCameraToWorldCoordinates(inputVector.mouse.x, inputVector.mouse.y);
             inputVector.mouse.x = x;
             inputVector.mouse.y = y;
@@ -843,7 +829,6 @@ private async setupGameWorld() {
         this.controller.keys.space.pressed = false; 
 
 
-        //console.log(`Processing input for tick ${this.localTick}: ${inputVector.x}, ${inputVector.y}. Added at index ${bufferIndex}`);
         this.inputBuffer[bufferIndex] = inputPayload;
         // We apply the input to the player
         this.self.update(inputVector, dt, false);
@@ -867,7 +852,7 @@ private async setupGameWorld() {
             || justStoppedMoving // Or was moving last input but stopped moving this input
         ) this.broadcastPlayerInput(inputPayload);
 
-        return inputPayload; // Return the input payload for further processing if needed
+        return inputPayload;
     }
 
     // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)

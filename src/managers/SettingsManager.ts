@@ -58,8 +58,6 @@ export class SettingsManager {
     public setRegion(region: Region): void {
         this.settings.region = region;
         this.saveSettings();
-    
-        // Notify subscribers about region change
     }
     
     public setMusicVolume(volume: number): void {
