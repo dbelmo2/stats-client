@@ -31,6 +31,58 @@ import { loginScreen } from '../logic/ui/LoginScreen';
 // There seems to be an issue with projectiles stopping and then resuming after match ends and restarts
 // (serverside related)
 
+
+interface PlayerData {
+    id: string,
+    name: string,
+    sprite: Player | undefined,
+    projectiles: Projectile[],
+}
+interface GameState {
+  phase: GamePhase;
+  scores: Map<string, number>;
+  localTick: number;
+  accumulator: number;
+  pendingCollisions: Map<string, { projectileId: string, timestamp: number }>;
+  destroyedProjectiles: Map<string, number>;
+}
+
+interface NetworkState {
+  latestServerSnapshot: ServerStateUpdate;
+  latestServerSnapshotProcessed: ServerStateUpdate;
+  inputBuffer: InputPayload[];
+  stateBuffer: StatePayload[];
+}
+
+interface EntityContainers {
+  enemies: Map<string, EnemyPlayer>;
+  enemyProjectiles: Map<string, EnemyProjectile>;
+  killIndicators: KillIndicator[];
+}
+
+interface WorldObjects {
+  platforms: Platform[];
+  ammoBox: AmmoBox;
+  backgroundAssets: { [key: string]: Sprite };
+}
+
+interface UIElements {
+  gameOverDisplay: GameOverDisplay | null;
+  pingDisplay: PingDisplay;
+  fpsDisplay: FPSDisplay;
+  scoreDisplay: ScoreDisplay;
+  pingUpdateCounter: number;
+}
+
+interface CameraSettings {
+  lerpFactor: number;
+  currentX: number;
+  currentY: number;
+}
+
+
+
+
 type PlayerState = {
   id: string;
   vector: Vector2;
@@ -86,22 +138,13 @@ type StatePayload = {
 type GamePhase = 'initializing' | 'ready' | 'active' | 'ended';
 
 export class GameManager {
-    private static instance: GameManager;
-    private app: Application;
-    private socketManager: SocketManager;
-    private controller: Controller;
-    private camera = new Container();
-
-    private readonly GAME_WIDTH = 1920;  // Fixed game width
-    private readonly GAME_HEIGHT = 1080; // Fixed game height
+    private readonly GAME_WIDTH = 1920; 
+    private readonly GAME_HEIGHT = 1080;
     private readonly SERVER_TICK_RATE = 60;
-    private readonly MIN_MS_BETWEEN_TICKS = 1000 / this.SERVER_TICK_RATE; // 60 FPS target
-    private readonly MIN_S_BETWEEN_TICKS = this.MIN_MS_BETWEEN_TICKS / 1000; // Convert to seconds
+    private readonly MIN_MS_BETWEEN_TICKS = 1000 / this.SERVER_TICK_RATE; 
+    private readonly MIN_S_BETWEEN_TICKS = this.MIN_MS_BETWEEN_TICKS / 1000; 
     private readonly BUFFER_SIZE = 1024;
-    private readonly COLLISION_TIMEOUT = 2000; // ms to wait before considering server missed collision
-    //private readonly PLAYER_SPAWN_X = 100; // X coordinate for player spawn
-    //private readonly PLAYER_SPAWN_Y = 100; // Y coordinate for player spawn
-
+    private readonly COLLISION_TIMEOUT = 2000; 
     private readonly GAME_BOUNDS = {
         left: 0,
         right: this.GAME_WIDTH,
@@ -109,49 +152,74 @@ export class GameManager {
         bottom: this.GAME_HEIGHT
     };
 
+    private static instance: GameManager;
+
+    private app: Application;
+    private socketManager: SocketManager;
+    private controller: Controller;
+
+    private camera = new Container();
     private gameContainer: Container;
-    // Game objects & state
-    private playerName: string = '';
-    private serverSelf: EnemyPlayer | undefined; // Server-side self for reconciliation
-    private self: Player | undefined;
-    private selfId: string = '';
-    private ownProjectiles: Projectile[] = [];
-    private enemyGraphics: Map<string, EnemyPlayer> = new Map();
-    private enemyProjectileGraphics: Map<string, EnemyProjectile> = new Map();
-    private destroyedProjectiles: Map<string, number> = new Map();
-    private pendingCollisions: Map<string, { projectileId: string, timestamp: number }> = new Map();
-    private gamePhase: GamePhase = 'active';
-    private currentScores: Map<string, number> = new Map();
-    private killIndicators: KillIndicator[] = [];
-    private localTick: number = 0;
-    private inputBuffer: InputPayload[] = [];
-    private stateBuffer: StatePayload[] = [];
-    private pingUpdateCounter: number = 0;
-    private backgroundAssets: { [key: string]: Sprite } = {};
 
-    private latestServerSnapshot: ServerStateUpdate = {
-        players: [],
-        projectiles: [],
-        scores: [], 
-        serverTick: 0
+    private player: PlayerData = {
+        id: '',
+        name: '',
+        sprite: undefined,
+        projectiles: []
     }
 
-    private latestServerSnapshotProcessed: ServerStateUpdate = {
-        players: [],
-        projectiles: [],
-        scores: [], 
-        serverTick: 0
+    private gameState: GameState = {
+        phase: 'active',
+        scores: new Map<string, number>(),
+        localTick: 0,
+        accumulator: 0,
+        pendingCollisions: new Map(),
+        destroyedProjectiles: new Map()
     }
-    private accumulator: number = 0; 
 
-    // Map displays &d
-    private gameOverDisplay: GameOverDisplay | null = null;
-    private ammoBox: AmmoBox;
-    private platforms: Platform[] = [];
-    private pingDisplay: PingDisplay;
-    private fpsDisplay: FPSDisplay;
-    private scoreDisplay: ScoreDisplay;
     
+    private network: NetworkState = {
+        latestServerSnapshot: {
+            players: [],
+            projectiles: [],
+            scores: [], 
+            serverTick: 0
+        },
+        latestServerSnapshotProcessed: {
+            players: [],
+            projectiles: [],
+            scores: [], 
+            serverTick: 0
+        },
+        inputBuffer: [],
+        stateBuffer: []
+    };
+
+    private entities: EntityContainers = {
+        enemies: new Map<string, EnemyPlayer>(),
+        enemyProjectiles: new Map<string, EnemyProjectile>(),
+        killIndicators: []
+    };
+
+    private world: WorldObjects = {
+        platforms: [],
+        ammoBox: undefined as unknown as AmmoBox, // Will be initialized in constructor
+        backgroundAssets: {}
+    };
+
+    private ui: UIElements = {
+        gameOverDisplay: null,
+        pingDisplay: undefined as unknown as PingDisplay, // Will be initialized in constructor
+        fpsDisplay: undefined as unknown as FPSDisplay,   // Will be initialized in constructor
+        scoreDisplay: undefined as unknown as ScoreDisplay, // Will be initialized in constructor
+        pingUpdateCounter: 0
+    };
+    
+    private cameraSettings: CameraSettings = {
+        lerpFactor: 0.1,
+        currentX: 0,
+        currentY: 0
+    };
 
     private constructor(app: Application) {
         this.controller = new Controller();
@@ -180,32 +248,29 @@ export class GameManager {
         // Add background first so it's behind everything
         this.gameContainer.addChild(background);
 
-        // Ping display
-        this.pingDisplay = new PingDisplay();
-        this.fpsDisplay = new FPSDisplay();
-
-        // Create score display
-        this.scoreDisplay = new ScoreDisplay();
+        this.ui.pingDisplay = new PingDisplay();
+        this.ui.fpsDisplay = new FPSDisplay();
+        this.ui.scoreDisplay = new ScoreDisplay();
 
         // Create platforms
-        this.platforms.push(new Platform(250, this.GAME_HEIGHT - 250))
-        this.platforms.push(new Platform(this.GAME_WIDTH - 850, this.GAME_HEIGHT - 250))
-        this.platforms.push(new Platform(250, this.GAME_HEIGHT - 500))
-        this.platforms.push(new Platform(this.GAME_WIDTH - 850, this.GAME_HEIGHT - 500))
+        this.world.platforms.push(new Platform(250, this.GAME_HEIGHT - 250))
+        this.world.platforms.push(new Platform(this.GAME_WIDTH - 850, this.GAME_HEIGHT - 250))
+        this.world.platforms.push(new Platform(250, this.GAME_HEIGHT - 500))
+        this.world.platforms.push(new Platform(this.GAME_WIDTH - 850, this.GAME_HEIGHT - 500))
 
-        for (const platform of this.platforms) {
+        for (const platform of this.world.platforms) {
             this.gameContainer.addChild(platform);
         }
 
         // Create ammo box at right side of screen
-        this.ammoBox = new AmmoBox(150, this.GAME_HEIGHT - 80);
-        this.gameContainer.addChild(this.ammoBox);
+        this.world.ammoBox = new AmmoBox(150, this.GAME_HEIGHT - 80);
+        this.gameContainer.addChild(this.world.ammoBox);
 
         this.camera.addChild(this.gameContainer);
         this.app.stage.addChild(this.camera);
-        this.app.stage.addChild(this.scoreDisplay);
-        this.app.stage.addChild(this.pingDisplay);
-        this.app.stage.addChild(this.fpsDisplay);
+        this.app.stage.addChild(this.ui.scoreDisplay);
+        this.app.stage.addChild(this.ui.pingDisplay);
+        this.app.stage.addChild(this.ui.fpsDisplay);
 
 
         // Add E key handler
@@ -225,19 +290,15 @@ export class GameManager {
         if (!GameManager.instance) {
             GameManager.instance = new GameManager(app);
 
-
             const { name, region } = await loginScreen();
-            GameManager.instance.playerName = name;
-            
+            GameManager.instance.player.name = name;
+
             GameManager.instance.setupEventListeners();
-           // GameManager.instance.setupPlayer();
             GameManager.instance.setupGameLoop();
             GameManager.instance.initializeAudio();
 
             await GameManager.instance.socketManager.waitForConnect();
-            await GameManager.instance.setupNetworking(region);
-            // After the first state update, we can start the game loop
-            
+            await GameManager.instance.setupNetworking(region);            
         }
         return GameManager.instance;
     }
@@ -305,13 +366,13 @@ private async setupGameWorld() {
         this.app.stage.addChild(j3Sprite);
         this.app.stage.addChild(j2Sprite);
         this.app.stage.addChild(j1Sprite);
-        this.backgroundAssets = {
+        this.world.backgroundAssets = {
             j1: j1Sprite,
             j2: j2Sprite,
             j3: j3Sprite,
             j4: j4Sprite
         }
-        console.log(`Game world setup complete with player name: ${this.playerName}`);
+        console.log(`Game world setup complete with player name: ${this.player.name}`);
     }
 
     private setupEventListeners(): void {
@@ -334,14 +395,15 @@ private async setupGameWorld() {
     }
 
     private async setupNetworking(region: string): Promise<void> {
+
         const id = this.socketManager.getId();
         if (!id) throw new Error('Socket ID is undefined');
-        this.selfId = id;
-        
-        this.socketManager.joinQueue(this.playerName, region);
+        this.player.id = id;
+
+        this.socketManager.joinQueue(this.player.name, region);
 
         this.socketManager.on('stateUpdate', (data: ServerStateUpdate) => {
-            this.latestServerSnapshot = data;
+            this.network.latestServerSnapshot = data;
         });
         
         this.socketManager.on('gameOver', this.handleGameOver);
@@ -357,26 +419,26 @@ private async setupGameWorld() {
 
     private handleGameOver = (scores: PlayerScore[]) => {
         this.controller.resetMouse();
-        this.gamePhase = 'ended';
-        this.pendingCollisions.clear();
+        this.gameState.phase = 'ended';
+        this.gameState.pendingCollisions.clear();
 
-        this.gameOverDisplay = new GameOverDisplay(scores, this.selfId);
-        this.gameOverDisplay.x = this.app.screen.width / 2;
-        this.gameOverDisplay.y = this.app.screen.height / 3;
-        this.app.stage.addChild(this.gameOverDisplay);
+        this.ui.gameOverDisplay = new GameOverDisplay(scores, this.player.id);
+        this.ui.gameOverDisplay.x = this.app.screen.width / 2;
+        this.ui.gameOverDisplay.y = this.app.screen.height / 3;
+        this.app.stage.addChild(this.ui.gameOverDisplay);
 
         this.socketManager.once('matchReset', () => {
-            this.ownProjectiles = [];
-            this.enemyProjectileGraphics.clear();
-            this.pendingCollisions.clear();
-            this.destroyedProjectiles.clear();
+            this.player.projectiles = [];
+            this.entities.enemyProjectiles.clear();
+            this.gameState.pendingCollisions.clear();
+            this.gameState.destroyedProjectiles.clear();
 
-            if (this.gameOverDisplay) {
-                this.app.stage.removeChild(this.gameOverDisplay);
-                this.gameOverDisplay.destroy();
-                this.gameOverDisplay = null;
+            if (this.ui.gameOverDisplay) {
+                this.app.stage.removeChild(this.ui.gameOverDisplay);
+                this.ui.gameOverDisplay.destroy();
+                this.ui.gameOverDisplay = null;
             }
-            this.gamePhase = 'active';
+            this.gameState.phase = 'active';
         });        
     }
     
@@ -410,8 +472,8 @@ private async setupGameWorld() {
 
 
     private integrateStateUpdate(): void {
-        const { players, projectiles } = this.latestServerSnapshot;
-        const selfData = players.find(player => player.id === this.selfId);
+        const { players, projectiles } = this.network.latestServerSnapshot;
+        const selfData = players.find(player => player.id === this.player.id);
 
         this.integrateSelfUpdate(selfData);
         this.integrateProjectileUpdates(projectiles);
@@ -420,36 +482,36 @@ private async setupGameWorld() {
     
     private checkForKills(scores: PlayerScore[]): void {
         for (const score of scores) {
-            const previousKills = this.currentScores.get(score.playerId) || 0;
+            const previousKills = this.gameState.scores.get(score.playerId) || 0;
             
             if (score.kills > previousKills) {
                 this.showKillIndicator(score.playerId);
             }
             
-            this.currentScores.set(score.playerId, score.kills);
+            this.gameState.scores.set(score.playerId, score.kills);
         }
     }
 
     private showKillIndicator(playerId: string): void {
-        if (playerId === this.selfId && this.self) {
+        if (playerId === this.player.id && this.player.sprite) {
             // Player kill
-            const indicator = new KillIndicator(this.self.x, this.self.y - 50);
+            const indicator = new KillIndicator(this.player.sprite.x, this.player.sprite.y - 50);
             this.gameContainer.addChild(indicator);
-            this.killIndicators.push(indicator);
+            this.entities.killIndicators.push(indicator);
         } else {
             // Enemy kill
-            const enemyGraphic = this.enemyGraphics.get(playerId);
+            const enemyGraphic = this.entities.enemies.get(playerId);
             if (enemyGraphic) {
                 const indicator = new KillIndicator(enemyGraphic.x, enemyGraphic.y - 50);
                 this.gameContainer.addChild(indicator);
-                this.killIndicators.push(indicator);
+                this.entities.killIndicators.push(indicator);
             }
         }
     }
     
     private handleAmmoBoxInteraction(): void {
-        if (!this.self || !this.self.getIsBystander()) return;
-        if (testForAABB(this.self, this.ammoBox)) {
+        if (!this.player.sprite || !this.player.sprite.getIsBystander()) return;
+        if (testForAABB(this.player.sprite, this.world.ammoBox)) {
             this.socketManager.emit('toggleBystander', false);
         }
     }
@@ -462,59 +524,64 @@ private async setupGameWorld() {
 
     private cleanupProjectiles(activeIds: Set<string>): void {
         // Clean up enemy projectiles
-        for (const [id, graphic] of this.enemyProjectileGraphics.entries()) {
+        for (const [id, graphic] of this.entities.enemyProjectiles.entries()) {
             if (!activeIds.has(id)) {
                 this.app.stage.removeChild(graphic);
                 graphic.destroy();
-                this.enemyProjectileGraphics.delete(id);
+                this.entities.enemyProjectiles.delete(id);
             }
         }
 
         // Clean up own projectiles only if they were in server state and now aren't
-        for (let i = this.ownProjectiles.length - 1; i >= 0; i--) {
-            const projectile = this.ownProjectiles[i];
+        for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
+            const projectile = this.player.projectiles[i];
             const projectileId = projectile.getId();
             
             // Only clean up projectiles that were previously acknowledged by server
             if (projectile.wasAcknowledged && !activeIds.has(projectileId)) {
                 this.app.stage.removeChild(projectile);
                 projectile.destroy();
-                this.ownProjectiles.splice(i, 1);
+                this.player.projectiles.splice(i, 1);
             }
         }
     }
 
     private updateProjectiles(projectiles: ProjectileState[]): void {
+        const { enemyProjectiles } = this.entities;
+        const { destroyedProjectiles } = this.gameState;
+
         for (const projectile of projectiles) {
-            if (projectile.ownerId === this.selfId) {
+            if (projectile.ownerId === this.player.id) {
                 // Mark own projectiles as acknowledged when they appear in server state
-                const ownProjectile = this.ownProjectiles.find(p => p.getId() === projectile.id);
+                const ownProjectile = this.player.projectiles.find(p => p.getId() === projectile.id);
                 if (ownProjectile) {
                     ownProjectile.wasAcknowledged = true;
                 }
-            } else if (!this.enemyProjectileGraphics.has(projectile.id) && !this.destroyedProjectiles.has(projectile.id)) {
+            } else if (!enemyProjectiles.has(projectile.id) && !destroyedProjectiles.has(projectile.id)) {
                 // Only create new projectile if it hasn't been destroyed locally
                 const graphic = new EnemyProjectile(projectile.id, projectile.ownerId, projectile.x, projectile.y, projectile.vx, projectile.vy);
                 this.gameContainer.addChild(graphic);
-                this.enemyProjectileGraphics.set(projectile.id, graphic);
+                enemyProjectiles.set(projectile.id, graphic);
             }
         }
     }
 
     private cleanupPendingCollisions(): void {
         const now = Date.now();
-        for (const [id, collision] of this.pendingCollisions.entries()) {
+        const { pendingCollisions } = this.gameState;
+
+        for (const [id, collision] of pendingCollisions.entries()) {
             if (now - collision.timestamp > this.COLLISION_TIMEOUT) {
                 // Get the affected entity (self or enemy)
-                if (this.self && id === this.selfId) {
-                    this.self.revertPrediction();
+                if (this.player.sprite && id === this.player.id) {
+                    this.player.sprite.revertPrediction();
                 } else {
-                    const graphic = this.enemyGraphics.get(id);
+                    const graphic = this.entities.enemies.get(id);
                     if (graphic) {
                         graphic.revertPrediction();
                     }
                 }
-                this.pendingCollisions.delete(id);
+                this.gameState.pendingCollisions.delete(id);
             }
         }
     }
@@ -523,9 +590,10 @@ private async setupGameWorld() {
     private cleanupDestroyedProjectiles(): void {
         const MAX_AGE = 5000; // 5 seconds
         const now = Date.now();
-        for (const [id, timestamp] of this.destroyedProjectiles.entries()) {
+        const { destroyedProjectiles } = this.gameState;
+        for (const [id, timestamp] of destroyedProjectiles.entries()) {
             if (now - timestamp > MAX_AGE) {
-                this.destroyedProjectiles.delete(id);
+                destroyedProjectiles.delete(id);
             }
         }
     }
@@ -534,82 +602,86 @@ private async setupGameWorld() {
         // Clean up projectiles first
         this.app.ticker.stop();
 
-        for (let i = this.ownProjectiles.length - 1; i >= 0; i--) {
-            const projectile = this.ownProjectiles[i];
-            this.app.stage.removeChild(projectile);
-            projectile.destroy();
-        }
-        this.ownProjectiles = [];
 
-        for (const [_, projectile] of this.enemyProjectileGraphics) {
+        for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
+            const projectile = this.player.projectiles[i];
             this.app.stage.removeChild(projectile);
             projectile.destroy();
         }
-        this.enemyProjectileGraphics.clear();
+        this.player.projectiles = [];
+
+
+        const { enemyProjectiles, enemies } = this.entities;
+
+        for (const [_, projectile] of enemyProjectiles) {
+            this.app.stage.removeChild(projectile);
+            projectile.destroy();
+        }
+        enemyProjectiles.clear();
 
         // Clean up enemy players
-        for (const [_, enemy] of this.enemyGraphics) {
+        for (const [_, enemy] of enemies) {
             this.app.stage.removeChild(enemy);
             enemy.destroy();
         }
-        this.enemyGraphics.clear();
+        enemies.clear();
 
         // Clean up self
-        if (this.self) {
-            this.app.stage.removeChild(this.self);
-            this.self.destroy();
-            this.self = undefined;
+        if (this.player.sprite) {
+            this.app.stage.removeChild(this.player.sprite);
+            this.player.sprite.destroy();
+            this.player.sprite = undefined;
         }
 
-        for (const platform of this.platforms) {
+        for (const platform of this.world.platforms) {
             this.app.stage.removeChild(platform);
             platform.destroy();
         }
 
 
         // Remove ping display
-        this.app.stage.removeChild(this.pingDisplay);
-        this.pingDisplay.destroy();
+        this.app.stage.removeChild(this.ui.pingDisplay);
+        this.ui.pingDisplay.destroy();
 
         // Remove FPS display
-        this.app.stage.removeChild(this.fpsDisplay);
-        this.fpsDisplay.destroy();
+        this.app.stage.removeChild(this.ui.fpsDisplay);
+        this.ui.fpsDisplay.destroy();
         
 
         // Clean up kill indicators
-        for (const indicator of this.killIndicators) {
+        for (const indicator of this.entities.killIndicators) {
             this.gameContainer.removeChild(indicator);
             indicator.destroy();
         }
-        this.killIndicators = [];
-        this.currentScores.clear();
+        this.entities.killIndicators = [];
+        this.gameState.scores.clear();
 
-        this.app.stage.removeChild(this.ammoBox);
-        this.ammoBox.destroy();
+        this.app.stage.removeChild(this.world.ammoBox);
+        this.world.ammoBox.destroy();
 
         // Clear all remaining state
-        this.pendingCollisions.clear();
-        this.destroyedProjectiles.clear();
+        this.gameState.pendingCollisions.clear();
+        this.gameState.destroyedProjectiles.clear();
 
 
     }
 
     // TODO: Update to also integrate player controller states. 
     private integrateEnemyPlayers(): void {
-        const enemyPlayers = this.latestServerSnapshot.players.filter(player => player.id !== this.selfId);
+        const enemyPlayers = this.network.latestServerSnapshot.players.filter(player => player.id !== this.player.id);
         for (const enemyPlayer of enemyPlayers) {
-            if (!this.enemyGraphics.has(enemyPlayer.id)) {
+            if (!this.entities.enemies.has(enemyPlayer.id)) {
                 // This doesn't trigger when match ends and player respawns immediately
                 const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.position.x, enemyPlayer.position.y, enemyPlayer.isBystander, enemyPlayer.name);
                 this.gameContainer.addChild(graphic);
-                this.enemyGraphics.set(enemyPlayer.id, graphic);
+                this.entities.enemies.set(enemyPlayer.id, graphic);
             } else {
-                const graphic = this.enemyGraphics.get(enemyPlayer.id);
+                const graphic = this.entities.enemies.get(enemyPlayer.id);
                 if (!graphic) continue;
                 graphic.setIsBystander(enemyPlayer.isBystander);
                     
                 // Only update health if we don't have a pending collision
-                const pendingCollision = this.pendingCollisions.get(enemyPlayer.id);
+                const pendingCollision = this.gameState.pendingCollisions.get(enemyPlayer.id);
                 if (!pendingCollision) {
                     graphic.setHealth(enemyPlayer.hp);
                 }
@@ -617,7 +689,7 @@ private async setupGameWorld() {
                 // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
                 // than our prediction, collision was confirmed
                 if (enemyPlayer.hp <= graphic.getPredictedHealth()) {
-                    this.pendingCollisions.delete(enemyPlayer.id);
+                    this.gameState.pendingCollisions.delete(enemyPlayer.id);
                     graphic.setHealth(enemyPlayer.hp);
                 }
                 graphic?.syncPosition(enemyPlayer.position.x, enemyPlayer.position.y);
@@ -626,76 +698,79 @@ private async setupGameWorld() {
 
 
         // Remove stale enemy players
-        for (const [id, graphic] of this.enemyGraphics.entries()) {
+        for (const [id, graphic] of this.entities.enemies.entries()) {
             if (!enemyPlayers.some(player => player.id === id)) {
                 this.app.stage.removeChild(graphic);
                 graphic.destroy();
-                this.enemyGraphics.delete(id);
+                this.entities.enemies.delete(id);
             }
         }
     }
 
     private integrateSelfUpdate(selfData: PlayerState | undefined): void {
-        if (!selfData && this.self) {
+        console.log('Integrating self update...');
+        if (!selfData && this.player.sprite) {
             // Clean up self graphics if no self data exists
             this.handlePlayerDeath();
             return;
         }
         if (!selfData) return;
-        if (selfData && !this.self) {
+        if (selfData && !this.player.sprite) {
+            console.log('Self data found, spawning self graphics');
             // create new self if it doesn't exist
             this.spawnPlayer(selfData);
         }
-        if (!this.self) return;
+        if (!this.player.sprite) return;
 
-        this.self.setIsBystander(selfData.isBystander);
-        if (this.self.getIsBystander() === false && selfData.isBystander ===  false) {
+        this.player.sprite.setIsBystander(selfData.isBystander);
+        if (this.player.sprite.getIsBystander() === false && selfData.isBystander ===  false) {
             // Only update health if we don't have a pending collision
             this.updatePlayerHealth(selfData);
         }
     }
     
     private handlePlayerDeath() {
-        this.pendingCollisions.delete(this.selfId);
-        if (this.self) {
-            this.app.stage.removeChild(this.self);
-            this.self.destroy();
+        this.gameState.pendingCollisions.delete(this.player.id);
+        if (this.player.sprite) {
+            this.app.stage.removeChild(this.player.sprite);
+            this.player.sprite.destroy();
         }
         console.log('Self data not found, removing self graphics');
-        this.self = undefined;
+        this.player.sprite = undefined;
     }
 
     private spawnPlayer(data: PlayerState): void {
-        if (this.self) {
+        if (this.player.sprite) {
             console.warn('Self already exists, cannot spawn again');
             return;
         }
+        console.log(`Spawning player with ID: ${data.id} and name: ${data.name}`);
         
-        this.self = new Player(
+        this.player.sprite = new Player(
             data.position.x,
             data.position.y,
             this.GAME_BOUNDS,
             data.name,
         );
         
-        this.self.setPlatforms(this.platforms);
-        this.self.setIsBystander(data.isBystander);
-        this.self.setLastProcessedInputVector(new Vector2(0, 0));
-        this.gameContainer.addChild(this.self);
+        this.player.sprite.setPlatforms(this.world.platforms);
+        this.player.sprite.setIsBystander(data.isBystander);
+        this.player.sprite.setLastProcessedInputVector(new Vector2(0, 0));
+        this.gameContainer.addChild(this.player.sprite);
     }
 
     private updatePlayerHealth(selfData: PlayerState): void {
-        if (!this.self) return;
-        const pendingCollision = this.pendingCollisions.get(this.selfId);
+        if (!this.player.sprite) return;
+        const pendingCollision = this.gameState.pendingCollisions.get(this.player.id);
         if (!pendingCollision) {
-            this.self.setHealth(selfData.hp);
+            this.player.sprite.setHealth(selfData.hp);
         }
         
         // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
         // than our prediction, collision was confirmed
-        if (selfData.hp <= this.self.getPredictedHealth()) {
-            this.pendingCollisions.delete(this.selfId);
-            this.self.setHealth(selfData.hp);
+        if (selfData.hp <= this.player.sprite.getPredictedHealth()) {
+            this.gameState.pendingCollisions.delete(this.player.id);
+            this.player.sprite.setHealth(selfData.hp);
         }
     }
 
@@ -716,12 +791,12 @@ private async setupGameWorld() {
             const elapsedMS = delta.elapsedMS;
             const cappedFrameTime = Math.min(elapsedMS, 100); 
 
-            this.accumulator += cappedFrameTime;
+            this.gameState.accumulator += cappedFrameTime;
 
-            while (this.accumulator >= this.MIN_MS_BETWEEN_TICKS) {
+            while (this.gameState.accumulator >= this.MIN_MS_BETWEEN_TICKS) {
                 this.handleTick(this.MIN_S_BETWEEN_TICKS);
-                this.accumulator -= this.MIN_MS_BETWEEN_TICKS;
-                this.localTick += 1;
+                this.gameState.accumulator -= this.MIN_MS_BETWEEN_TICKS;
+                this.gameState.localTick += 1;
             }
 
             // Note: Pixijs calls render() at the end of the ticker loop, sod we don't
@@ -734,33 +809,26 @@ private async setupGameWorld() {
 
     
     private handleReconciliation(): void {
-        this.latestServerSnapshotProcessed = this.latestServerSnapshot;
-        const selfData = this.latestServerSnapshotProcessed.players.find(player => player.id === this.selfId);
-        if (!selfData  || !this.self) {
+        this.network.latestServerSnapshotProcessed = this.network.latestServerSnapshot;
+        const selfData = this.network.latestServerSnapshotProcessed.players.find(player => player.id === this.player.id);
+        if (!selfData  || !this.player.sprite) {
             console.log('Self data not found in latest server snapshot');
             return;
         }
         const tick = selfData.tick;
         selfData.position = new Vector2(selfData.position.x, selfData.position.y);
 
-        if (!this.serverSelf) {
-            //this.serverSelf = new EnemyPlayer(selfData.id, selfData.position.x, selfData.position.y, selfData.isBystander, selfData.name, true);
-            //this.gameContainer.addChild(this.serverSelf);
-        } else {
-           //this.serverSelf.syncPosition(selfData.position.x, selfData.position.y);
-           //this.serverSelf.setIsBystander(selfData.isBystander);
-        }
 
         let serverStateBufferIndex = tick % this.BUFFER_SIZE;
-        let clientPosition = this.stateBuffer[serverStateBufferIndex]?.position;
+        let clientPosition = this.network.stateBuffer[serverStateBufferIndex]?.position;
 
-        if (tick >= this.localTick) {
-            //console.warn(`Server tick ${tick} is ahead of client tick ${this.localTick}. Syncing client position.`);
+        if (tick >= this.gameState.localTick) {
+            //console.warn(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
             // Server has marched ahead of the client...
             // As a temporary fix, we will simply sync the clint position with the server position
-            this.self.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
-            this.stateBuffer[serverStateBufferIndex] = selfData;
-            this.localTick = tick;
+            this.player.sprite.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
+            this.network.stateBuffer[serverStateBufferIndex] = selfData;
+            this.gameState.localTick = tick;
             return;
         }
 
@@ -773,14 +841,16 @@ private async setupGameWorld() {
         const positionError = Vector2.subtract(selfData.position, clientPosition);
         
         if (positionError.len() > 0.0001) {
-            //console.warn(`Server position at tick client tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at local tick ${ this.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
-            this.self.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
-            this.stateBuffer[serverStateBufferIndex].position = selfData.position;
+            //console.warn(`Server position at tick client tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at local tick ${ this.network.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
+            this.player.sprite.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
+            this.network.stateBuffer[serverStateBufferIndex].position = selfData.position;
             let tickToResimulate = tick + 1;
-            while (tickToResimulate < this.localTick) {
+            while (tickToResimulate < this.gameState.localTick) {
                 const bufferIndex = tickToResimulate % this.BUFFER_SIZE;
-                this.self.update(this.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS, true);
-                this.stateBuffer[bufferIndex].position = this.self.getPositionVector();
+                // TODO: look into bug where this.network.inputBuffer[bufferIndex].vector throws cannot access property 'vector' of undefined
+                // Happened after player died. 
+                this.player.sprite.update(this.network.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS, true);
+                this.network.stateBuffer[bufferIndex].position = this.player.sprite.getPositionVector();
                 tickToResimulate++;
             }
         }
@@ -788,15 +858,16 @@ private async setupGameWorld() {
 
 
     private handleTick(dt: number): void {
-        if (this.self) {
-            if (this.latestServerSnapshot.serverTick > this.latestServerSnapshotProcessed.serverTick) {
+        if (this.player.sprite) {
+            console.log('we have player sprite, handling tick');
+            if (this.network.latestServerSnapshot.serverTick > this.network.latestServerSnapshotProcessed.serverTick) {
                 this.handleReconciliation();
             }
             const playerInput = this.handlePlayerInput(dt);
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
             if (playerInput) {
                 this.handleShooting(playerInput);
-                this.self.setLastProcessedInputVector(playerInput.vector);
+                this.player.sprite.setLastProcessedInputVector(playerInput.vector);
             }            
         }
 
@@ -809,7 +880,7 @@ private async setupGameWorld() {
     }
 
     private handlePlayerInput(dt: number): InputPayload | undefined {
-        if (!this.self) return; // No player to control
+        if (!this.player.sprite) return; // No player to control
 
         const controllerState = this.controller.getState();
         const inputVector = Vector2.createFromControllerState(controllerState);
@@ -820,32 +891,32 @@ private async setupGameWorld() {
             inputVector.mouse.y = y;
         }
         const inputPayload: InputPayload = {
-            tick: this.localTick,
+            tick: this.gameState.localTick,
             vector: inputVector,
         };
 
-        const bufferIndex = this.localTick % this.BUFFER_SIZE;
+        const bufferIndex = this.gameState.localTick % this.BUFFER_SIZE;
         this.controller.keys.up.pressed = false; // Reset up keys to prevent double jump
         this.controller.keys.space.pressed = false; 
 
 
-        this.inputBuffer[bufferIndex] = inputPayload;
+        this.network.inputBuffer[bufferIndex] = inputPayload;
         // We apply the input to the player
-        this.self.update(inputVector, dt, false);
+        this.player.sprite.update(inputVector, dt, false);
 
         // Add the updated state to the state buffer
-        const stateVector = this.self.getPositionVector();
-        this.stateBuffer[bufferIndex] = {
-            tick: this.localTick,
+        const stateVector = this.player.sprite.getPositionVector();
+        this.network.stateBuffer[bufferIndex] = {
+            tick: this.gameState.localTick,
             position: stateVector
         };
 
-        const lastProcessedInputVector = this.self.getLastProcessedInputVector();
+        const lastProcessedInputVector = this.player.sprite.getLastProcessedInputVector();
         const justStoppedMoving = lastProcessedInputVector.x !== 0 || lastProcessedInputVector.y !== 0 // This is true when jump is pressed, but the player is not moving
             && inputVector.x === 0 && inputVector.y === 0;
 
         if (
-            this.self.y !== this.GAME_HEIGHT // If the player is in the air TODO: Change this to isAFk === false?
+            this.player.sprite.y !== this.GAME_HEIGHT // If the player is in the air TODO: Change this to isAFk === false?
             || inputVector.x !== 0 // Has horizontal input
             || inputVector.y !== 0 // Has verical input
             || inputVector.mouse // Has mouse input
@@ -858,8 +929,8 @@ private async setupGameWorld() {
     // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)
     private render(deltaMs: number): void {
         //this.updateCameraPosition();
-        this.checkForKills(this.latestServerSnapshot.scores);
-        this.scoreDisplay.updateScores(this.latestServerSnapshot.scores, this.selfId);
+        this.checkForKills(this.network.latestServerSnapshot.scores);
+        this.ui.scoreDisplay.updateScores(this.network.latestServerSnapshot.scores, this.player.id);
         this.updateFpsDisplay(deltaMs);
     }
 
@@ -869,21 +940,21 @@ private async setupGameWorld() {
 
 
     private updateFpsDisplay(deltaMS: number): void {
-        this.fpsDisplay.update();
+        this.ui.fpsDisplay.update();
         // Update ping display (every ~60 frames = ~1 second)
-        this.pingUpdateCounter += deltaMS;
-        if (this.pingUpdateCounter >= 1000) {
-            this.pingDisplay.updatePing(this.socketManager.getPing());
-            this.pingUpdateCounter = 0;
+        this.ui.pingUpdateCounter += deltaMS;
+        if (this.ui.pingUpdateCounter >= 1000) {
+            this.ui.pingDisplay.updatePing(this.socketManager.getPing());
+            this.ui.pingUpdateCounter = 0;
         }
     }
 
     private showScoreBoard(): void {
-        this.scoreDisplay.show();
+        this.ui.scoreDisplay.show();
     }
 
     private hideScoreBoard(): void {
-        this.scoreDisplay.hide();
+        this.ui.scoreDisplay.hide();
     }
     
 
@@ -917,15 +988,15 @@ private async setupGameWorld() {
 
     private handleShooting(input: InputPayload): void {
         if (
-            !this.self 
-            || this.self.getIsBystander() 
-            || this.gamePhase !== 'active'
+            !this.player.sprite 
+            || this.player.sprite.getIsBystander() 
+            || this.gameState.phase !== 'active'
             || !input.vector.mouse
         ) return;
         console.log('Shooting!!!');
         const projectile = new Projectile(
-            this.self.x,
-            this.self.y - 50,
+            this.player.sprite.x,
+            this.player.sprite.y - 50,
             input.vector.mouse.x,
             input.vector.mouse.y,
             this.app.screen.height,
@@ -934,24 +1005,22 @@ private async setupGameWorld() {
 
         AudioManager.getInstance().play('shoot');
         this.gameContainer.addChild(projectile);
-        this.ownProjectiles.push(projectile);
+        this.player.projectiles.push(projectile);
 
     }
 
-    private cameraLerpFactor: number = 0.1; // Adjust between 0.01 (very slow) and 0.5 (very fast)
-    private currentCameraX: number = 0;
-    private currentCameraY: number = 0;
 
 
     
 
     // Note: This is causing jitter.
     private updateCameraPositionLERP(): void {
-        if (!this.self) return;
-        
+        console.log('updating camera position bfoere');
+        if (!this.player.sprite) return;
+        console.log('updating camera position');
         // Calculate target camera position (centered on player)
-        const targetX = -this.self.x + this.GAME_WIDTH / 2;
-        const targetY = -this.self.y + this.GAME_HEIGHT / 2;
+        const targetX = -this.player.sprite.x + this.GAME_WIDTH / 2;
+        const targetY = -this.player.sprite.y + this.GAME_HEIGHT / 2;
 
         // Clamp camera position to stay within bounds + buffer
         const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
@@ -964,63 +1033,62 @@ private async setupGameWorld() {
         const clampedTargetY = Math.max(minY, Math.min(maxY, targetY));
         
         // Initialize camera position if not set
-        if (this.currentCameraX === 0 && this.currentCameraY === 0) {
-            this.currentCameraX = clampedTargetX;
-            this.currentCameraY = clampedTargetY;
+        if (this.cameraSettings.currentX === 0 && this.cameraSettings.currentY === 0) {
+            this.cameraSettings.currentX = clampedTargetX;
+            this.cameraSettings.currentY = clampedTargetY;
         }
         
         // Smoothly interpolate between current position and target position
-        this.currentCameraX += (clampedTargetX - this.currentCameraX) * this.cameraLerpFactor;
-        this.currentCameraY += (clampedTargetY - this.currentCameraY) * this.cameraLerpFactor;
-        
+        this.cameraSettings.currentX += (clampedTargetX - this.cameraSettings.currentX) * this.cameraSettings.lerpFactor;
+        this.cameraSettings.currentY += (clampedTargetY - this.cameraSettings.currentY) * this.cameraSettings.lerpFactor;
 
 
-        const xOffset = this.currentCameraX - this.camera.x;
-        const yOffset = this.currentCameraY - this.camera.y;
+        const xOffset = this.cameraSettings.currentX - this.camera.x;
+        const yOffset = this.cameraSettings.currentY - this.camera.y;
         
         // Apply the smoothed camera position
-        this.camera.x = this.currentCameraX;
-        this.camera.y = this.currentCameraY;
+        this.camera.x = this.cameraSettings.currentX;
+        this.camera.y = this.cameraSettings.currentY;
 
         this.updateBackground(xOffset, yOffset);
 
         // Update position of UI elements relative to the camera
-        this.scoreDisplay.fixPosition();
-        this.fpsDisplay.fixPosition();
-        this.pingDisplay.fixPosition();
+        this.ui.scoreDisplay.fixPosition();
+        this.ui.fpsDisplay.fixPosition();
+        this.ui.pingDisplay.fixPosition();
     }
 
     private updateBackground(offsetX: number, offsetY: number): void {
         // Update background position based on camera offset
-        if (!this.backgroundAssets
-            || !this.backgroundAssets.j1
-            || !this.backgroundAssets.j2
-            || !this.backgroundAssets.j3
-            || !this.backgroundAssets.j4
+        if (!this.world.backgroundAssets
+            || !this.world.backgroundAssets.j1
+            || !this.world.backgroundAssets.j2
+            || !this.world.backgroundAssets.j3
+            || !this.world.backgroundAssets.j4
         ) return;
         
-        this.backgroundAssets.j1.x += offsetX * 0.4;
-        this.backgroundAssets.j2.x += offsetX * 0.3;
-        this.backgroundAssets.j3.x += offsetX * 0.2;
+        this.world.backgroundAssets.j1.x += offsetX * 0.4;
+        this.world.backgroundAssets.j2.x += offsetX * 0.3;
+        this.world.backgroundAssets.j3.x += offsetX * 0.2;
 
-        this.backgroundAssets.j1.y += offsetY * 0.4;
-        this.backgroundAssets.j2.y += offsetY * 0.3;
-        this.backgroundAssets.j3.y += offsetY * 0.2;
+        this.world.backgroundAssets.j1.y += offsetY * 0.4;
+        this.world.backgroundAssets.j2.y += offsetY * 0.3;
+        this.world.backgroundAssets.j3.y += offsetY * 0.2;
 
     }
 
     private updateOwnProjectiles(): void {
-        for (let i = this.ownProjectiles.length - 1; i >= 0; i--) {
-            const projectile = this.ownProjectiles[i];
+        for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
+            const projectile = this.player.projectiles[i];
             projectile.update();
             // Check for collisions with enemy players
-            if (this.gamePhase === 'active') {
-                for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
+            if (this.gameState.phase === 'active') {
+                for (const [enemyId, enemyGraphic] of this.entities.enemies.entries()) {
                     if (enemyGraphic.getIsBystander() === false && testForAABB(projectile, enemyGraphic, this.convertCameraToWorldCoordinates.bind(this))) {
                         // Record collision prediction
                         // This is required so we can reject stateUpdates that likely haven't computed
                         // the collision yet due to network latency
-                        this.pendingCollisions.set(enemyId, {
+                        this.gameState.pendingCollisions.set(enemyId, {
                             projectileId: projectile.getId(),
                             timestamp: Date.now()
                         });
@@ -1039,7 +1107,7 @@ private async setupGameWorld() {
 
 
             if (projectile.shouldBeDestroyed) {
-                this.ownProjectiles.splice(i, 1);
+                this.player.projectiles.splice(i, 1);
                 projectile.destroy();
             }
 
@@ -1048,40 +1116,40 @@ private async setupGameWorld() {
     }
 
     private updateEnemyProjectiles(): void {
-        for (const [projectileId, projectile] of this.enemyProjectileGraphics.entries()) {
+        for (const [projectileId, projectile] of this.entities.enemyProjectiles.entries()) {
             projectile.update();
             
-            if (this.gamePhase === 'active') {
+            if (this.gameState.phase === 'active') {
                 // Check collision with self first
-                if (this.self && this.self.getIsBystander() === false && testForAABB(projectile, this.self)) {
+                if (this.player.sprite && this.player.sprite.getIsBystander() === false && testForAABB(projectile, this.player.sprite)) {
                     // Add projectile to destroyed list
                     // to avoid respawning it on delayed stateUpdates
-                    this.destroyedProjectiles.set(projectileId, Date.now());
+                    this.gameState.destroyedProjectiles.set(projectileId, Date.now());
 
                     // Record collision prediction
-                    this.pendingCollisions.set(this.selfId, {
+                    this.gameState.pendingCollisions.set(this.player.id, {
                         projectileId: projectileId,
                         timestamp: Date.now()
                     });
 
                     AudioManager.getInstance().play('impact');
                     // Apply predicted damage to self
-                    this.self.damage();
+                    this.player.sprite.damage();
                     
                     // Mark projectile for cleanup
                     projectile.shouldBeDestroyed = true;
                 } else {
                     // Check collisions with other enemies
-                    for (const [enemyId, enemyGraphic] of this.enemyGraphics.entries()) {
+                    for (const [enemyId, enemyGraphic] of this.entities.enemies.entries()) {
                         if (
                             enemyId !== projectile.getOwnerId() 
                             && testForAABB(projectile, enemyGraphic)
                             && enemyGraphic.getIsBystander() === false
                         ) {
                             
-                            this.destroyedProjectiles.set(projectileId, Date.now());
+                            this.gameState.destroyedProjectiles.set(projectileId, Date.now());
                             // Record collision prediction
-                            this.pendingCollisions.set(enemyId, {
+                            this.gameState.pendingCollisions.set(enemyId, {
                                 projectileId: projectileId,
                                 timestamp: Date.now()
                             });
@@ -1104,10 +1172,41 @@ private async setupGameWorld() {
             if (projectile.shouldBeDestroyed) {
                 this.app.stage.removeChild(projectile);
                 projectile.destroy();
-                this.enemyProjectileGraphics.delete(projectileId);
+                this.entities.enemyProjectiles.delete(projectileId);
             }
         }
     }
+
+    // Helper utility methods
+    private addOwnProjectile(projectile: Projectile): void {
+        this.player.projectiles.push(projectile);
+        this.gameContainer.addChild(projectile);
+    }
+
+    private removeOwnProjectile(index: number): void {
+        const projectile = this.player.projectiles[index];
+        if (projectile) {
+            this.gameContainer.removeChild(projectile);
+            projectile.destroy();
+            this.player.projectiles.splice(index, 1);
+        }
+    }
+
+    private addEnemyPlayer(id: string, player: EnemyPlayer): void {
+        this.entities.enemies.set(id, player);
+        this.gameContainer.addChild(player);
+    }
+
+    private removeEnemyPlayer(id: string): void {
+        const player = this.entities.enemies.get(id);
+        if (player) {
+            this.gameContainer.removeChild(player);
+            player.destroy();
+            this.entities.enemies.delete(id);
+        }
+    }
+
+
 
 
 }

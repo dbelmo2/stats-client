@@ -3,7 +3,6 @@ import { Platform } from './Platform';
 import { Vector2 } from './Vector';
 import { AudioManager } from '../managers/AudioManager';
 
-
 export interface PendingInput {
   seq: number; 
   tick: number;
@@ -18,6 +17,7 @@ export class Player extends Container {
   public readonly MAX_FALL_SPEED = 1500
   private readonly HEALTH_BAR_WIDTH = 50;
   private readonly HEALTH_BAR_HEIGHT = 5;
+
 
   private velocity: Vector2;
   private healthBar: Graphics;
@@ -40,7 +40,7 @@ export class Player extends Container {
   private canDoubleJump = true;
   private isWalking = false;
 
-  constructor(x: number, y: number, gameBounds: any, name: string) {
+  constructor(x: number, y: number, gameBounds: any, username: string = 'Player',) {
     super();
     this.gameBounds = gameBounds;
     this.velocity = new Vector2(0, 0);
@@ -59,15 +59,12 @@ export class Player extends Container {
     });
 
 
-    this.nameText = new Text({ text: name, style: nameStyle });
+    this.nameText = new Text({ text: username, style: nameStyle });
     this.nameText.x = this.body.width / 2; // Center the text
     this.nameText.anchor.set(0.5, 1); // Center horizontally, align bottom
     this.nameText.y = -20; // Position above health bar
     this.healthBarContainer.addChild(this.nameText);
 
-
-
-  
 
     // Create health bar background
     const healthBarBg = new Graphics()
