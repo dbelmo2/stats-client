@@ -13,7 +13,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
         display: flex;
         justify-content: center;
         align-items: center;
-        z-index: 1000;
+        z-index: 100;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     `;
 

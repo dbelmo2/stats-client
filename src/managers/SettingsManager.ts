@@ -93,13 +93,10 @@ export class SettingsManager {
         const button = document.createElement('button');
         button.style.cssText = `
             position: fixed;
-            top: 20px;
-            right: 20px;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid #fff;
+            top: 30px;
+            right: 30px;
+            border: none;
+            background: rgba(0, 0, 0, 0.0);
             cursor: pointer;
             z-index: 1000;
             display: flex;
@@ -115,20 +112,23 @@ export class SettingsManager {
         icon.src = settingsIcon;
         icon.alt = 'Settings';
         icon.style.cssText = `
-            width: 30px;
-            height: 30px;
+            width: 40px;
+            height: 40px;
             object-fit: contain;
-            filter: invert(1); /* Make icon white */
         `;
         
         button.appendChild(icon);
         
         button.addEventListener('mouseover', () => {
             button.style.transform = 'scale(1.1)';
+            icon.style.filter = 'invert(1)'; // Invert colors on hover
         });
         
         button.addEventListener('mouseout', () => {
             button.style.transform = 'scale(1)';
+            icon.style.filter = 'none'; // Reset filter on mouse out
+            icon.style.filter = 'invert(0)'; // Invert colors on hover
+
         });
         
         button.addEventListener('click', () => {
