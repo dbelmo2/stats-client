@@ -25,6 +25,7 @@ import jumpAudio from '../swipe-sound.mp3';
 import walkingAudio from '../walking-grass-sound.flac'; 
 import { AudioManager } from './AudioManager';
 import { loginScreen } from '../logic/ui/LoginScreen';
+import type { SettingsManager } from './SettingsManager';
 
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
 // can start with low health. Once they take damage, the health bar updates to the correct value.
@@ -37,6 +38,7 @@ interface PlayerData {
     name: string,
     sprite: Player | undefined,
     projectiles: Projectile[],
+    disableInput: boolean
 }
 interface GameState {
   phase: GamePhase;
@@ -72,6 +74,7 @@ interface UIElements {
   fpsDisplay: FPSDisplay;
   scoreDisplay: ScoreDisplay;
   pingUpdateCounter: number;
+  overlayActive: boolean;
 }
 
 interface CameraSettings {
@@ -133,6 +136,11 @@ type StatePayload = {
 // - offense (fat love shoots every projectile he ate in the direction of the mouse)
 
 
+// Problem: overlay being opened (settings) is causing issues with player input, specifically informing the server
+// that input has stopped. THe player continuees moving on the server but not the client.
+// Fix: implement a checkIfOverlayisActive() function that gets called in player input. If it returns true, handle the last input 
+// to inform the server of the player stopping, then set this.overlayActive = true;
+
 type GamePhase = 'initializing' | 'ready' | 'active' | 'ended';
 
 export class GameManager {
@@ -163,7 +171,8 @@ export class GameManager {
         id: '',
         name: '',
         sprite: undefined,
-        projectiles: []
+        projectiles: [],
+        disableInput: false
     }
 
     private gameState: GameState = {
@@ -210,7 +219,8 @@ export class GameManager {
         pingDisplay: undefined as unknown as PingDisplay, // Will be initialized in constructor
         fpsDisplay: undefined as unknown as FPSDisplay,   // Will be initialized in constructor
         scoreDisplay: undefined as unknown as ScoreDisplay, // Will be initialized in constructor
-        pingUpdateCounter: 0
+        pingUpdateCounter: 0,
+        overlayActive: false
     };
     
     private cameraSettings: CameraSettings = {
@@ -284,10 +294,11 @@ export class GameManager {
     
 
     
-    public static async initialize(app: Application): Promise<GameManager> {
+    public static async initialize(app: Application, settingsManager: SettingsManager): Promise<GameManager> {
         if (!GameManager.instance) {
             GameManager.instance = new GameManager(app);
-
+            settingsManager.onModalOpen(() => GameManager.instance.ui.overlayActive = true);
+            settingsManager.onModalClose(() => GameManager.instance.ui.overlayActive = false);
             const { name, region } = await loginScreen();
             GameManager.instance.player.name = name;
 
@@ -308,7 +319,7 @@ export class GameManager {
         // Register game sounds
         audioManager.registerSound('shoot', {
             src: [shootingAudio],
-            volume: 0.5
+            volume: 0.30
         }, 'sfx');
         
         audioManager.registerSound('impact', {
@@ -330,12 +341,11 @@ export class GameManager {
         audioManager.registerSound('theme', {
             src: [h3Theme],
             loop: true,
-            volume: 0.7
+            volume: 0.50
         }, 'music');
         
         // Preload all sounds
         audioManager.preloadAll().then(() => {
-            console.log('Audio ready!');
             // Start background music
             audioManager.play('theme');
         });
@@ -370,7 +380,6 @@ private async setupGameWorld() {
             j3: j3Sprite,
             j4: j4Sprite
         }
-        console.log(`Game world setup complete with player name: ${this.player.name}`);
     }
 
     private setupEventListeners(): void {
@@ -700,7 +709,6 @@ private async setupGameWorld() {
     }
 
     private integrateSelfUpdate(selfData: PlayerServerState | undefined): void {
-        console.log('Integrating self update...');
         if (!selfData && this.player.sprite) {
             // Clean up self graphics if no self data exists
             this.handlePlayerDeath();
@@ -708,7 +716,6 @@ private async setupGameWorld() {
         }
         if (!selfData) return;
         if (selfData && !this.player.sprite) {
-            console.log('Self data found, spawning self graphics');
             // create new self if it doesn't exist
             this.spawnPlayer(selfData);
         }
@@ -727,7 +734,6 @@ private async setupGameWorld() {
             this.app.stage.removeChild(this.player.sprite);
             this.player.sprite.destroy();
         }
-        console.log('Self data not found, removing self graphics');
         this.player.sprite = undefined;
     }
 
@@ -736,8 +742,7 @@ private async setupGameWorld() {
             console.warn('Self already exists, cannot spawn again');
             return;
         }
-        console.log(`Spawning player with ID: ${data.id} and name: ${data.name}`);
-        
+
         this.player.sprite = new Player(
             data.position.x,
             data.position.y,
@@ -841,6 +846,14 @@ private async setupGameWorld() {
                 const bufferIndex = tickToResimulate % this.BUFFER_SIZE;
                 // TODO: look into bug where this.network.inputBuffer[bufferIndex].vector throws cannot access property 'vector' of undefined
                 // Happened after player died. 
+
+                const inputVector = this.network.inputBuffer[bufferIndex]?.vector;
+                if (!inputVector) {
+                    console.warn(`No input vector found for buffer index ${bufferIndex} at tick ${tickToResimulate}`);
+                    break; // No input to resimulate
+                }
+
+
                 this.player.sprite.update(this.network.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS, true);
                 this.network.stateBuffer[bufferIndex].position = this.player.sprite.getPositionVector();
                 tickToResimulate++;
@@ -851,16 +864,18 @@ private async setupGameWorld() {
 
     private handleTick(dt: number): void {
         if (this.player.sprite) {
-            console.log('we have player sprite, handling tick');
             if (this.network.latestServerSnapshot.serverTick > this.network.latestServerSnapshotProcessed.serverTick) {
                 this.handleReconciliation();
             }
+
             const playerInput = this.handlePlayerInput(dt);
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
             if (playerInput) {
                 this.handleShooting(playerInput);
                 this.player.sprite.setLastProcessedInputVector(playerInput.vector);
-            }            
+            }     
+        
+       
         }
 
         this.integrateStateUpdate();
@@ -872,10 +887,22 @@ private async setupGameWorld() {
     }
 
     private handlePlayerInput(dt: number): InputPayload | undefined {
+
+
         if (!this.player.sprite) return; // No player to control
 
         const controllerState = this.controller.getState();
         const inputVector = Vector2.createFromControllerState(controllerState);
+
+        if (this.player.disableInput) {
+            inputVector.x = 0; // Prevent input when overlay is active
+            inputVector.y = 0; // Prevent input when overlay is active
+            inputVector.mouse = undefined; // Prevent mouse input when overlay is active
+        }
+
+        this.player.disableInput = this.ui.overlayActive; // Disable input when overlay is active
+        if (this.player.disableInput) inputVector.mouse = undefined; // Prevent mouse input when overlay is active
+
         this.controller.resetMouse();
         if (inputVector.mouse) { // Convert camera to world coordinates
             const { x, y } = this.convertCameraToWorldCoordinates(inputVector.mouse.x, inputVector.mouse.y);
@@ -1000,12 +1027,9 @@ private async setupGameWorld() {
         this.gameContainer.addChild(projectile);    
     }
 
-
     // Note: This is causing jitter.
     private updateCameraPositionLERP(): void {
-        console.log('updating camera position bfoere');
         if (!this.player.sprite) return;
-        console.log('updating camera position');
         // Calculate target camera position (centered on player)
         const targetX = -this.player.sprite.x + this.GAME_WIDTH / 2;
         const targetY = -this.player.sprite.y + this.GAME_HEIGHT / 2;
@@ -1072,7 +1096,7 @@ private async setupGameWorld() {
             // Check for collisions with enemy players
             if (this.gameState.phase === 'active') {
                 for (const [enemyId, enemyGraphic] of this.entities.enemies.entries()) {
-                    if (enemyGraphic.getIsBystander() === false && testForAABB(projectile, enemyGraphic, this.convertCameraToWorldCoordinates.bind(this))) {
+                    if (enemyGraphic.getIsBystander() === false && testForAABB(projectile, enemyGraphic)) {
                         // Record collision prediction
                         // This is required so we can reject stateUpdates that likely haven't computed
                         // the collision yet due to network latency

@@ -34,9 +34,8 @@ export class AudioManager {
         Howler.autoUnlock = true;
         Howler.html5PoolSize = 10;
         this.applyVolumeSettings();
-        this.settingsManager.onVolumeChange((category: AudioCategory, volume: number) => {
+        this.settingsManager.onVolumeChange(() => {
             this.applyVolumeSettings();
-            console.log(`Volume for ${category} changed to ${volume}`);
         });
 
     }

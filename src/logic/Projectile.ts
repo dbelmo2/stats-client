@@ -57,7 +57,6 @@ export class Projectile extends Container {
 
     // initialize
     this.id = id;
-    console.log(`Projectile created with id: ${this.id}, spawn position: (${spawnX}, ${spawnY}), target position: (${targetX}, ${targetY}), speed: ${speed}, lifespan: ${lifespan}, gravity effect: ${gravityEffect}`);
     this.x = spawnX;
     this.y = spawnY;
     this.speed = speed;

@@ -45,5 +45,5 @@ console.log('Starting game...');
 
 
     // Initialize game manager
-    await GameManager.initialize(app);
+    await GameManager.initialize(app, settingsManager);
 })();

@@ -96,6 +96,14 @@ export class Controller {
     this.customMouseUpHandler = handler;
   }
 
+  public reset(): void {
+    for (const key in this.keys) {
+      const keyName = key as keyof typeof this.keys;
+      this.keys[keyName].pressed = false;
+    }
+    this.resetMouse();
+  }
+
 
   public resetMouse(): void {
     this.mouse.pressed = false;

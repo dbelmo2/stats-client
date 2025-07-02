@@ -151,7 +151,6 @@ export class Player extends Container {
     this.y = y; // Update temporary position for physics calculations
     this.velocity.y = vy;
     this.velocity.x = vx; // Update velocity based on server data
-    //console.log(`Syncing position to (${x}, ${y}) with velocity (${vx}, ${vy})`);
   }
 
 
@@ -162,7 +161,6 @@ export class Player extends Container {
 
 
   update(inputVector: Vector2, dt: number, isResimulating: boolean = false): void {
-    //console.log('Player position: ', this.x, this.y);
       if (isResimulating) {
         this.body.clear();
         this.body.rect(0, 0, 50, 50).fill(0xff0000);

@@ -15,11 +15,14 @@ export class SettingsManager {
     private settingsButton: HTMLElement | null = null;
     private settingsModal: HTMLElement | null = null;
     private onVolumeChangeCallback: any;
-    
+    private onModalOpenCallback: any;
+    private onModalCloseCallback: any;
+
+
     private constructor() {
         // Load settings from localStorage or use defaults
         const savedSettings = localStorage.getItem('gameSettings');
-        
+        console.log('Saved settings:', savedSettings);
         if (savedSettings) {
             this.settings = JSON.parse(savedSettings);
         } else {
@@ -60,6 +63,14 @@ export class SettingsManager {
         this.saveSettings();
     }
     
+    public onModalOpen(callback: any) {
+        this.onModalOpenCallback = callback;
+    }
+
+    public onModalClose(callback: any) {
+        this.onModalCloseCallback = callback;
+    }
+
     public setMusicVolume(volume: number): void {
         this.settings.musicVolume = Math.max(0, Math.min(1, volume)); // Clamp between 0-1
         if (this.onVolumeChangeCallback) {
@@ -138,6 +149,7 @@ export class SettingsManager {
         document.body.appendChild(button);
         this.settingsButton = button;
     }
+
     private toggleSettingsModal(): void {
         if (this.settingsModal) {
             this.closeSettingsModal();
@@ -155,34 +167,35 @@ export class SettingsManager {
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.85);
             display: flex;
             justify-content: center;
             align-items: center;
             z-index: 1001;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         `;
         
         // Create the modal content
         const modal = document.createElement('div');
         modal.style.cssText = `
-            background: #2c2c2c;
+            background: #1a1a1a;
             padding: 30px;
-            border-radius: 8px;
-            width: 400px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            border-radius: 6px;
+            width: 280px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
             position: relative;
             color: white;
-            font-family: Arial, sans-serif;
         `;
         
         // Create title
         const title = document.createElement('h2');
         title.textContent = 'Game Settings';
         title.style.cssText = `
-            margin-top: 0;
-            margin-bottom: 20px;
+            margin: 0 0 24px 0;
+            color: white;
+            font-size: 20px;
+            font-weight: 500;
             text-align: center;
-            color: #fff;
         `;
         
         // Create close button
@@ -195,9 +208,23 @@ export class SettingsManager {
             background: none;
             border: none;
             font-size: 24px;
-            color: #999;
+            color: #666;
             cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
         `;
+
+        closeButton.addEventListener('mouseover', () => {
+            closeButton.style.color = '#fff';
+        });
+        closeButton.addEventListener('mouseout', () => {
+            closeButton.style.color = '#666';
+        });
         closeButton.addEventListener('click', () => this.closeSettingsModal());
         
         
@@ -211,26 +238,37 @@ export class SettingsManager {
         
         // Add save button
         const saveButton = document.createElement('button');
-        saveButton.textContent = 'Save Settings';
+        saveButton.textContent = 'Save';
         saveButton.style.cssText = `
-            background: #4CAF50;
-            color: white;
-            padding: 10px 20px;
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
             border: none;
             border-radius: 4px;
-            margin-top: 20px;
+            background: #4CAF50;
+            color: white;
             cursor: pointer;
-            width: 100%;
-            font-size: 16px;
-            transition: background 0.3s;
+            transition: all 0.2s ease;
+            margin-top: 20px;
         `;
         saveButton.addEventListener('mouseover', () => {
-            saveButton.style.background = '#3e8e41';
+            saveButton.style.background = '#43a047';
         });
         saveButton.addEventListener('mouseout', () => {
             saveButton.style.background = '#4CAF50';
         });
-        saveButton.addEventListener('click', () => this.closeSettingsModal());
+        saveButton.addEventListener('click', () => {
+            // Add fade out animation
+            modalContainer.style.transition = 'opacity 0.3s ease';
+            modalContainer.style.opacity = '0';
+            this.saveSettings();
+            setTimeout(() => {
+                this.closeSettingsModal();
+            }, 300);
+        });
+
         
         modal.appendChild(saveButton);
         modalContainer.appendChild(modal);
@@ -238,13 +276,7 @@ export class SettingsManager {
         // Add to DOM
         document.body.appendChild(modalContainer);
         this.settingsModal = modalContainer;
-        
-        // Prevent clicks from propagating to game
-        this.settingsModal.addEventListener('click', (e) => {
-            if (e.target === this.settingsModal) {
-                this.closeSettingsModal();
-            }
-        });
+        this.onModalOpenCallback?.(); // Call the open callback if set
     }
 
     
@@ -350,10 +382,12 @@ export class SettingsManager {
         if (this.settingsModal && this.settingsModal.parentNode) {
             document.body.removeChild(this.settingsModal);
             this.settingsModal = null;
+            this.onModalCloseCallback?.(); // Call the close callback if set
         }
     }
     
     private saveSettings(): void {
+        console.log('Saving settings:', this.settings);
         localStorage.setItem('gameSettings', JSON.stringify(this.settings));
     }
     
