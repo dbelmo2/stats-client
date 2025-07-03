@@ -7,6 +7,10 @@ export interface GameSettings {
     region: Region;
     musicVolume: number;  // 0-1 range
     sfxVolume: number;    // 0-1 range
+    muteAll: boolean;
+    muteMusic: boolean;
+    muteSfx: boolean;
+    devMode: boolean;
 }
 
 export class SettingsManager {
@@ -18,7 +22,6 @@ export class SettingsManager {
     private onModalOpenCallback: any;
     private onModalCloseCallback: any;
 
-
     private constructor() {
         // Load settings from localStorage or use defaults
         const savedSettings = localStorage.getItem('gameSettings');
@@ -29,7 +32,11 @@ export class SettingsManager {
             this.settings = {
                 region: 'NA',
                 musicVolume: 0.5,
-                sfxVolume: 0.5
+                sfxVolume: 0.5,
+                muteAll: false,
+                muteMusic: false,
+                muteSfx: false,
+                devMode: false,
             };
             this.saveSettings();
         }
@@ -74,14 +81,14 @@ export class SettingsManager {
     public setMusicVolume(volume: number): void {
         this.settings.musicVolume = Math.max(0, Math.min(1, volume)); // Clamp between 0-1
         if (this.onVolumeChangeCallback) {
-            this.onVolumeChangeCallback('music', this.settings.musicVolume);
+            this.onVolumeChangeCallback('Music Volume', this.settings.musicVolume);
         }
     }
     
     public setSfxVolume(volume: number): void {
         this.settings.sfxVolume = Math.max(0, Math.min(1, volume)); // Clamp between 0-1
         if (this.onVolumeChangeCallback) {
-            this.onVolumeChangeCallback('sfx', this.settings.sfxVolume);
+            this.onVolumeChangeCallback('Sound Effects Volume', this.settings.sfxVolume);
         }
     }
     
@@ -89,7 +96,7 @@ export class SettingsManager {
         this.createSettingsButton();
     }
 
-    public onVolumeChange(callback: any): void {
+    public onVolumeChange(callback: (type: string, value: any) => void): void {
         this.onVolumeChangeCallback = callback;
     }
 
@@ -181,15 +188,17 @@ export class SettingsManager {
             background: #1a1a1a;
             padding: 30px;
             border-radius: 6px;
-            width: 280px;
+            width: 320px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
             position: relative;
             color: white;
+            max-height: 80vh;
+            overflow-y: auto;
         `;
         
         // Create title
         const title = document.createElement('h2');
-        title.textContent = 'Game Settings';
+        title.textContent = 'Settings';
         title.style.cssText = `
             margin: 0 0 24px 0;
             color: white;
@@ -228,14 +237,16 @@ export class SettingsManager {
         closeButton.addEventListener('click', () => this.closeSettingsModal());
         
         
-        // Create volume sliders
+        // Volume controls
         const volumeSection = this.createVolumeSection();
-        
+        const checkboxSection = this.createCheckboxSection();
+
         // Assemble modal
         modal.appendChild(title);
         modal.appendChild(closeButton);
         modal.appendChild(volumeSection);
-        
+        modal.appendChild(checkboxSection);
+
         // Add save button
         const saveButton = document.createElement('button');
         saveButton.textContent = 'Save';
@@ -374,6 +385,91 @@ export class SettingsManager {
         
         section.appendChild(musicContainer);
         section.appendChild(sfxContainer);
+        
+        return section;
+    }
+
+    private createCheckboxSection(): HTMLElement {
+        const section = document.createElement('div');
+        section.style.cssText = `
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        `;
+        
+        // Helper function to create a checkbox
+        const createCheckbox = (label: string, checked: boolean, onChange: (checked: boolean) => void) => {
+            const container = document.createElement('div');
+            container.style.cssText = `
+                display: flex;
+                align-items: center;
+                margin-bottom: 12px;
+                cursor: pointer;
+            `;
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = checked;
+            checkbox.style.cssText = `
+                width: 16px;
+                height: 16px;
+                margin-right: 10px;
+                cursor: pointer;
+                accent-color: #4CAF50;
+            `;
+            
+            const labelElement = document.createElement('label');
+            labelElement.textContent = label;
+            labelElement.style.cssText = `
+                font-size: 14px;
+                color: #ddd;
+                cursor: pointer;
+                user-select: none;
+            `;
+            
+            // Handle change events
+            checkbox.addEventListener('change', () => {
+                this.onVolumeChangeCallback(label, checkbox.checked);
+                onChange(checkbox.checked);
+            });
+            
+            // Make the entire container clickable
+            container.addEventListener('click', (e) => {
+                if (e.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    this.onVolumeChangeCallback(label, checkbox.checked);
+
+                    onChange(checkbox.checked);
+                }
+            });
+            
+            container.appendChild(checkbox);
+            container.appendChild(labelElement);
+            return container;
+        };
+        
+        // Create all checkboxes
+        const muteAllCheckbox = createCheckbox('Mute All Sound', this.settings.muteAll, (checked) => {
+            this.settings.muteAll = checked;
+        });
+        
+        const muteMusicCheckbox = createCheckbox('Mute Music', this.settings.muteMusic, (checked) => {
+            this.settings.muteMusic = checked;
+        });
+        
+        const muteSfxCheckbox = createCheckbox('Mute Sound Effects', this.settings.muteSfx, (checked) => {
+            this.settings.muteSfx = checked;
+        });
+        
+        const devModeCheckbox = createCheckbox('Developer Mode', this.settings.devMode, (checked) => {
+            this.settings.devMode = checked;
+        });
+        
+        // Add all checkboxes to section
+        section.appendChild(muteAllCheckbox);
+        section.appendChild(muteMusicCheckbox);
+        section.appendChild(muteSfxCheckbox);
+        section.appendChild(devModeCheckbox);
         
         return section;
     }

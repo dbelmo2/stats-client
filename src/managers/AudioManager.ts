@@ -34,11 +34,19 @@ export class AudioManager {
         Howler.autoUnlock = true;
         Howler.html5PoolSize = 10;
         this.applyVolumeSettings();
-        this.settingsManager.onVolumeChange(() => {
-            this.applyVolumeSettings();
+        this.applyMuteSettings();
+
+        this.settingsManager.onVolumeChange((type: string, value: any) => {
+            this.handleSettingsChange(type, value);
         });
 
+
+
+
     }
+
+
+
 
     public static getInstance(): AudioManager {
         if (!AudioManager.instance) {
@@ -273,5 +281,54 @@ export class AudioManager {
             sound.howl.unload();
             this.sounds.delete(tempId);
         });
+    }
+
+    private handleSettingsChange(type: string, value: any): void {
+        switch (type) {
+            case 'Music Volume':
+            case 'Sound Effects Volume':
+                this.applyVolumeSettings();
+                break;
+            case 'Mute All Sound':
+                if (value) {
+                    this.muteAll();
+                } else {
+                    this.unmuteAll();
+                }
+                break;
+            case 'Mute Music':
+                if (value) {
+                    this.muteCategory('music');
+                } else {
+                    this.unmuteCategory('music');
+                }
+                break;
+            case 'Mute Sound Effects':
+                if (value) {
+                    this.muteCategory('sfx');
+                    this.muteCategory('ui');
+                    this.muteCategory('ambient');
+                } else {
+                    this.unmuteCategory('sfx');
+                    this.unmuteCategory('ui');
+                    this.unmuteCategory('ambient');
+                }
+            break;
+        }
+    }
+
+    private applyMuteSettings(): void {
+        const settings  = this.settingsManager.getSettings();
+        if (settings.muteAll) {
+            this.muteAll();
+        }
+        if (settings.muteMusic) {
+            this.muteCategory('music');
+        } 
+        if (settings.muteSfx) {
+            this.muteCategory('sfx');
+            this.muteCategory('ui');
+            this.muteCategory('ambient');
+        }
     }
 }
