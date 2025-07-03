@@ -1097,6 +1097,7 @@ private async setupGameWorld() {
             if (this.gameState.phase === 'active') {
                 for (const [enemyId, enemyGraphic] of this.entities.enemies.entries()) {
                     if (enemyGraphic.getIsBystander() === false && testForAABB(projectile, enemyGraphic)) {
+                        this.socketManager.emit('projectileHit', enemyId);
                         // Record collision prediction
                         // This is required so we can reject stateUpdates that likely haven't computed
                         // the collision yet due to network latency
