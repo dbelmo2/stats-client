@@ -9,41 +9,86 @@ import tomato from './tomato.png';
 import ammoBox from './ammobox.png';
 import platform from './platform.png';
 import { SettingsManager } from './managers/SettingsManager';
+import { createLoadingScreen, removeLoadingScreen, updateLoadingProgress } from './logic/ui/Loading';
 
 console.log('Starting game...');
 
 (async () => {
+    const loadingScreen = createLoadingScreen();
 
-    SettingsManager.getInstance();
+    try {
+        // Initialize SettingsManager
+        updateLoadingProgress(1, 10, 'Initializing settings...');
+        SettingsManager.getInstance();
+
+                // Add assets to loader
+        updateLoadingProgress(2, 10, 'Preparing assets...');
+        const assetList = [
+            { alias: 'j1', src: j1 },
+            { alias: 'j2', src: j2 },
+            { alias: 'j3', src: j3 },
+            { alias: 'j4', src: j4 },
+            { alias: 'tomato', src: tomato },
+            { alias: 'ammoBox', src: ammoBox },
+            { alias: 'platform', src: platform }
+        ];
+
+        // Add all assets
+        assetList.forEach(asset => {
+            Assets.add(asset);
+        });
+
+        // Load assets with progress tracking
+        let loadedCount = 0;
+        const totalAssets = assetList.length;
+        
+        for (const asset of assetList) {
+            updateLoadingProgress(3 + loadedCount, 10, `Loading ${asset.alias}...`);
+            await Assets.load(asset.alias);
+            loadedCount++;
+        }
+
+        // Initialize PIXI Application
+        updateLoadingProgress(9, 10, 'Initializing game...');
+        const app = new Application();
+        await app.init({ 
+            background: '#202020',
+        });
 
 
-    Assets.add({ alias: 'j1', src: j1 });
-    Assets.add({ alias: 'j2', src: j2 });
-    Assets.add({ alias: 'j3', src: j3 });
-    Assets.add({ alias: 'j4', src: j4 });
-    Assets.add({ alias: 'tomato', src: tomato });
-    Assets.add({ alias: 'ammoBox', src: ammoBox });
-    Assets.add({ alias: 'platform', src: platform });
+    
+        document.body.appendChild(app.canvas);
 
-    await Assets.load('j1');
-    await Assets.load('j2');
-    await Assets.load('j3');
-    await Assets.load('j4');
-    await Assets.load('tomato');
-    await Assets.load('ammoBox');
-    await Assets.load('platform');
+        // Create settings UI
+        const settingsManager = SettingsManager.getInstance();
+        settingsManager.createSettingsUI();
 
-    const settingsManager = SettingsManager.getInstance();
-    settingsManager.createSettingsUI();
+        // Initialize game manager
+        GameManager.initialize(app, settingsManager);
 
-    const app = new Application();
-    await app.init({ 
-        background: '#202020',
-    });
-
-    document.body.appendChild(app.canvas);
+        // Complete loading
+        updateLoadingProgress(10, 10, 'Ready!');
+        
+        // Small delay to show completion
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
 
 
-    // Initialize game manager
-    await GameManager.initialize(app, settingsManager);
+        
+
+        // Remove loading screen
+        await removeLoadingScreen();
+
+
+
+    } catch (error) {
+        console.error('Error during game initialization:', error);
+        
+        // Show error on loading screen
+        const loadingText = document.getElementById('loading-text');
+        if (loadingText) {
+            loadingText.textContent = 'Error loading game. Please refresh.';
+            loadingText.style.color = '#ff4444';
+        }    }
+
 })();
