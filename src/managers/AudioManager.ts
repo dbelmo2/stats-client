@@ -92,6 +92,27 @@ export class AudioManager {
             return undefined;
         }
 
+
+                // Check SettingsManager mute states first
+        const settings = this.settingsManager.getSettings();
+        
+        if (settings.muteAll) {
+            console.log("All sounds are muted globally, cannot play sound.");
+            return undefined;
+        }
+
+        if (sound.category === 'music' && settings.muteMusic) {
+            console.log("Music category is muted, cannot play sound.");
+            return undefined;
+        }
+
+        if ((sound.category === 'sfx' || sound.category === 'ui' || sound.category === 'ambient') 
+            && settings.muteSfx) {
+            console.log("Sound effects, UI, and ambient categories are muted, cannot play sound.");
+            return undefined;
+        }
+
+
         if (this.muted || this.categoryMutes[sound.category]) return undefined;
 
         if (sound.category === 'music') {
@@ -193,6 +214,10 @@ export class AudioManager {
     public unmuteCategory(category: AudioCategory): void {
         this.categoryMutes[category] = false;
         this.applyVolumeSettings();
+        console.log(`Unmuted category: ${category}`);
+        if (category === 'music') {
+            this.play('theme');
+        }
     }
 
     public stopAll(): void {
@@ -211,6 +236,28 @@ export class AudioManager {
     }
 
     private getAdjustedVolume(baseVolume: number, category: AudioCategory): number {
+        const settings = this.settingsManager.getSettings();
+        
+        // Check SettingsManager mute states
+        if (settings.muteAll) {
+            return 0;
+        }
+
+        if (category === 'music' && settings.muteMusic) {
+            return 0;
+        }
+
+        if ((category === 'sfx' || category === 'ui' || category === 'ambient') 
+            && settings.muteSfx) {
+            return 0;
+        }
+
+        // Check local category mautes (for backwards compatibility)
+        if (this.categoryMutes[category]) {
+            return 0;
+        }
+
+
         if (category === 'music') {
             return baseVolume * this.settingsManager.getMusicVolume();
         } else {
@@ -293,25 +340,44 @@ export class AudioManager {
                 if (value) {
                     this.muteAll();
                 } else {
+                    console.log("Unmuting all sounds.");
                     this.unmuteAll();
+                    const settings = this.settingsManager.getSettings();
+                    if (!settings.muteMusic) {
+                        console.log("Unmuting music category.");
+                        this.unmuteCategory('music');
+                        
+                    }
+                    if (!settings.muteSfx) {
+                        console.log("Unmuting sound effects, UI, and ambient categories.");
+                        this.unmuteCategory('sfx');
+                        this.unmuteCategory('ui');
+                        this.unmuteCategory('ambient');
+                    }
                 }
                 break;
             case 'Mute Music':
                 if (value) {
                     this.muteCategory('music');
                 } else {
-                    this.unmuteCategory('music');
+                    // Only unmute if global mute is not active
+                    if (!this.settingsManager.getSettings().muteAll) {
+                        this.unmuteCategory('music');
+                    }
                 }
-                break;
+            break;
             case 'Mute Sound Effects':
                 if (value) {
                     this.muteCategory('sfx');
                     this.muteCategory('ui');
                     this.muteCategory('ambient');
                 } else {
-                    this.unmuteCategory('sfx');
-                    this.unmuteCategory('ui');
-                    this.unmuteCategory('ambient');
+                    // Only unmute if global mute is not active
+                    if (!this.settingsManager.getSettings().muteAll) {
+                        this.unmuteCategory('sfx');
+                        this.unmuteCategory('ui');
+                        this.unmuteCategory('ambient');
+                    }
                 }
             break;
         }
@@ -320,6 +386,7 @@ export class AudioManager {
     private applyMuteSettings(): void {
         const settings  = this.settingsManager.getSettings();
         if (settings.muteAll) {
+            console.log("Applying global mute settings.");
             this.muteAll();
         }
         if (settings.muteMusic) {

@@ -429,17 +429,17 @@ export class SettingsManager {
             
             // Handle change events
             checkbox.addEventListener('change', () => {
-                this.onVolumeChangeCallback(label, checkbox.checked);
                 onChange(checkbox.checked);
+                this.onVolumeChangeCallback(label, checkbox.checked);
             });
             
             // Make the entire container clickable
             container.addEventListener('click', (e) => {
                 if (e.target !== checkbox) {
                     checkbox.checked = !checkbox.checked;
+                    onChange(checkbox.checked);
                     this.onVolumeChangeCallback(label, checkbox.checked);
 
-                    onChange(checkbox.checked);
                 }
             });
             
@@ -450,7 +450,9 @@ export class SettingsManager {
         
         // Create all checkboxes
         const muteAllCheckbox = createCheckbox('Mute All Sound', this.settings.muteAll, (checked) => {
+            console.log(`Mute All Sound changed to: ${checked}`);
             this.settings.muteAll = checked;
+            console.log('settings after muteAll change:', this.settings);
         });
         
         const muteMusicCheckbox = createCheckbox('Mute Music', this.settings.muteMusic, (checked) => {

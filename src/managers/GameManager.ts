@@ -136,11 +136,6 @@ type StatePayload = {
 // - offense (fat love shoots every projectile he ate in the direction of the mouse)
 
 
-// Problem: overlay being opened (settings) is causing issues with player input, specifically informing the server
-// that input has stopped. THe player continuees moving on the server but not the client.
-// Fix: implement a checkIfOverlayisActive() function that gets called in player input. If it returns true, handle the last input 
-// to inform the server of the player stopping, then set this.overlayActive = true;
-
 type GamePhase = 'initializing' | 'ready' | 'active' | 'ended';
 
 export class GameManager {
