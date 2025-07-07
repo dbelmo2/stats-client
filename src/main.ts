@@ -1,9 +1,10 @@
 import { Application, Assets } from 'pixi.js';
 import { GameManager } from './managers/GameManager';
 
-import j1 from './j1.png';
-import j2 from './j2.png';
-import j3 from './j3.png';
+import tv from './tv-asset.png';
+import j1 from './j1-small.png';
+import j2 from './j2-small.png';
+import j3 from './j3-small.png';
 import j4 from './j4.png';
 import tomato from './tomato.png';
 import ammoBox from './ammobox.png';
@@ -14,7 +15,7 @@ import { createLoadingScreen, removeLoadingScreen, updateLoadingProgress } from 
 console.log('Starting game...');
 
 (async () => {
-    const loadingScreen = createLoadingScreen();
+    createLoadingScreen();
 
     try {
         // Initialize SettingsManager
@@ -30,7 +31,8 @@ console.log('Starting game...');
             { alias: 'j4', src: j4 },
             { alias: 'tomato', src: tomato },
             { alias: 'ammoBox', src: ammoBox },
-            { alias: 'platform', src: platform }
+            { alias: 'platform', src: platform },
+            { alias: 'tv', src: tv }
         ];
 
         // Add all assets
@@ -40,7 +42,6 @@ console.log('Starting game...');
 
         // Load assets with progress tracking
         let loadedCount = 0;
-        const totalAssets = assetList.length;
         
         for (const asset of assetList) {
             updateLoadingProgress(3 + loadedCount, 10, `Loading ${asset.alias}...`);

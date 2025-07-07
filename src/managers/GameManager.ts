@@ -81,7 +81,13 @@ interface CameraSettings {
   lerpFactor: number;
   currentX: number;
   currentY: number;
-}
+    // Add shake properties
+    shakeIntensity: number;
+    shakeDuration: number;
+    shakeElapsed: number;
+    baseX: number; // Store the non-shaken position
+    baseY: number; // Store the non-shaken position
+    }
 
 
 type PlayerServerState = {
@@ -221,7 +227,12 @@ export class GameManager {
     private cameraSettings: CameraSettings = {
         lerpFactor: 0.1,
         currentX: 0,
-        currentY: 0
+        currentY: 0,
+        shakeIntensity: 0,
+        shakeDuration: 0,
+        shakeElapsed: 0,
+        baseX: 0,
+        baseY: 0
     };
 
     private constructor(app: Application) {
@@ -347,16 +358,22 @@ export class GameManager {
     }
 
 private async setupGameWorld() {
+        const tvSprite = Sprite.from('tv');
+        tvSprite.x = 500
+        tvSprite.y = 300;
+        tvSprite.scale.set(0.75);
+        
+
         const j1Sprite = Sprite.from('j1');
         j1Sprite.x = 0 - this.GAME_WIDTH / 2;
         j1Sprite.y = 0;
-
+        
         const j2Sprite = Sprite.from('j2');
-        j2Sprite.x = 0 - this.GAME_WIDTH / 2;
+        j2Sprite.x = 0 - this.GAME_WIDTH / 5;
         j2Sprite.y = 0;
 
         const j3Sprite = Sprite.from('j3');
-        j3Sprite.x = 0 - this.GAME_WIDTH / 2;
+        j3Sprite.x = -200;
         j3Sprite.y = 0;
 
         const j4Sprite = Sprite.from('j4');
@@ -369,6 +386,7 @@ private async setupGameWorld() {
         this.app.stage.addChild(j3Sprite);
         this.app.stage.addChild(j2Sprite);
         this.app.stage.addChild(j1Sprite);
+    this.app.stage.addChild(tvSprite);
         this.world.backgroundAssets = {
             j1: j1Sprite,
             j2: j2Sprite,
@@ -943,6 +961,8 @@ private async setupGameWorld() {
     // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)
     private render(deltaMs: number): void {
         //this.updateCameraPosition();
+        this.updateCameraShake(deltaMs);
+
         this.checkForKills(this.network.latestServerSnapshot.scores);
         this.ui.scoreDisplay.updateScores(this.network.latestServerSnapshot.scores, this.player.id);
         this.updateFpsDisplay(deltaMs);
@@ -1018,6 +1038,7 @@ private async setupGameWorld() {
         );
 
         AudioManager.getInstance().play('shoot');
+        this.triggerCameraShake(4, 80); // 6 pixels intensity, 120ms duration
         this.player.projectiles.push(projectile);
         this.gameContainer.addChild(projectile);    
     }
@@ -1049,6 +1070,10 @@ private async setupGameWorld() {
         this.cameraSettings.currentX += (clampedTargetX - this.cameraSettings.currentX) * this.cameraSettings.lerpFactor;
         this.cameraSettings.currentY += (clampedTargetY - this.cameraSettings.currentY) * this.cameraSettings.lerpFactor;
 
+            
+        // Store the base (non-shaken) camera position
+        this.cameraSettings.baseX = this.cameraSettings.currentX;
+        this.cameraSettings.baseY = this.cameraSettings.currentY;
 
         const xOffset = this.cameraSettings.currentX - this.camera.x;
         const yOffset = this.cameraSettings.currentY - this.camera.y;
@@ -1063,6 +1088,47 @@ private async setupGameWorld() {
         this.ui.scoreDisplay.fixPosition();
         this.ui.fpsDisplay.fixPosition();
         this.ui.pingDisplay.fixPosition();
+    }
+
+        /**
+     * Trigger camera shake effect
+     * @param intensity - How strong the shake is (in pixels)
+     * @param duration - How long the shake lasts (in milliseconds)
+     */
+    private triggerCameraShake(intensity: number = 8, duration: number = 150): void {
+        //this.cameraSettings.shakeIntensity = intensity;
+        //this.cameraSettings.shakeDuration = duration;
+        //this.cameraSettings.shakeElapsed = 0;
+        console.log(`Camera shake triggered with intensity ${intensity} and duration ${duration}`);
+    }
+
+    /**
+     * Update camera shake - call this in your game loop
+     */
+    private updateCameraShake(deltaMs: number): void {
+        if (this.cameraSettings.shakeElapsed < this.cameraSettings.shakeDuration) {
+            this.cameraSettings.shakeElapsed += deltaMs;
+            
+            // Calculate shake progress (0 to 1)
+            const progress = this.cameraSettings.shakeElapsed / this.cameraSettings.shakeDuration;
+            
+            // Use easing function to make shake feel more natural (strong start, fade out)
+            const easedProgress = 1 - Math.pow(progress, 2);
+            const currentIntensity = this.cameraSettings.shakeIntensity * easedProgress;
+            
+            // Generate random shake offset
+            const shakeX = (Math.random() - 0.5) * 2 * currentIntensity;
+            const shakeY = (Math.random() - 0.5) * 2 * currentIntensity;
+            
+            // Apply shake to camera position
+            this.camera.x = this.cameraSettings.baseX + shakeX;
+            this.camera.y = this.cameraSettings.baseY + shakeY;
+        } else {
+            // Shake finished, reset to base position
+            this.camera.x = this.cameraSettings.baseX;
+            this.camera.y = this.cameraSettings.baseY;
+            this.cameraSettings.shakeIntensity = 0;
+        }
     }
 
     private updateBackground(offsetX: number, offsetY: number): void {
