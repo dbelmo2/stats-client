@@ -2,7 +2,7 @@ import { Application, Assets } from 'pixi.js';
 import { GameManager } from './managers/GameManager';
 
 import tv from './tv-asset.png';
-import j1 from './j1-small.png';
+import j1 from './j1-h3.png';
 import j2 from './j2-small.png';
 import j3 from './j3-small.png';
 import j4 from './j4.png';

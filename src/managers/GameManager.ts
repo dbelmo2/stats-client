@@ -366,15 +366,20 @@ private async setupGameWorld() {
 
         const j1Sprite = Sprite.from('j1');
         j1Sprite.x = 0 - this.GAME_WIDTH / 2;
-        j1Sprite.y = 0;
-        
+        j1Sprite.y = -350;
+        j1Sprite.width = 3963;
+        j1Sprite.height = 1080;
+        j1Sprite.scale.set(1.3)
+
         const j2Sprite = Sprite.from('j2');
         j2Sprite.x = 0 - this.GAME_WIDTH / 5;
-        j2Sprite.y = 0;
+        j2Sprite.y = -400;
+        j2Sprite.scale.set(1.3);
 
         const j3Sprite = Sprite.from('j3');
         j3Sprite.x = -200;
-        j3Sprite.y = 0;
+        j3Sprite.y = -550;
+        j3Sprite.scale.set(1.3);
 
         const j4Sprite = Sprite.from('j4');
         j4Sprite.x = 0;
@@ -386,7 +391,7 @@ private async setupGameWorld() {
         this.app.stage.addChild(j3Sprite);
         this.app.stage.addChild(j2Sprite);
         this.app.stage.addChild(j1Sprite);
-    this.app.stage.addChild(tvSprite);
+    //this.app.stage.addChild(tvSprite);
         this.world.backgroundAssets = {
             j1: j1Sprite,
             j2: j2Sprite,
@@ -1048,14 +1053,21 @@ private async setupGameWorld() {
         if (!this.player.sprite) return;
         // Calculate target camera position (centered on player)
         const targetX = -this.player.sprite.x + this.GAME_WIDTH / 2;
-        const targetY = -this.player.sprite.y + this.GAME_HEIGHT / 2;
+        const targetY = -this.player.sprite.y + (this.GAME_HEIGHT / 2);
 
+
+        // Calculate responsive offsets based on screen size
+        const screenHeight = window.innerHeight;
+        
+        // Calculate scale ratio between game resolution and actual screen
+        const scaleY = screenHeight / this.GAME_HEIGHT;
+ 
         // Clamp camera position to stay within bounds + buffer
         const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
         const maxX = this.GAME_BOUNDS.left + 5000;
-        const minY = -(this.GAME_BOUNDS.bottom + 175) + this.GAME_HEIGHT;
+        const minY = -(150 / scaleY);
+
         const maxY = this.GAME_BOUNDS.top + 250;
-        
         // Apply clamping to target position
         const clampedTargetX = Math.max(minX, Math.min(maxX, targetX));
         const clampedTargetY = Math.max(minY, Math.min(maxY, targetY));
