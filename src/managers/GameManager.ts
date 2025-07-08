@@ -1048,14 +1048,21 @@ private async setupGameWorld() {
         if (!this.player.sprite) return;
         // Calculate target camera position (centered on player)
         const targetX = -this.player.sprite.x + this.GAME_WIDTH / 2;
-        const targetY = -this.player.sprite.y + this.GAME_HEIGHT / 2;
+        const targetY = -this.player.sprite.y + (this.GAME_HEIGHT / 2);
+
+
+        // Calculate responsive offsets based on screen size
+        const screenHeight = window.innerHeight;
+        
+        // Calculate scale ratio between game resolution and actual screen
+        const scaleY = screenHeight / this.GAME_HEIGHT;
 
         // Clamp camera position to stay within bounds + buffer
         const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
         const maxX = this.GAME_BOUNDS.left + 5000;
-        const minY = -(this.GAME_BOUNDS.bottom + 175) + this.GAME_HEIGHT;
+        const minY = -(150 / scaleY);
+
         const maxY = this.GAME_BOUNDS.top + 250;
-        
         // Apply clamping to target position
         const clampedTargetX = Math.max(minX, Math.min(maxX, targetX));
         const clampedTargetY = Math.max(minY, Math.min(maxY, targetY));
