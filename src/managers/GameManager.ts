@@ -373,7 +373,7 @@ private async setupGameWorld() {
         j2Sprite.y = 0;
 
         const j3Sprite = Sprite.from('j3');
-        j3Sprite.x = -200;
+        j3Sprite.x = 0 - this.GAME_WIDTH / 2 ;
         j3Sprite.y = 0;
 
         const j4Sprite = Sprite.from('j4');
