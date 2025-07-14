@@ -199,10 +199,11 @@ export class SettingsManager {
         const title = document.createElement('h2');
         title.textContent = 'Settings';
         title.style.cssText = `
+            font-family: 'Pixel', sans-serif;
             margin: 0 0 24px 0;
             color: white;
-            font-size: 20px;
-            font-weight: 500;
+            font-size: 32px;
+            font-weight: 900;
             text-align: center;
         `;
         

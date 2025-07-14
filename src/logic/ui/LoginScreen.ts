@@ -32,12 +32,13 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
 
     // Create title
     const title = document.createElement('h2');
-    title.textContent = 'Join Game';
+    title.textContent = 'Tomato Arena';
     title.style.cssText = `
+        font-family: 'Pixel', sans-serif;
         margin: 0 0 48px 0;
         color: white;
-        font-size: 20px;
-        font-weight: 500;
+        font-size: 32px;
+        font-weight: 900;
         text-align: center;
     `;
     modal.appendChild(title);

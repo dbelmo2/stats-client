@@ -370,11 +370,11 @@ private async setupGameWorld() {
         j1Sprite.x = 0 - this.GAME_WIDTH / 2;
         j1Sprite.y = 0;
         
-        const j1SpriteMask = new Graphics().rect(0, 0, 620, 450).fill('#000000');
+        const j1SpriteMask = new Graphics().rect(0, 0, 550, 347).fill('#000000');
 
-        j1SpriteMask.rotation = -0.19; // Rotate the mask to match the TV angle
-        j1SpriteMask.x = this.GAME_WIDTH - 295;
-        j1SpriteMask.y = this.GAME_HEIGHT / 2 - 221;
+        j1SpriteMask.rotation = -0.187; // Rotate the mask to match the TV angle
+        j1SpriteMask.x = this.GAME_WIDTH - 246;
+        j1SpriteMask.y = this.GAME_HEIGHT / 2 - 162;
         j1Sprite.addChild(j1SpriteMask);
 
         // TODO: Set up screen class that allows me to switch between different screens on TV asset.
