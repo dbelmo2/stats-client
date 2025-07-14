@@ -1,6 +1,4 @@
 import { Container, Text, Graphics } from 'pixi.js';
-import * as config from '../../config.json';
-
 export class PingDisplay extends Container {
     private pingText: Text | undefined;
     private background: Graphics | undefined;
@@ -8,7 +6,6 @@ export class PingDisplay extends Container {
     
     constructor() {
         super();
-        if (config.DEV_MODE === false) return;
         // Create background
         this.background = new Graphics()
             .rect(0, 0, 80, 30)
@@ -39,7 +36,6 @@ export class PingDisplay extends Container {
     }
     
     public updatePing(ping: number): void {
-        if (config.DEV_MODE === false) return;
         if (!this.pingText) return;
         // Update text color based on ping quality
         let color = 0x00ff00; // Green for good ping
@@ -51,7 +47,6 @@ export class PingDisplay extends Container {
     }
     
     public fixPosition(): void {
-        if (config.DEV_MODE === false) return;
         // Position in top left corner with slight margin
         const windowWidth = window.innerWidth;
         const largestWidth = this.largestWidth;
@@ -62,7 +57,6 @@ export class PingDisplay extends Container {
     
     destroy(): void {
         super.destroy();
-        if (config.DEV_MODE === false) return;
         if (this.pingText) this.pingText.destroy();
         if (this.background) this.background.destroy();
     }

@@ -1,4 +1,5 @@
-import { Application, Container, Graphics, Sprite } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
+import { config } from '../config';
 import { Player } from '../logic/Player';
 import { Controller } from '../logic/Controller';
 import { SocketManager } from './SocketManager';
@@ -12,7 +13,6 @@ import { GameOverDisplay } from '../logic/ui/GameOverDisplay';
 import { Platform } from '../logic/Platform';
 import { AmmoBox } from '../logic/objects/AmmoBox';
 import { KillIndicator } from '../logic/ui/KillIndicator';
-import * as config from '../config.json';
 import { PingDisplay } from '../logic/ui/PingDisplay';
 import { FPSDisplay } from '../logic/ui/FPSDisplay';
 import { Vector2 } from '../logic/Vector';
@@ -24,6 +24,7 @@ import impactAudio from '../impact-sound.wav';
 import jumpAudio from '../swipe-sound.mp3';
 import walkingAudio from '../walking-grass-sound.flac'; 
 import { AudioManager } from './AudioManager';
+import { DevModeManager } from './DevModeManager';
 import { loginScreen } from '../logic/ui/LoginScreen';
 import type { SettingsManager } from './SettingsManager';
 
@@ -238,13 +239,16 @@ export class GameManager {
     private constructor(app: Application) {
         this.controller = new Controller();
 
-        this.socketManager = new SocketManager(config.SERVER_URL ?? 'https://yt-livestream-late-tracker-server-production.up.railway.app/');
+        this.socketManager = new SocketManager(config.SERVER_URL);
 
         this.app = app;
         this.setupGameWorld()
         this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
         this.gameContainer = new Container();
 
+        const devManager = DevModeManager.getInstance();
+        devManager.initialize(app);
+        
         // Create a background that extends beyond game bounds
         const background = new Container();
         const leftBgTop = new Graphics()
@@ -262,8 +266,7 @@ export class GameManager {
         // Add background first so it's behind everything
         this.gameContainer.addChild(background);
 
-        this.ui.pingDisplay = new PingDisplay();
-        this.ui.fpsDisplay = new FPSDisplay();
+
         this.ui.scoreDisplay = new ScoreDisplay();
 
         // Create platforms
@@ -277,21 +280,20 @@ export class GameManager {
         }
 
         // Create ammo box at right side of screen
-        this.world.ammoBox = new AmmoBox(150, this.GAME_HEIGHT - 80);
+        this.world.ammoBox = new AmmoBox(150, this.GAME_HEIGHT - 80, this.socketManager);
         this.gameContainer.addChild(this.world.ammoBox);
 
         this.camera.addChild(this.gameContainer);
         this.app.stage.addChild(this.camera);
         this.app.stage.addChild(this.ui.scoreDisplay);
-        this.app.stage.addChild(this.ui.pingDisplay);
-        this.app.stage.addChild(this.ui.fpsDisplay);
-
 
         // Add E key handler
         window.addEventListener('keydown', (e) => {
             if (e.key === 'e' || e.key === 'E') {
                 this.controller.resetMouse()
-                this.handleAmmoBoxInteraction();
+                if (this.player.sprite) {
+                    this.world.ammoBox.handleAmmoBoxInteraction(this.player.sprite);
+                }
             }
         });
 
@@ -368,6 +370,27 @@ private async setupGameWorld() {
         j1Sprite.x = 0 - this.GAME_WIDTH / 2;
         j1Sprite.y = 0;
         
+        const j1SpriteMask = new Graphics().rect(0, 0, 620, 450).fill('#000000');
+
+        j1SpriteMask.rotation = -0.19; // Rotate the mask to match the TV angle
+        j1SpriteMask.x = this.GAME_WIDTH - 295;
+        j1SpriteMask.y = this.GAME_HEIGHT / 2 - 221;
+        j1Sprite.addChild(j1SpriteMask);
+
+        // TODO: Set up screen class that allows me to switch between different screens on TV asset.
+
+        const textLabel = new Text({ text: 'Total late time is 10 days!'});
+        textLabel.style = {
+            align: 'center',
+            fontFamily: 'Pixel',
+            fontWeight: 'normal',
+            fontStyle: 'normal',
+            fontSize: 40,
+            fill: '#ffffff',
+        };
+
+        j1SpriteMask.addChild(textLabel);
+
         const j2Sprite = Sprite.from('j2');
         j2Sprite.x = 0 - this.GAME_WIDTH / 5;
         j2Sprite.y = 0;
@@ -523,12 +546,11 @@ private async setupGameWorld() {
         }
     }
     
-    private handleAmmoBoxInteraction(): void {
-        if (!this.player.sprite || !this.player.sprite.getIsBystander()) return;
-        if (testForAABB(this.player.sprite, this.world.ammoBox)) {
-            this.socketManager.emit('toggleBystander', false);
-        }
-    }
+
+
+
+
+
 
     private integrateProjectileUpdates(projectiles: ProjectileServerState[]): void {
         const activeProjectileIds = new Set(projectiles.map(p => p.id));
@@ -653,14 +675,7 @@ private async setupGameWorld() {
         }
 
 
-        // Remove ping display
-        this.app.stage.removeChild(this.ui.pingDisplay);
-        this.ui.pingDisplay.destroy();
-
-        // Remove FPS display
-        this.app.stage.removeChild(this.ui.fpsDisplay);
-        this.ui.fpsDisplay.destroy();
-        
+        DevModeManager.getInstance().cleanup();
 
         // Clean up kill indicators
         for (const indicator of this.entities.killIndicators) {
@@ -887,16 +902,15 @@ private async setupGameWorld() {
                 this.handleShooting(playerInput);
                 this.player.sprite.setLastProcessedInputVector(playerInput.vector);
             }     
-        
-       
         }
 
         this.integrateStateUpdate();
         this.updateOwnProjectiles();
         this.updateEnemyProjectiles();
         this.cleanupDestroyedProjectiles(); 
-        this.cleanupPendingCollisions(); 
-        
+        this.cleanupPendingCollisions();
+        this.world.ammoBox.update(this.player.sprite);
+
     }
 
     private handlePlayerInput(dt: number): InputPayload | undefined {
@@ -965,7 +979,7 @@ private async setupGameWorld() {
 
         this.checkForKills(this.network.latestServerSnapshot.scores);
         this.ui.scoreDisplay.updateScores(this.network.latestServerSnapshot.scores, this.player.id);
-        this.updateFpsDisplay(deltaMs);
+        this.updateDevDisplays(deltaMs);
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
@@ -973,14 +987,10 @@ private async setupGameWorld() {
     }
 
 
-    private updateFpsDisplay(deltaMS: number): void {
-        this.ui.fpsDisplay.update();
-        // Update ping display (every ~60 frames = ~1 second)
-        this.ui.pingUpdateCounter += deltaMS;
-        if (this.ui.pingUpdateCounter >= 1000) {
-            this.ui.pingDisplay.updatePing(this.socketManager.getPing());
-            this.ui.pingUpdateCounter = 0;
-        }
+    private updateDevDisplays(deltaMS: number): void {
+        const devManager = DevModeManager.getInstance();
+        devManager.updateFPS();
+        devManager.updatePing(deltaMS, this.socketManager.getPing());
     }
 
     private showScoreBoard(): void {
@@ -1093,8 +1103,7 @@ private async setupGameWorld() {
 
         // Update position of UI elements relative to the camera
         this.ui.scoreDisplay.fixPosition();
-        this.ui.fpsDisplay.fixPosition();
-        this.ui.pingDisplay.fixPosition();
+        DevModeManager.getInstance().fixPositions();
     }
 
         /**

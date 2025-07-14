@@ -36,7 +36,7 @@ export class AudioManager {
         this.applyVolumeSettings();
         this.applyMuteSettings();
 
-        this.settingsManager.onVolumeChange((type: string, value: any) => {
+        this.settingsManager.onSettingsChange((type: string, value: any) => {
             this.handleSettingsChange(type, value);
         });
 
@@ -367,6 +367,7 @@ export class AudioManager {
                 }
             break;
             case 'Mute Sound Effects':
+                
                 if (value) {
                     this.muteCategory('sfx');
                     this.muteCategory('ui');
@@ -380,6 +381,8 @@ export class AudioManager {
                     }
                 }
             break;
+            default:
+                //console.warn(`Unknown settings change type '${type}' detected in AudioManager. No action taken.`);
         }
     }
 

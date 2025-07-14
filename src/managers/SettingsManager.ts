@@ -18,7 +18,7 @@ export class SettingsManager {
     private settings: GameSettings;
     private settingsButton: HTMLElement | null = null;
     private settingsModal: HTMLElement | null = null;
-    private onVolumeChangeCallback: any;
+    private onSettingsChangeCallbacks: ((type: string, value: any) => void)[] = [];
     private onModalOpenCallback: any;
     private onModalCloseCallback: any;
 
@@ -80,15 +80,15 @@ export class SettingsManager {
 
     public setMusicVolume(volume: number): void {
         this.settings.musicVolume = Math.max(0, Math.min(1, volume)); // Clamp between 0-1
-        if (this.onVolumeChangeCallback) {
-            this.onVolumeChangeCallback('Music Volume', this.settings.musicVolume);
+        for (const callback of this.onSettingsChangeCallbacks) {
+            callback('Music Volume', this.settings.musicVolume);
         }
     }
     
     public setSfxVolume(volume: number): void {
         this.settings.sfxVolume = Math.max(0, Math.min(1, volume)); // Clamp between 0-1
-        if (this.onVolumeChangeCallback) {
-            this.onVolumeChangeCallback('Sound Effects Volume', this.settings.sfxVolume);
+        for (const callback of this.onSettingsChangeCallbacks) {
+            callback('Sound Effects Volume', this.settings.sfxVolume);
         }
     }
     
@@ -96,11 +96,10 @@ export class SettingsManager {
         this.createSettingsButton();
     }
 
-    public onVolumeChange(callback: (type: string, value: any) => void): void {
-        this.onVolumeChangeCallback = callback;
+    public onSettingsChange(callback: (type: string, value: any) => void): void {
+        this.onSettingsChangeCallbacks.push(callback);
     }
 
-    
     private createSettingsButton(): void {
         // Remove existing button if it exists
         if (this.settingsButton) {
@@ -430,7 +429,7 @@ export class SettingsManager {
             // Handle change events
             checkbox.addEventListener('change', () => {
                 onChange(checkbox.checked);
-                this.onVolumeChangeCallback(label, checkbox.checked);
+                this.onSettingsChangeCallbacks.forEach(callback => callback(label, checkbox.checked));
             });
             
             // Make the entire container clickable
@@ -438,7 +437,7 @@ export class SettingsManager {
                 if (e.target !== checkbox) {
                     checkbox.checked = !checkbox.checked;
                     onChange(checkbox.checked);
-                    this.onVolumeChangeCallback(label, checkbox.checked);
+                    this.onSettingsChangeCallbacks.forEach(callback => callback(label, checkbox.checked));
 
                 }
             });

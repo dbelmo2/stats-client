@@ -1,6 +1,4 @@
 import { Container, Text, Graphics } from 'pixi.js';
-import * as config from '../../config.json';
-
 export class FPSDisplay extends Container {
     private fpsText: Text | undefined;
     private background: Graphics | undefined;
@@ -12,7 +10,6 @@ export class FPSDisplay extends Container {
     
     constructor() {
         super();
-        if (config.DEV_MODE === false) return;
 
         // Create background
         this.background = new Graphics()
@@ -44,7 +41,7 @@ export class FPSDisplay extends Container {
     
     public update(): void {
         // Count frames
-        if (config.DEV_MODE === false || !this.fpsText) return;
+        if (!this.fpsText) return;
 
         this.frameCounter++;
         
@@ -71,8 +68,6 @@ export class FPSDisplay extends Container {
     }
     
     public fixPosition(): void {
-        if (config.DEV_MODE === false) return;
-
         // Position in top left corner with slight margin
         const windowWidth = window.innerWidth;
         const largestWidth = this.largestWidth;

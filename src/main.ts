@@ -1,7 +1,7 @@
 import { Application, Assets } from 'pixi.js';
 import { GameManager } from './managers/GameManager';
 
-import j1 from './j1-small.png';
+import j1 from './j1-small-tv.png';
 import j2 from './j2-small.png';
 import j3 from './j3.png';
 import j4 from './j4.png';
@@ -10,6 +10,8 @@ import ammoBox from './ammobox.png';
 import platform from './platform.png';
 import { SettingsManager } from './managers/SettingsManager';
 import { createLoadingScreen, removeLoadingScreen, updateLoadingProgress } from './logic/ui/Loading';
+
+import './style.css';
 
 console.log('Starting game...');
 
