@@ -253,7 +253,7 @@ export class SettingsManager {
         saveButton.style.cssText = `
             width: 100%;
             padding: 12px;
-            font-size: 14px;
+            font-size: 24px;
             font-weight: 500;
             letter-spacing: 0.5px;
             border: none;
@@ -263,6 +263,7 @@ export class SettingsManager {
             cursor: pointer;
             transition: all 0.2s ease;
             margin-top: 20px;
+            font-family: 'Pixel', sans-serif;
         `;
         saveButton.addEventListener('mouseover', () => {
             saveButton.style.background = '#43a047';
@@ -301,6 +302,8 @@ export class SettingsManager {
             display: block;
             margin-bottom: 5px;
             font-weight: bold;
+            font-size: 24px;
+            font-family: 'Pixel', sans-serif;
         `;
         
         const musicSlider = document.createElement('input');
@@ -334,6 +337,8 @@ export class SettingsManager {
             display: block;
             margin-bottom: 5px;
             font-weight: bold;
+            font-family: 'Pixel', sans-serif;
+            font-size: 24px;
         `;
         
         const sfxSlider = document.createElement('input');
@@ -395,6 +400,7 @@ export class SettingsManager {
             margin-top: 24px;
             padding-top: 20px;
             border-top: 1px solid #333;
+            font-family: 'Pixel', sans-serif;
         `;
         
         // Helper function to create a checkbox
@@ -405,6 +411,7 @@ export class SettingsManager {
                 align-items: center;
                 margin-bottom: 12px;
                 cursor: pointer;
+                font-family: 'Pixel', sans-serif;
             `;
             
             const checkbox = document.createElement('input');
@@ -421,7 +428,7 @@ export class SettingsManager {
             const labelElement = document.createElement('label');
             labelElement.textContent = label;
             labelElement.style.cssText = `
-                font-size: 14px;
+                font-size: 24px;
                 color: #ddd;
                 cursor: pointer;
                 user-select: none;

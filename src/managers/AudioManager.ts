@@ -81,7 +81,6 @@ export class AudioManager {
             baseVolume
         });
 
-        console.log(`Sound ${soundId} registered as ${category}`);
     }
 
     public play(soundId: string, spriteName?: string): number | undefined {
@@ -292,7 +291,6 @@ export class AudioManager {
             if (!sound.howl.state() || sound.howl.state() === 'unloaded') {
                 const loadPromise = new Promise<void>((resolve) => {
                     sound.howl.once('load', () => {
-                        console.log(`Sound ${id} loaded successfully.`);
                         resolve();
                     });
 

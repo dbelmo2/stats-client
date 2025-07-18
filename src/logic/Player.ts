@@ -63,6 +63,8 @@ export class Player extends Container {
     this.nameText.x = this.body.width / 2; // Center the text
     this.nameText.anchor.set(0.5, 1); // Center horizontally, align bottom
     this.nameText.y = -20; // Position above health bar
+    this.nameText.style.fontFamily = 'Pixel, sans-serif'; // Set font family
+    this.nameText.style.fontSize = 20; // Set font size
     this.healthBarContainer.addChild(this.nameText);
 
 

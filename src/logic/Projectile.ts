@@ -35,7 +35,7 @@ export class Projectile extends Container {
     screenHeight: number,
     id = Math.random().toString(36).substring(2, 15),
     speed = 30, 
-    lifespan = 5000, 
+    lifespan = 1750, 
     gravityEffect = 0.05, 
   ) {
     super();

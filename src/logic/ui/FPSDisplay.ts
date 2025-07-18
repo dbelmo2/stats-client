@@ -73,6 +73,6 @@ export class FPSDisplay extends Container {
         const largestWidth = this.largestWidth;
         const offset = -(windowWidth - largestWidth) / 2;
         this.x = offset < 0 ? 50 : 50 + offset;
-        this.y = 225;
+        this.y = 220;
     }
 }

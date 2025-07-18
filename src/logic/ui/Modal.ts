@@ -34,6 +34,7 @@ export class ModalManager {
             justify-content: center;
             align-items: center;
             z-index: 2000;
+            font-family: 'Pixel', sans-serif;
         `;
         
         // Create modal content
@@ -47,6 +48,7 @@ export class ModalManager {
             width: 100%;
             border: ${options.isWarning ? '2px solid #ff6b6b' : '2px solid #4CAF50'};
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            font-size: 24px;
         `;
         
         // Create title
@@ -55,7 +57,7 @@ export class ModalManager {
         title.style.cssText = `
             color: ${options.isWarning ? '#ff6b6b' : 'white'};
             margin-top: 0;
-            font-size: 24px;
+            font-size: 32px;
         `;
         
         // Create message
@@ -64,7 +66,7 @@ export class ModalManager {
         message.style.cssText = `
             color: white;
             margin: 15px 0;
-            font-size: 16px;
+            font-size: 24px;
             line-height: 1.5;
         `;
         
@@ -74,7 +76,7 @@ export class ModalManager {
         button.style.cssText = `
             margin: 10px 0 0;
             padding: 10px 20px;
-            font-size: 16px;
+            font-size: 24px;
             border: none;
             border-radius: 4px;
             background: ${options.isWarning ? '#ff6b6b' : '#4CAF50'};

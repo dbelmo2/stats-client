@@ -51,7 +51,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
     input.style.cssText = `
         width: 100%;
         padding: 12px 15px;
-        font-size: 14px;
+        font-size: 24px;
         border: none;
         border-radius: 4px;
         background: #252525;
@@ -60,6 +60,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
         box-sizing: border-box;
         margin-bottom: 12px;
         transition: background 0.2s;
+        font-family: 'Pixel', sans-serif;
     `;
     input.addEventListener('focus', () => {
         input.style.background = '#303030';
@@ -74,7 +75,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
     regionSelect.style.cssText = `
         width: 100%;
         padding: 12px 15px;
-        font-size: 14px;
+        font-size: 24px;
         border: none;
         border-radius: 4px;
         background: #252525;
@@ -89,6 +90,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
         background-repeat: no-repeat;
         background-position: right 10px center;
         transition: background 0.2s;
+        font-family: 'Pixel', sans-serif;
     `;
 
     regionSelect.addEventListener('focus', () => {
@@ -111,12 +113,14 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
     placeholderOption.textContent = 'Select Region';
     placeholderOption.disabled = true;
     placeholderOption.selected = true;
+    placeholderOption.style.fontFamily = 'Pixel, sans-serif';
     regionSelect.appendChild(placeholderOption);
 
     // Add region options
     const regions: Region[] = ['NA', 'EU', 'ASIA', 'GLOBAL'];
     regions.forEach(region => {
         const option = document.createElement('option');
+        option.style.fontFamily = 'Pixel, sans-serif';
         option.value = region;
         option.textContent = region === 'NA' ? 'North America' : 
                              region === 'EU' ? 'Europe' : 
@@ -147,7 +151,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
     button.style.cssText = `
         width: fit-content;
         padding: 12px 24px;
-        font-size: 14px;
+        font-size: 24px;
         font-weight: 500;
         letter-spacing: 0.5px;
         border: none;
@@ -160,6 +164,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
         pointer-events: none;
         align-self: center;
         margin-top: 12px;
+        font-family: 'Pixel', sans-serif;
     `;
     button.disabled = true;
 

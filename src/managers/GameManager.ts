@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
+import { Application, Container, Graphics, Sprite } from 'pixi.js';
 import { config } from '../config';
 import { Player } from '../logic/Player';
 import { Controller } from '../logic/Controller';
@@ -25,6 +25,7 @@ import jumpAudio from '../swipe-sound.mp3';
 import walkingAudio from '../walking-grass-sound.flac'; 
 import { AudioManager } from './AudioManager';
 import { DevModeManager } from './DevModeManager';
+import { TvManager } from './TvManager';
 import { loginScreen } from '../logic/ui/LoginScreen';
 import type { SettingsManager } from './SettingsManager';
 
@@ -32,8 +33,6 @@ import type { SettingsManager } from './SettingsManager';
 // can start with low health. Once they take damage, the health bar updates to the correct value.
 // There seems to be an issue with projectiles stopping and then resuming after match ends and restarts
 // (serverside related)
-
-
 interface PlayerData {
     id: string,
     name: string,
@@ -144,6 +143,10 @@ type StatePayload = {
 
 
 type GamePhase = 'initializing' | 'ready' | 'active' | 'ended';
+
+
+
+
 
 export class GameManager {
     private readonly GAME_WIDTH = 1920; 
@@ -270,10 +273,10 @@ export class GameManager {
         this.ui.scoreDisplay = new ScoreDisplay();
 
         // Create platforms
-        this.world.platforms.push(new Platform(250, this.GAME_HEIGHT - 250))
-        this.world.platforms.push(new Platform(this.GAME_WIDTH - 850, this.GAME_HEIGHT - 250))
-        this.world.platforms.push(new Platform(250, this.GAME_HEIGHT - 500))
-        this.world.platforms.push(new Platform(this.GAME_WIDTH - 850, this.GAME_HEIGHT - 500))
+        this.world.platforms.push(new Platform(0, this.GAME_HEIGHT - 250))
+        this.world.platforms.push(new Platform(this.GAME_WIDTH - 500, this.GAME_HEIGHT - 250))
+        this.world.platforms.push(new Platform(0, this.GAME_HEIGHT - 500))
+        this.world.platforms.push(new Platform(this.GAME_WIDTH - 500, this.GAME_HEIGHT - 500))
 
         for (const platform of this.world.platforms) {
             this.gameContainer.addChild(platform);
@@ -298,6 +301,7 @@ export class GameManager {
         });
 
 
+
     }
     
 
@@ -315,7 +319,9 @@ export class GameManager {
             GameManager.instance.initializeAudio();
 
             await GameManager.instance.socketManager.waitForConnect();
-            await GameManager.instance.setupNetworking(region);            
+            await GameManager.instance.setupNetworking(region);
+            
+            TvManager.getInstance().startTv();
         }
         return GameManager.instance;
     }
@@ -360,40 +366,10 @@ export class GameManager {
     }
 
 private async setupGameWorld() {
-        const tvSprite = Sprite.from('tv');
-        tvSprite.x = 500
-        tvSprite.y = 300;
-        tvSprite.scale.set(0.75);
-        
 
         const j1Sprite = Sprite.from('j1');
         j1Sprite.x = 0 - this.GAME_WIDTH / 2;
         j1Sprite.y = 0;
-        
-        const j1SpriteMask = new Graphics().rect(0, 0, 553, 348).fill('#394241');
-
-        j1SpriteMask.rotation = -0.187; // Rotate the mask to match the TV angle
-        j1SpriteMask.x = this.GAME_WIDTH - 248;
-        j1SpriteMask.y = this.GAME_HEIGHT / 2 - 162;
-        j1SpriteMask.stroke({
-            color: '#292826',
-            width: 10
-        });
-        j1Sprite.addChild(j1SpriteMask);
-
-        // TODO: Set up screen class that allows me to switch between different screens on TV asset.
-
-        const textLabel = new Text({ text: 'Total late time is 10 days!'});
-        textLabel.style = {
-            align: 'center',
-            fontFamily: 'Pixel',
-            fontWeight: 'normal',
-            fontStyle: 'normal',
-            fontSize: 40,
-            fill: '#ffffff',
-        };
-
-        j1SpriteMask.addChild(textLabel);
 
         const j2Sprite = Sprite.from('j2');
         j2Sprite.x = 0 - this.GAME_WIDTH / 5;
@@ -409,17 +385,21 @@ private async setupGameWorld() {
 
         localStorage.debug = '*';
 
+        TvManager.getInstance().initialize(j1Sprite, this.GAME_WIDTH, this.GAME_HEIGHT);
         this.app.stage.addChild(j4Sprite);
         this.app.stage.addChild(j3Sprite);
         this.app.stage.addChild(j2Sprite);
         this.app.stage.addChild(j1Sprite);
-    this.app.stage.addChild(tvSprite);
+
         this.world.backgroundAssets = {
             j1: j1Sprite,
             j2: j2Sprite,
             j3: j3Sprite,
             j4: j4Sprite
         }
+
+        
+
     }
 
     private setupEventListeners(): void {
@@ -984,6 +964,8 @@ private async setupGameWorld() {
         this.checkForKills(this.network.latestServerSnapshot.scores);
         this.ui.scoreDisplay.updateScores(this.network.latestServerSnapshot.scores, this.player.id);
         this.updateDevDisplays(deltaMs);
+
+        TvManager.getInstance().update(deltaMs);
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {

@@ -15,7 +15,7 @@ function createLoadingScreen(): HTMLElement {
         justify-content: center;
         align-items: center;
         z-index: 9999;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-family: 'Pixel', -apple-system, BlinkMacSystemFont, sans-serif;
     `;
 
     // Game title
@@ -23,10 +23,11 @@ function createLoadingScreen(): HTMLElement {
     title.textContent = 'Game Loading';
     title.style.cssText = `
         color: white;
-        font-size: 36px;
+        font-size: 42px;
         font-weight: 300;
         margin-bottom: 40px;
         text-align: center;
+        font-family: 'Pixel', sans-serif;
     `;
 
     // Loading bar container
@@ -57,8 +58,9 @@ function createLoadingScreen(): HTMLElement {
     loadingText.textContent = 'Loading assets...';
     loadingText.style.cssText = `
         color: #999;
-        font-size: 14px;
+        font-size: 24px;
         text-align: center;
+        font-family: 'Pixel', sans-serif;
     `;
 
     // Spinner (optional)
