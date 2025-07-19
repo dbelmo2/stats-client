@@ -361,7 +361,7 @@ export class TvManager {
         if (!this.tvMask) return;
         
         const mainTypeText = new TypeText({ 
-            text: `The H3 Podcast has been late a total of... 3 days, 5 hours and 12 minutes!`,
+            text: `The H3 Show has been late a total of... 3 days, 5 hours and 12 minutes!`,
             style:  {
                 align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
