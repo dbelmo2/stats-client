@@ -266,7 +266,7 @@ export class SettingsManager {
             font-family: 'Pixel', sans-serif;
         `;
         saveButton.addEventListener('mouseover', () => {
-            saveButton.style.background = '#7462B3';
+            saveButton.style.background = '#d2758e';
         });
         saveButton.addEventListener('mouseout', () => {
             saveButton.style.background = '#7462B3';
@@ -314,6 +314,7 @@ export class SettingsManager {
         musicSlider.style.cssText = `
             width: 100%;
             margin-bottom: 15px;
+            accent-color: #7462b3;
         `;
         
         const musicValue = document.createElement('span');
@@ -339,6 +340,7 @@ export class SettingsManager {
             font-weight: bold;
             font-family: 'Pixel', sans-serif;
             font-size: 24px;
+            
         `;
         
         const sfxSlider = document.createElement('input');
@@ -349,6 +351,8 @@ export class SettingsManager {
         sfxSlider.style.cssText = `
             width: 100%;
             margin-bottom: 15px;
+            accent-color: #7462b3;
+
         `;
         
         const sfxValue = document.createElement('span');

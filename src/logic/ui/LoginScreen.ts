@@ -38,9 +38,9 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
     const logo = document.createElement('img');
     logo.src = l3l3; // Adjust path as needed
     logo.style.cssText = `
-        width: 300px;
+        width: 250px;
         height: auto;
-        margin-bottom: 20px;
+        margin-bottom: 75px;
     `;
 
     modal.appendChild(logo);
@@ -95,7 +95,6 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
         font-family: 'Pixel', sans-serif;
     `;
 
-    reggiona
 
     regionSelect.addEventListener('focus', () => {
         regionSelect.style.background = '#303030';
@@ -151,7 +150,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
 
     // Create button
     const button = document.createElement('button');
-    button.textContent = 'Play';
+    button.textContent = 'Enter';
     button.style.cssText = `
         width: fit-content;
         padding: 12px 24px;
@@ -160,7 +159,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
         letter-spacing: 0.5px;
         border: none;
         border-radius: 4px;
-        background: #c;
+        background: #7462B3;
         color: white;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -175,7 +174,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
     // Button effects
     button.addEventListener('mouseover', () => {
         if (!button.disabled) {
-            button.style.background = '#7462B3';
+            button.style.background = '#d2758e';
         }
     });
     button.addEventListener('mouseout', () => {
