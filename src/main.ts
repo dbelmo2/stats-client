@@ -1,17 +1,17 @@
 import { Application, Assets } from 'pixi.js';
 import { GameManager } from './managers/GameManager';
 
-import H3Logo from './h3-logo.png';
-import liveBanner from './live-banner.png';
-import ian from './ian.png';
-import dan from './dan.png';
-import j1 from './j1-small-tv.png';
-import j2 from './j2-small.png';
-import j3 from './j3.png';
-import j4 from './j4.png';
-import tomato from './tomato.png';
-import ammoBox from './ammobox.png';
-import platform from './platform.png';
+import H3Logo from './images/h3-logo.png';
+import liveBanner from './images/live-banner.png';
+import ian from './images/ian.png';
+import dan from './images/dan.png';
+import j1 from './images/j1-small-tv.png';
+import j2 from './images/j2-small.png';
+import j3 from './images/j3.png';
+import j4 from './images/j4.png';
+import tomato from './images/tomato.png';
+import ammoBox from './images/ammobox.png';
+import platform from './images/platform.png';
 import { SettingsManager } from './managers/SettingsManager';
 import { createLoadingScreen, removeLoadingScreen, updateLoadingProgress } from './logic/ui/Loading';
 

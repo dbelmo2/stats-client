@@ -18,11 +18,11 @@ import { FPSDisplay } from '../logic/ui/FPSDisplay';
 import { Vector2 } from '../logic/Vector';
 import { ModalManager } from '../logic/ui/Modal';
 
-import h3Theme from '../h3-theme.mp3'
-import shootingAudio from '../shoot-sound.wav';
-import impactAudio from '../impact-sound.wav';
-import jumpAudio from '../swipe-sound.mp3';
-import walkingAudio from '../walking-grass-sound.flac'; 
+import h3Theme from '../sounds/h3-theme.mp3'
+import shootingAudio from '../sounds/shoot-sound.wav';
+import impactAudio from '../sounds/impact-sound.wav';
+import jumpAudio from '../sounds/swipe-sound.mp3';
+import walkingAudio from '../sounds/walking-grass-sound.flac'; 
 import { AudioManager } from './AudioManager';
 import { DevModeManager } from './DevModeManager';
 import { TvManager } from './TvManager';

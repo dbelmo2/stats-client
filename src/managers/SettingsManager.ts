@@ -1,4 +1,4 @@
-import settingsIcon from '../settings-icon.png';
+import settingsIcon from '../images/settings-icon.png';
 
 export type Region = 'NA' | 'EU' | 'ASIA';
 
