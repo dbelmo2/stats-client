@@ -258,7 +258,7 @@ export class SettingsManager {
             letter-spacing: 0.5px;
             border: none;
             border-radius: 4px;
-            background: #4CAF50;
+            background: #7462B3;
             color: white;
             cursor: pointer;
             transition: all 0.2s ease;
@@ -266,10 +266,10 @@ export class SettingsManager {
             font-family: 'Pixel', sans-serif;
         `;
         saveButton.addEventListener('mouseover', () => {
-            saveButton.style.background = '#43a047';
+            saveButton.style.background = '#7462B3';
         });
         saveButton.addEventListener('mouseout', () => {
-            saveButton.style.background = '#4CAF50';
+            saveButton.style.background = '#7462B3';
         });
         saveButton.addEventListener('click', () => {
             // Add fade out animation
@@ -422,7 +422,7 @@ export class SettingsManager {
                 height: 16px;
                 margin-right: 10px;
                 cursor: pointer;
-                accent-color: #4CAF50;
+                accent-color: #7462B3;
             `;
             
             const labelElement = document.createElement('label');

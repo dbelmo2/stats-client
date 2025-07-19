@@ -45,7 +45,7 @@ export class TypeText {
         
         // Create the PIXI Text object
         this.textObject = new Text({
-            text: this.cursor, // Start with just the cursor
+            text: this.currentText, // Start with just the cursor
             style: options.style || {
                 fontFamily: '"Pixel", Arial, sans-serif',
                 fontSize: 32,
@@ -54,9 +54,7 @@ export class TypeText {
                 wordWrapWidth: 500
             }
         });
-        
-        this.currentText = this.cursor;
-        
+                
         console.log('TypeWriter created with text:', this.fullText);
     }
     
@@ -86,12 +84,17 @@ export class TypeText {
      * Start the typewriter effect
      * Returns a promise that resolves when typing is complete
      */
-    public async type(): Promise<void> {
+    public async type(delay?: number): Promise<void> {
         if (this.isTyping) {
             console.warn('TypeWriter: Already typing');
             return;
         }
         
+        if (delay) {
+            console.log(`TypeWriter: Delaying start by ${delay}ms`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
         console.log('TypeWriter: Starting type effect');
         this.isTyping = true;
         this.typingComplete = false;
@@ -180,7 +183,7 @@ export class TypeText {
     /**
      * Clean up everything - intervals and text object
      */
-    public cleanup(): void {
+    public destroy(): void {
         console.log('TypeWriter: Full cleanup');
         this.stopTyping();
         this.stopCursorBlink();

@@ -6,7 +6,6 @@ export class AmmoBox extends Container {
     private body: Sprite;
     private labelIsShowing: boolean = false;
     private socketManager: any; // Replace with actual socket manager type
-    private readonly labelText: string = 'Press E';
     private floatingLabel: Text | null = null;
 
     // Animation properties

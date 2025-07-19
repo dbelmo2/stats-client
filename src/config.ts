@@ -6,7 +6,7 @@ interface Config {
 console.log(import.meta.env.SERVER_URL);
 
 export const config: Config = {
-    SERVER_URL: import.meta.env.VITE_SERVER_URL || "http://localhost:3000",
+    SERVER_URL: import.meta.env.VITE_SERVER_URL || "https://game-server-dev.up.railway.app",
     PVP_ON: import.meta.env.VITE_PVP_ON === "true" || false
 };
 

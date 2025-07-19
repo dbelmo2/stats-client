@@ -156,7 +156,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
         letter-spacing: 0.5px;
         border: none;
         border-radius: 4px;
-        background: #4CAF50;
+        background: #c;
         color: white;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -171,12 +171,12 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
     // Button effects
     button.addEventListener('mouseover', () => {
         if (!button.disabled) {
-            button.style.background = '#43a047';
+            button.style.background = '#7462B3';
         }
     });
     button.addEventListener('mouseout', () => {
         if (!button.disabled) {
-            button.style.background = '#4CAF50';
+            button.style.background = '#7462B3';
         }
     });
 

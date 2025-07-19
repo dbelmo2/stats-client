@@ -46,7 +46,7 @@ export class ModalManager {
             text-align: center;
             max-width: 400px;
             width: 100%;
-            border: ${options.isWarning ? '2px solid #ff6b6b' : '2px solid #4CAF50'};
+            border: ${options.isWarning ? '2px solid #ff6b6b' : '2px solid #7462B3'};
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
             font-size: 24px;
         `;
@@ -79,18 +79,18 @@ export class ModalManager {
             font-size: 24px;
             border: none;
             border-radius: 4px;
-            background: ${options.isWarning ? '#ff6b6b' : '#4CAF50'};
+            background: ${options.isWarning ? '#ff6b6b' : '#7462B3'};
             color: white;
             cursor: pointer;
             transition: background 0.3s;
         `;
         
         button.addEventListener('mouseover', () => {
-            button.style.background = options.isWarning ? '#ff4949' : '#3e8e41';
+            button.style.background = options.isWarning ? '#ff4949' : '#7462B3';
         });
         
         button.addEventListener('mouseout', () => {
-            button.style.background = options.isWarning ? '#ff6b6b' : '#4CAF50';
+            button.style.background = options.isWarning ? '#ff6b6b' : '#7462B3';
         });
         
         button.addEventListener('click', () => {

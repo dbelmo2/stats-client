@@ -47,7 +47,7 @@ function createLoadingScreen(): HTMLElement {
     progressBar.style.cssText = `
         width: 0%;
         height: 100%;
-        background: #4CAF50;
+        background: #7462B3;
         border-radius: 2px;
         transition: width 0.3s ease;
     `;
@@ -69,7 +69,7 @@ function createLoadingScreen(): HTMLElement {
         width: 24px;
         height: 24px;
         border: 2px solid #333;
-        border-top: 2px solid #4CAF50;
+        border-top: 2px solid #7462B3;
         border-radius: 50%;
         animation: spin 1s linear infinite;
         margin-top: 20px;

@@ -3,9 +3,9 @@ import { CRTFilter } from 'pixi-filters';
 import { TypeText } from '../logic/ui/TypeText';
 
 
-export interface TvMessage {
+export interface TvScreen {
     text: string;
-    template?: 'default' | 'api'; // 'default' for regular messages, 'api' for API data
+    template?: 'default' | 'api' | 'live'; // 'default' for regular screens, 'api' for API data
     duration?: number; // milliseconds, 0 = permanent
     priority?: number; // higher = more important
     id?: string; // unique identifier
@@ -18,17 +18,17 @@ export interface TvMessage {
 export class TvManager {
     private static instance: TvManager;
     private tvMask: Graphics | null = null;
-    private currentTextObjects: (Text | BitmapText)[] = [];
+    private currentTextObjects: (Text | BitmapText | TypeText)[] = [];
+    private currentSprites: Sprite[] = [];
 
-    // Message queue system
-    private messageQueue: TvMessage[] = [];
-    private currentMessage: TvMessage | null = null;
-    private messageTimer: number = 0;
+    // Screen queue system
+    private screenQueue: TvScreen[] = [];
+    private currentScreen: TvScreen | null = null;
+    private screenTimer: number = 0;
     private isDisplaying: boolean = false;
     
     // Default settings
     private readonly defaultDuration: number = 5000; // 5 seconds
-    private readonly fadeSpeed: number = 0.05;
 
     private intervals: NodeJS.Timeout[] = [];
     private CRTFilter: CRTFilter | null = null;
@@ -72,11 +72,12 @@ export class TvManager {
         this.tvMask.filters = [this.CRTFilter];
 
         // Clear any existing text objects
-        this.clearAllTextObjects();
+        this.clearScreen();
         
         j1Sprite.addChild(this.tvMask);
 
     }
+
 
     public async startTv(): Promise<void> {
         if (!this.tvMask) {
@@ -85,92 +86,98 @@ export class TvManager {
         }
         
         // Clear any existing text objects
-        this.clearAllTextObjects();
+        this.clearScreen();
         
-        // Display default message
+        // Display default screen
         
         console.log('TvManager initialized with TV mask');
 
-        await this.showLoadingScreen();
-
-        this.showMessage({
-            text: 'API',
-            duration: 0, // Permanent until cleared
-            priority: 10,
-            id: 'API data',
-            template: 'api'
-        }); // Show default message on init
+        this.displayDefaultScreen();
+        this.displayApiScreen();
+        this.displayLiveScreen();
     }   
 
-    public async showLoadingScreen(): Promise<void> {
+
+    private displayApiScreen(duration?: number): void {
+        this.displayScreen({
+            text: 'api',
+            priority: 1,
+            id: 'api',
+            template: 'api',
+            duration: duration ?? 20000
+        });
+    }
+
+    private displayLiveScreen(duration?: number): void {
+        this.displayScreen({
+            text: 'live',
+            priority: 1,
+            id: 'live',
+            template: 'live',
+            duration: duration ?? 10000
+        });
+    }
+
+    private async useLogoTemplate(screen: TvScreen): Promise<void> {
         if (!this.tvMask) {
             console.error('TvManager: TV mask not initialized. Call initialize() first.');
             return;
         }
         
-        // Clear any existing text objects
-        this.clearAllTextObjects();
-        
         const logo = Sprite.from('h3Logo');
         logo.anchor.set(0.5);
 
-    // Scale logo to fit within the TV mask while maintaining aspect ratio
-    const maxWidth = this.tvMask.width * 0.8;
-    const maxHeight = this.tvMask.height * 0.8;
-    const scaleX = maxWidth / logo.width;
-    const scaleY = maxHeight / logo.height;
-    const scale = Math.min(scaleX, scaleY);
-    logo.scale.set(scale);
+        // Scale logo to fit within the TV mask while maintaining aspect ratio
+        const maxWidth = this.tvMask.width * 0.8;
+        const maxHeight = this.tvMask.height * 0.8;
+        const scaleX = maxWidth / logo.width;
+        const scaleY = maxHeight / logo.height;
+        const scale = Math.min(scaleX, scaleY);
+        logo.scale.set(scale);
 
         logo.x = this.tvMask.width / 2;
         logo.y = this.tvMask.height / 2;
-        this.tvMask.addChild(logo);
+        this.addSprite(logo);
 
-        await new Promise<void>(resolve => {
-            setTimeout(() => {
-                if (!this.tvMask) {
-                    console.error('TvManager: TV mask not initialized during loading screen.');
-                    return;
-                }
-                this.tvMask.removeChild(logo);
-                resolve();
-            }, 3000);
-        });
+        // Set up screen tracking
+        this.currentScreen = screen;
+        this.screenTimer = 0;
+        this.isDisplaying = true;
     }
     
 
 
     /**
-     * Display a message on the TV screen
+     * Display a screen on the TV screen
      */
-    public displayMessage(message: TvMessage): void {
+    public displayScreen(screen: TvScreen): void {
         // Add to queue if not immediate
-        if (this.isDisplaying && message.priority !== undefined && message?.priority > 10) {
-            // High priority message - interrupt current
-            console.log(`TvManager: Interrupting current message with high priority: "${message.text}"`);
+        if (this.isDisplaying && screen.priority !== undefined && screen?.priority > 10) {
+            // High priority screen - interrupt current
+            console.log(`TvManager: Interrupting current screen with high priority: "${screen.text}"`);
 
-            this.messageQueue.unshift(message);
-            this.skipCurrentMessage();
+            this.screenQueue.unshift(screen);
+            this.skipcurrentScreen();
         } else {
             // Add to queue
-                        console.log(`TvManager: Queued message: "${message.text}"`);
+                        console.log(`TvManager: Queued screen: "${screen.text}"`);
 
-            this.messageQueue.push(message);
+            this.screenQueue.push(screen);
         }
         
         // Start processing if not already displaying
         if (!this.isDisplaying) {
-            console.log(`TvManager: Started displaying message: "${message.text}"`);
-            this.processNextMessage();
+            console.log(`TvManager: Started displaying screen: "${screen.text}"`);
+            this.processNextScreen();
         }
     }
     
 
     /**
-     * Display immediate message (bypasses queue)
+     * Display immediate screen (bypasses queue)
      */
     public displayImmediate(text: string, duration: number = this.defaultDuration): void {
-        this.displayMessage({
+        this.displayScreen({
             text,
             duration,
             priority: 100, // Highest priority
@@ -187,26 +194,26 @@ export class TvManager {
         currentLeader?: string,
         remainingTime?: string 
     }): void {
-        let message = '';
+        let screen = '';
         
         if (stats.totalPlayers) {
-            message += `Players Online: ${stats.totalPlayers}\n`;
+            screen += `Players Online: ${stats.totalPlayers}\n`;
         }
         
         if (stats.currentLeader) {
-            message += `Leader: ${stats.currentLeader}\n`;
+            screen += `Leader: ${stats.currentLeader}\n`;
         }
         
         if (stats.matchTime) {
-            message += `Match Time: ${stats.matchTime}\n`;
+            screen += `Match Time: ${stats.matchTime}\n`;
         }
         
         if (stats.remainingTime) {
-            message += `Time Left: ${stats.remainingTime}`;
+            screen += `Time Left: ${stats.remainingTime}`;
         }
         
-        this.displayMessage({
-            text: message.trim(),
+        this.displayScreen({
+            text: screen.trim(),
             duration: 3000,
             priority: 5,
             id: 'game_stats'
@@ -214,10 +221,10 @@ export class TvManager {
     }
     
     /**
-     * Display kill feed messages
+     * Display kill feed screens
      */
     public displayKillFeed(killer: string, victim: string): void {
-        this.displayMessage({
+        this.displayScreen({
             text: `${killer} eliminated ${victim}!`,
             duration: 2000,
             priority: 7,
@@ -229,27 +236,27 @@ export class TvManager {
      * Display match events
      */
     public displayMatchEvent(event: 'start' | 'end' | 'warning', details?: string): void {
-        let message = '';
+        let screen = '';
         let priority = 8;
         
         switch (event) {
             case 'start':
-                message = 'Match Starting!';
-                if (details) message += `\n${details}`;
+                screen = 'Match Starting!';
+                if (details) screen += `\n${details}`;
                 break;
             case 'end':
-                message = 'Match Ended!';
-                if (details) message += `\n${details}`;
+                screen = 'Match Ended!';
+                if (details) screen += `\n${details}`;
                 priority = 9;
                 break;
             case 'warning':
-                message = details || 'Warning!';
+                screen = details || 'Warning!';
                 priority = 9;
                 break;
         }
         
-        this.displayMessage({
-            text: message,
+        this.displayScreen({
+            text: screen,
             duration: 4000,
             priority,
             id: `match_${event}_${Date.now()}`
@@ -257,22 +264,23 @@ export class TvManager {
     }
     
     /**
-     * Clear all messages and display default
+     * Clear all screens and display default
      */
     public clearAll(): void {
-        this.messageQueue = [];
-        this.skipCurrentMessage();
-        this.displayDefaultMessage();
+        this.screenQueue = [];
+        this.skipcurrentScreen();
+        this.displayDefaultScreen();
     }
     
     /**
-     * Display default/idle message
+     * Display default/idle screen
      */
-    public displayDefaultMessage(): void {
-        this.displayMessage({
-            text: 'Welcome to Tomato Arena!\nFight for glory!',
+    public displayDefaultScreen(duration?: number): void {
+        this.displayScreen({
+            text: 'default',
             priority: 1,
-            id: 'default'
+            id: 'default',
+            duration: duration ?? 5000
         });
     }
     
@@ -282,57 +290,64 @@ export class TvManager {
     public update(deltaMs: number): void {
         if (!this.isDisplaying) return;
         
-        // Update message timer
-        if (this.currentMessage && this.currentMessage.duration && this.currentMessage.duration > 0) {
-            this.messageTimer += deltaMs;
-            
-            if (this.messageTimer >= this.currentMessage.duration) {
-                this.finishCurrentMessage();
+        // Update screen timer
+        if (this.currentScreen && this.currentScreen.duration && this.currentScreen.duration > 0) {
+            this.screenTimer += deltaMs;
+            console.log(`this.screenTimer: ${this.screenTimer}, currentScreen.duration: ${this.currentScreen.duration}`);
+            if (this.screenTimer >= this.currentScreen.duration) {
+                console.log(`TvManager: Screen "${this.currentScreen.text}" duration ended`);
+                this.finishcurrentScreen();
             }
         }
     }
     
     /**
-     * Process the next message in queue
+     * Process the next screen in queue
      */
-    private processNextMessage(): void {
-        if (this.messageQueue.length === 0) {
+    private processNextScreen(): void {
+        if (this.screenQueue.length === 0) {
             this.isDisplaying = false;
+            this.displayDefaultScreen();
             return;
         }
         
         // Sort by priority (higher first)
-        this.messageQueue.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+        this.screenQueue.sort((a, b) => (b.priority || 0) - (a.priority || 0));
         
-        const message = this.messageQueue.shift()!;
-        this.showMessage(message);
+        const screen = this.screenQueue.shift()!;
+        console.log(`TvManager: Processing screen: "${screen.text}" with priority ${screen.priority} and duration ${screen.duration}`);
+        this.showScreen(screen);
     }
     
     /**
-     * Display the actual message on screen
+     * Display the actual screen on screen
      */
-    private showMessage(message: TvMessage): void {
+    private showScreen(screen: TvScreen): void {
         if (!this.tvMask) {
             console.warn('TvManager: TV mask not initialized');
             return;
         }
         
         // Clear any existing text objects
-        this.clearAllTextObjects();
+        this.clearScreen();
         
 
-        switch (message.template) {
+        switch (screen.template) {
             case 'api': {
-                this.useApiMessageTemplate(message);
+                this.useApiScreenTemplate(screen);
                 break;
-            } 
+            }
+            case 'live': {
+                this.useLiveScreenTemplate(screen);
+                break;
+            }
             default: {
-                this.useDefaultMessageTemplate(message);
+                this.useLogoTemplate(screen);
             }
 
 
         
-        console.log(`TvManager: Displaying message: "${message.text}"`);
+        console.log(`TvManager: Displaying screen: "${screen.text}"`);
         }
     }
 
@@ -342,24 +357,12 @@ export class TvManager {
  
 
 
-    private useApiMessageTemplate(message: TvMessage): void {
+    private async useApiScreenTemplate(screen: TvScreen): Promise<void> {
         if (!this.tvMask) return;
         
-
-
-
-
-
-        
-        const fullText = `The H3 Podcast has been late a total of... 3 days, 5 hours and 12 minutes!`;
-        let currentText = '|';
-        // Create new text
-
-
-        const mainText = new Text({
-            text: '',
-            style: {
-
+        const mainTypeText = new TypeText({ 
+            text: `The H3 Podcast has been late a total of... 3 days, 5 hours and 12 minutes!`,
+            style:  {
                 align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
                 fontStyle: 'normal',
@@ -368,106 +371,77 @@ export class TvManager {
                 wordWrap: true,
                 wordWrapWidth: 453, // Wrap text to fit TV screen
             }
-        });
+         })
+
+        mainTypeText.setPosition(50, 50); // Set position within the TV mask
+        mainTypeText.setAnchor(0, 0); // Set anchor to top-left
 
 
-        // Center the text in the TV mask
-        mainText.anchor.set(0, 0);
-        mainText.x = 50;
-        mainText.y = 50;
-
-        
-        
-        // Add to TV mask
-        this.addTextObject(mainText);
-        
-
-        // Typewriter Effect
-        let index = 0;
-        const typingSpeed = 150; // milliseconds per character
-
-
-
-        let dotCount = 0;
-        let isPaused = false;
-        const typeInterval = setInterval(() => {
-
-            if (index < fullText.length && isPaused === false) {
-                // replace the cursor with the new character
-                currentText = currentText.slice(0, -1); // Remove the cursor
-                currentText += fullText[index];
-                currentText += '|'; // Add the cursor back
-                mainText.text = currentText;
-                if (fullText[index] === '.') {
-                    dotCount++;
-                    if (dotCount === 3) {
-                        isPaused = true;
-                        setTimeout(() => {
-                            isPaused = false;
-                            dotCount = 0;
-                        }, 2000); // Pause for 2 seconds after 3 dots
-                    }
-                }
-                index++;
-            }
-        }, typingSpeed);
-
-        // Blink cursor
-        const blinkInterval = setInterval(() => {
-            const isCursorVisible = mainText.text.endsWith('|');
-            console.log(`Cursor is currently ${isCursorVisible ? 'visible' : 'hidden'}`);
-            console.log(`Current text: "${mainText.text}"`);
-            if (isCursorVisible) {
-                mainText.text = mainText.text.slice(0, -1); // Remove cursor
-            } else {
-                mainText.text += '|'; // Add cursor back
-            }
-        }, 400);
-
-        this.intervals.push(typeInterval, blinkInterval);
-
-        // Set up message tracking
-        this.currentMessage = message;
-        this.messageTimer = 0;
-        this.isDisplaying = true;
-    }
-
-
-
-
-
-
-    private useDefaultMessageTemplate(message: TvMessage): void {
-        if (!this.tvMask) return;
-
-        // Create new text
-        const mainText = new Text({
-            text: message.text,
+        const tipText = new TypeText({
+            text: 'Try picking up a tomato!',
             style: {
-                align: 'center',
+                align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
                 fontStyle: 'normal',
-                fontSize: 32, // Smaller font size
+                fontSize: 32, // Smaller font size for tips
                 fill: '#ffffff',
                 wordWrap: true,
-                wordWrapWidth: 500, // Wrap text to fit TV screen
-                lineHeight: 35
+                wordWrapWidth: 453, // Wrap text to fit TV screen
             }
         });
-        
-        // Center the text in the TV mask
-        mainText.anchor.set(0.5);
-        mainText.x = this.tvMask.width / 2;
-        mainText.y = this.tvMask.height / 2;
+        tipText.setPosition(50, 200); // Set position below main text
+        tipText.setAnchor(0, 0); // Set anchor to top-left
+
 
         // Add to TV mask
-        this.addTextObject(mainText);
+        this.addTextObject(mainTypeText.text);
+        this.addTextObject(tipText.text);
+        this.currentTextObjects.push(mainTypeText, tipText);
+        await mainTypeText.type();
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait a bit before showing tip
+        mainTypeText.killCursor(); // Stop cursor blinking
 
-        // Set up message tracking
-        this.currentMessage = message;
-        this.messageTimer = 0;
+
+        console.log('calling type for tipText');
+        await tipText.type();
+
+        // Set up screen tracking
+        this.currentScreen = screen;
+        this.screenTimer = 0;
         this.isDisplaying = true;
+
+     
     }
+
+    private async useLiveScreenTemplate(screen: TvScreen): Promise<void> {
+        if (!this.tvMask) return;
+
+        this.clearScreen();
+
+        const liveSprite = Sprite.from('liveLogo');
+
+
+        liveSprite.anchor.set(0.5);
+
+        // Scale logo to fit within the TV mask while maintaining aspect ratio
+        const maxWidth = this.tvMask.width * 1;
+        const maxHeight = this.tvMask.height * 1;
+        const scaleX = maxWidth / liveSprite.width;
+        const scaleY = maxHeight / liveSprite.height;
+        const scale = Math.min(scaleX, scaleY);
+        liveSprite.scale.set(scale);
+
+        liveSprite.x = this.tvMask.width / 2;
+        liveSprite.y = this.tvMask.height / 2 - 15;
+        this.addSprite(liveSprite);
+
+        // Set up screen tracking
+        this.currentScreen = screen;
+        this.screenTimer = 0;
+        this.isDisplaying = true;
+ 
+    }
+
 
         /**
      * Add a text object to the TV mask and track it
@@ -479,61 +453,72 @@ export class TvManager {
         this.tvMask.addChild(textObj);
     }
 
-    
+
+    private addSprite(sprite: Sprite): void {
+        if (!this.tvMask) return;
+        this.currentSprites.push(sprite);
+        this.tvMask.addChild(sprite);
+    }
 
 
-
-    private clearAllTextObjects(): void {
+    private clearScreen(): void {
         if (!this.tvMask) return;
 
         for (const textObject of this.currentTextObjects) {
-            this.tvMask.removeChild(textObject);
-            textObject.destroy();
+            const pixiText = textObject instanceof TypeText ? textObject.text : textObject;
+            this.tvMask.removeChild(pixiText);
+            textObject.destroy(); // Clean up PIXI object
         }
 
         this.currentTextObjects = [];
+
+        for (const sprite of this.currentSprites) {
+            this.tvMask.removeChild(sprite);
+            sprite.destroy(); // Clean up PIXI object
+        }
+        this.currentSprites = [];
     }
 
 
     /**
-     * Finish current message and process next
+     * Finish current screen and process next
      */
-    private finishCurrentMessage(): void {
-        this.currentMessage = null;
-        this.messageTimer = 0;
-        this.processNextMessage();
+    private finishcurrentScreen(): void {
+        this.currentScreen = null;
+        this.screenTimer = 0;
+        this.processNextScreen();
     }
     
     /**
-     * Skip current message immediately
+     * Skip current screen immediately
      */
-    private skipCurrentMessage(): void {
-        this.clearAllTextObjects();
-        this.finishCurrentMessage();
+    private skipcurrentScreen(): void {
+        this.clearScreen();
+        this.finishcurrentScreen();
     }
 
 
     /**
-     * Get current message info
+     * Get current screen info
      */
-    public getCurrentMessage(): TvMessage | null {
-        return this.currentMessage;
+    public getcurrentScreen(): TvScreen | null {
+        return this.currentScreen;
     }
     
     /**
      * Get queue length
      */
     public getQueueLength(): number {
-        return this.messageQueue.length;
+        return this.screenQueue.length;
     }
     
     /**
-     * Remove specific message from queue
+     * Remove specific screen from queue
      */
-    public removeMessage(id: string): boolean {
-        const index = this.messageQueue.findIndex(msg => msg.id === id);
+    public removeScreen(id: string): boolean {
+        const index = this.screenQueue.findIndex(msg => msg.id === id);
         if (index !== -1) {
-            this.messageQueue.splice(index, 1);
+            this.screenQueue.splice(index, 1);
             return true;
         }
         return false;
@@ -543,12 +528,12 @@ export class TvManager {
      * Cleanup when game session ends
      */
     public cleanup(): void {
-        this.messageQueue = [];
-        this.currentMessage = null;
-        this.messageTimer = 0;
+        this.screenQueue = [];
+        this.currentScreen = null;
+        this.screenTimer = 0;
         this.isDisplaying = false;
         this.intervals.forEach(interval => clearInterval(interval));
-        this.clearAllTextObjects();
+        this.clearScreen();
 
     }
 }
