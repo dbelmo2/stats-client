@@ -259,13 +259,15 @@ export class TypeText {
         this.blinkInterval = setInterval(() => {
             const isCursorVisible = this.textObject.text.endsWith(this.cursor);
             
+            // Instead of removing cursor, replace with space to maintain consistent width
             if (isCursorVisible) {
-                // Remove cursor
-                this.textObject.text = this.textObject.text.slice(0, -1);
+                // Replace cursor with space
+                this.textObject.text = this.textObject.text.slice(0, -1) + ' ';
             } else {
-                // Add cursor back
-                this.textObject.text += this.cursor;
+                // Remove space and add cursor back
+                this.textObject.text = this.textObject.text.slice(0, -1) + this.cursor;
             }
+
             
         }, this.blinkSpeed);
     }

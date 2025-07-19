@@ -1,4 +1,8 @@
+import l3l3 from '../../images/l3l3.png';
+
+
 type Region = 'NA' | 'EU' | 'ASIA' | 'GLOBAL';;
+
 
 export const loginScreen = () => new Promise<{ name: string, region: Region }>((resolve) => {
     // Create modal container with dark overlay
@@ -21,7 +25,7 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
     const modal = document.createElement('div');
     modal.style.cssText = `
         background: #1a1a1a;
-        padding: 30px;
+        padding: 75px;
         border-radius: 6px;
         width: 280px;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
@@ -30,18 +34,16 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
         align-items: center;
     `;
 
-    // Create title
-    const title = document.createElement('h2');
-    title.textContent = 'Tomato Arena';
-    title.style.cssText = `
-        font-family: 'Pixel', sans-serif;
-        margin: 0 0 48px 0;
-        color: white;
-        font-size: 32px;
-        font-weight: 900;
-        text-align: center;
+    // Logo
+    const logo = document.createElement('img');
+    logo.src = l3l3; // Adjust path as needed
+    logo.style.cssText = `
+        width: 300px;
+        height: auto;
+        margin-bottom: 20px;
     `;
-    modal.appendChild(title);
+
+    modal.appendChild(logo);
 
     // Create name input (no label)
     const input = document.createElement('input');
@@ -92,6 +94,8 @@ export const loginScreen = () => new Promise<{ name: string, region: Region }>((
         transition: background 0.2s;
         font-family: 'Pixel', sans-serif;
     `;
+
+    reggiona
 
     regionSelect.addEventListener('focus', () => {
         regionSelect.style.background = '#303030';
