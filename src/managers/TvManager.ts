@@ -104,7 +104,7 @@ export class TvManager {
             priority: 1,
             id: 'api',
             template: 'api',
-            duration: duration ?? 20000
+            duration: duration ?? 2000
         });
     }
 
@@ -293,9 +293,7 @@ export class TvManager {
         // Update screen timer
         if (this.currentScreen && this.currentScreen.duration && this.currentScreen.duration > 0) {
             this.screenTimer += deltaMs;
-            console.log(`this.screenTimer: ${this.screenTimer}, currentScreen.duration: ${this.currentScreen.duration}`);
             if (this.screenTimer >= this.currentScreen.duration) {
-                console.log(`TvManager: Screen "${this.currentScreen.text}" duration ended`);
                 this.finishcurrentScreen();
             }
         }
@@ -366,7 +364,7 @@ export class TvManager {
                 align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
                 fontStyle: 'normal',
-                fontSize: 32, // Smaller font size
+                fontSize: 36, // Smaller font size
                 fill: '#ffffff',
                 wordWrap: true,
                 wordWrapWidth: 453, // Wrap text to fit TV screen
@@ -383,13 +381,13 @@ export class TvManager {
                 align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
                 fontStyle: 'normal',
-                fontSize: 32, // Smaller font size for tips
+                fontSize: 36, // Smaller font size for tips
                 fill: '#ffffff',
                 wordWrap: true,
                 wordWrapWidth: 453, // Wrap text to fit TV screen
             }
         });
-        tipText.setPosition(50, 200); // Set position below main text
+        tipText.setPosition(50, 225); // Set position below main text
         tipText.setAnchor(0, 0); // Set anchor to top-left
 
 

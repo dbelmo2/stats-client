@@ -484,7 +484,6 @@ private async setupGameWorld() {
             message: "You have been removed from the game due to inactivity. Please reload the page to rejoin.",
             buttonText: "Reload Page",
             buttonAction: () => {
-                this.cleanupSession();
                 window.location.reload();
             },
             isWarning: false
@@ -618,8 +617,8 @@ private async setupGameWorld() {
         }
     }
 
-    private cleanupSession(): void {
-        // Clean up projectiles first
+    private cleanupSession = (): void => {
+
         this.app.ticker.stop();
 
 
@@ -946,7 +945,10 @@ private async setupGameWorld() {
             && inputVector.x === 0 && inputVector.y === 0;
 
         if (
-            this.player.sprite.y !== this.GAME_HEIGHT // If the player is in the air TODO: Change this to isAFk === false?
+            (
+                this.player.sprite.y !== this.GAME_HEIGHT
+                && this.player.sprite.getIsOnSurface() === false
+             ) // If the player is in the air TODO: Change this to isAFk === false?
             || inputVector.x !== 0 // Has horizontal input
             || inputVector.y !== 0 // Has verical input
             || inputVector.mouse // Has mouse input

@@ -110,6 +110,10 @@ export class Player extends Container {
       return this.isBystander;
   }
 
+  public getIsOnSurface(): boolean {
+      return this.isOnSurface;
+  }
+
   private updateHealthBar(): void {
       this.healthBar.clear();
       const healthPercentage = this.predictedHealth / this.maxHealth;
@@ -216,7 +220,8 @@ export class Player extends Container {
           this.velocity.y = 0;
           this.isOnSurface = true;
       }
-    
+
+      this.isOnSurface = isOnPlatform || this.y === this.gameBounds?.bottom; // Update surface state based on platform collision
 
       if (this.isOnSurface && inputVector.x !== 0 && !this.isWalking) {
         this.isWalking = true;

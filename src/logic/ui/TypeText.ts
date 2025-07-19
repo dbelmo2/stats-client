@@ -29,7 +29,6 @@ export class TypeText {
     private dotCount: number = 0;
     private isPaused: boolean = false;
     private isTyping: boolean = false;
-    private cursorVisible: boolean = true;
     private typingComplete: boolean = false;
     
     // Promise resolvers
@@ -263,11 +262,9 @@ export class TypeText {
             if (isCursorVisible) {
                 // Remove cursor
                 this.textObject.text = this.textObject.text.slice(0, -1);
-                this.cursorVisible = false;
             } else {
                 // Add cursor back
                 this.textObject.text += this.cursor;
-                this.cursorVisible = true;
             }
             
         }, this.blinkSpeed);
