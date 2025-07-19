@@ -2,7 +2,9 @@ import { Application, Assets } from 'pixi.js';
 import { GameManager } from './managers/GameManager';
 
 import H3Logo from './h3-logo.png';
-import liveLogo from './now-live.png';
+import liveBanner from './live-banner.png';
+import ian from './ian.png';
+import dan from './dan.png';
 import j1 from './j1-small-tv.png';
 import j2 from './j2-small.png';
 import j3 from './j3.png';
@@ -36,7 +38,9 @@ console.log('Starting game...');
             { alias: 'ammoBox', src: ammoBox },
             { alias: 'platform', src: platform },
             { alias: 'h3Logo', src: H3Logo },
-            { alias: 'liveLogo', src: liveLogo },
+            { alias: 'liveBanner', src: liveBanner },
+            { alias: 'ian', src: ian },
+            { alias: 'dan', src: dan },
         ];
 
         // Add all assets

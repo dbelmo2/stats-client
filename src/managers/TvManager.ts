@@ -94,7 +94,8 @@ export class TvManager {
 
         this.displayDefaultScreen();
         this.displayApiScreen();
-        this.displayLiveScreen();
+        this.displayLiveScreen(); // Show live screen for 10 seconds
+
     }   
 
 
@@ -416,22 +417,49 @@ export class TvManager {
 
         this.clearScreen();
 
-        const liveSprite = Sprite.from('liveLogo');
+        const banner = Sprite.from('liveBanner');
+        const ianSprite = Sprite.from('ian');
+        const danSprite = Sprite.from('dan');
+
+        banner.anchor.set(0.5);
+        ianSprite.anchor.set(0.5);
+        danSprite.anchor.set(0.5);
 
 
-        liveSprite.anchor.set(0.5);
+        banner.width = this.tvMask.width * 0.65; // Scale to fit TV mask
+        banner.height = this.tvMask.height * 0.65; // Adjust height to fit
+        banner.x = this.tvMask.width / 2;
+        banner.y = this.tvMask.height / 2 - 75; // Position above center
 
-        // Scale logo to fit within the TV mask while maintaining aspect ratio
-        const maxWidth = this.tvMask.width * 1;
-        const maxHeight = this.tvMask.height * 1;
-        const scaleX = maxWidth / liveSprite.width;
-        const scaleY = maxHeight / liveSprite.height;
-        const scale = Math.min(scaleX, scaleY);
-        liveSprite.scale.set(scale);
 
-        liveSprite.x = this.tvMask.width / 2;
-        liveSprite.y = this.tvMask.height / 2 - 15;
-        this.addSprite(liveSprite);
+
+        // Calculate the aspect ratio for each sprite
+        const ianAspectRatio = ianSprite.height / ianSprite.width;
+        const danAspectRatio = danSprite.height / danSprite.width;
+
+        // Set the desired width based on TV mask size
+        const ianWidth = this.tvMask.width * 0.25;
+        const danWidth = this.tvMask.width * 0.25;
+
+        // Calculate heights that maintain the aspect ratio
+        const ianHeight = ianWidth * ianAspectRatio;
+        const danHeight = danWidth * danAspectRatio;
+
+
+        ianSprite.width = ianWidth; // Scale to fit TV mask
+        ianSprite.height = ianHeight; // Adjust height
+        ianSprite.x = (ianWidth / 2) + 5;
+        ianSprite.y = this.tvMask.height - (ianHeight / 2) - 15; // Position at bottom left
+
+
+        danSprite.width = danWidth; // Scale to fit TV mask
+        danSprite.height = danHeight; // Adjust height
+        danSprite.x = this.tvMask.width - (danWidth / 2) - 15; // Position at bottom right
+        danSprite.y = this.tvMask.height - (danHeight / 2) - 15; // Position at bottom right
+
+        this.addSprite(banner);
+        this.addSprite(ianSprite);
+        this.addSprite(danSprite);
 
         // Set up screen tracking
         this.currentScreen = screen;
