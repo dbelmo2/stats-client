@@ -279,7 +279,71 @@ export class GameManager {
         bottomBg.addChild(bushTree);
 
 
-        
+        const grassHeight = this.GAME_HEIGHT - 47;; // Height of the grass tile
+
+
+
+        const grassOne = Sprite.from('grassOne');
+        grassOne.anchor.set(0, 0);
+        grassOne.zIndex = 100; // Ensure grass is on top of background
+        grassOne.x = -960;
+        grassOne.y = grassHeight;
+
+
+        const grassTwo = Sprite.from('grassOne');
+        grassTwo.anchor.set(0, 0);
+        grassTwo.zIndex = 100; // Ensure grass is on top of background
+        grassTwo.x = grassOne.x + grassOne.width;
+        grassTwo.y = grassHeight;
+
+        const grassThree = Sprite.from('grassOne');
+        grassThree.anchor.set(0, 0);
+        grassThree.zIndex = 100; // Ensure grass is on top of background
+        grassThree.x = grassTwo.x + grassTwo.width;
+        grassThree.y = grassHeight;
+
+        const grassFour = Sprite.from('grassOne');
+        grassFour.anchor.set(0, 0);
+        grassFour.zIndex = 100; // Ensure grass is on top of background
+        grassFour.x = grassThree.x + grassThree.width;
+        grassFour.y = grassHeight;
+
+        const grassFive = Sprite.from('grassOne');
+        grassFive.anchor.set(0, 0);
+        grassFive.zIndex = 100; // Ensure grass is on top of background
+        grassFive.x = grassFour.x + grassFour.width;    
+        grassFive.y = grassHeight;
+
+        const grassSix = Sprite.from('grassOne');
+        grassSix.anchor.set(0, 0);
+        grassSix.zIndex = 100; // Ensure grass is on top of background
+        grassSix.x = grassFive.x + grassFive.width;
+        grassSix.y = grassHeight;
+
+        const grassSeven = Sprite.from('grassOne');
+        grassSeven.anchor.set(0, 0);
+        grassSeven.zIndex = 100; // Ensure grass is on top of background
+        grassSeven.x = grassSix.x + grassSix.width;
+        grassSeven.y = grassHeight;
+
+        const grassEight = Sprite.from('grassOne');
+        grassEight.anchor.set(0, 0);
+        grassEight.zIndex = 100; // Ensure grass is on top of background
+        grassEight.x = grassSeven.x + grassSeven.width;
+        grassEight.y = grassHeight;
+
+
+
+
+        bottomBg.addChild(grassOne);
+        bottomBg.addChild(grassTwo);
+        bottomBg.addChild(grassThree);
+        bottomBg.addChild(grassFour);
+        bottomBg.addChild(grassFive);
+        bottomBg.addChild(grassSix);
+        bottomBg.addChild(grassSeven);
+        bottomBg.addChild(grassEight);
+
         // Add background first so it's behind everything
         this.gameContainer.addChild(background);
 

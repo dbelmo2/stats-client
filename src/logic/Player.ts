@@ -45,6 +45,7 @@ export class Player extends Container {
     this.gameBounds = gameBounds;
     this.velocity = new Vector2(0, 0);
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
+    this.body.zIndex = 1000;
     this.addChild(this.body);
     // Create separate container for UI elements
     this.healthBarContainer = new Container();

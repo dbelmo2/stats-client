@@ -16,7 +16,7 @@ import ammoBush from './images/small-bush.png';
 import tomatoBasket from './images/tomato-basket.png';
 import platformOne from './images/platform-one.png';
 import platformTwo from './images/platform-two.png';
-
+import grassOne from './images/grass-tile.png';
 
 
 import { SettingsManager } from './managers/SettingsManager';
@@ -52,6 +52,7 @@ console.log('Starting game...');
             { alias: 'bush', src: bush },
             { alias: 'bushTree', src: bushTree },
             { alias: 'tomatoBasket', src: tomatoBasket },
+            { alias: 'grassOne', src: grassOne },
 
         ];
 
