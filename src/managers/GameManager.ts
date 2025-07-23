@@ -11,7 +11,7 @@ import { testForAABB } from '../logic/collision';
 import { ScoreDisplay } from '../logic/ui/ScoreDisplay';
 import { GameOverDisplay } from '../logic/ui/GameOverDisplay';
 import { Platform } from '../logic/Platform';
-import { AmmoBox } from '../logic/objects/AmmoBox';
+import { AmmoBush } from '../logic/objects/AmmoBush';
 import { KillIndicator } from '../logic/ui/KillIndicator';
 import { PingDisplay } from '../logic/ui/PingDisplay';
 import { FPSDisplay } from '../logic/ui/FPSDisplay';
@@ -64,7 +64,7 @@ interface EntityContainers {
 
 interface WorldObjects {
   platforms: Platform[];
-  ammoBox: AmmoBox;
+  ammoBush: AmmoBush;
   backgroundAssets: { [key: string]: Sprite };
 }
 
@@ -215,7 +215,7 @@ export class GameManager {
 
     private world: WorldObjects = {
         platforms: [],
-        ammoBox: undefined as unknown as AmmoBox, // Will be initialized in constructor
+        ammoBush: undefined as unknown as AmmoBush, // Will be initialized in constructor
         backgroundAssets: {}
     };
 
@@ -256,14 +256,28 @@ export class GameManager {
         const background = new Container();
         const leftBgTop = new Graphics()
             .rect(-this.GAME_WIDTH,  this.GAME_HEIGHT, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
-            .fill('#192328');; //d  Dark gray color
+            .fill('#1C252A');; //d  Dark gray color
 
         const bottomBg = new Graphics()
           .rect(0, this.GAME_HEIGHT, this.GAME_WIDTH * 2, 500)
-          .fill('#192328');  // Dark gray color
+          .fill('#1D252A');  // Dark gray color
 
         background.addChild(leftBgTop);
         background.addChild(bottomBg);
+
+        const bush = Sprite.from('bush');
+        bush.anchor.set(1, -1);
+        bush.y = bush.y + 352;
+        bush.x = bush.x - 200;
+        
+        const bushTree = Sprite.from('bushTree');
+        bushTree.anchor.set(0, 0);
+        bushTree.x = this.GAME_WIDTH - 650;
+        bushTree.y = -250;
+
+        bottomBg.addChild(bush);
+        bottomBg.addChild(bushTree);
+
 
         
         // Add background first so it's behind everything
@@ -273,18 +287,18 @@ export class GameManager {
         this.ui.scoreDisplay = new ScoreDisplay();
 
         // Create platforms
-        this.world.platforms.push(new Platform(0, this.GAME_HEIGHT - 250))
-        this.world.platforms.push(new Platform(this.GAME_WIDTH - 500, this.GAME_HEIGHT - 250))
-        this.world.platforms.push(new Platform(0, this.GAME_HEIGHT - 500))
-        this.world.platforms.push(new Platform(this.GAME_WIDTH - 500, this.GAME_HEIGHT - 500))
+        this.world.platforms.push(new Platform(115, this.GAME_HEIGHT - 250, 'two'))
+        this.world.platforms.push(new Platform(this.GAME_WIDTH - 610, this.GAME_HEIGHT - 250,'one'))
+        this.world.platforms.push(new Platform(115, this.GAME_HEIGHT - 500,'one'))
+        this.world.platforms.push(new Platform(this.GAME_WIDTH - 610, this.GAME_HEIGHT - 500,'two'))
 
         for (const platform of this.world.platforms) {
             this.gameContainer.addChild(platform);
         }
 
         // Create ammo box at right side of screen
-        this.world.ammoBox = new AmmoBox(150, this.GAME_HEIGHT - 80, this.socketManager);
-        this.gameContainer.addChild(this.world.ammoBox);
+        this.world.ammoBush = new AmmoBush(-100, this.GAME_HEIGHT, this.socketManager);
+        this.gameContainer.addChild(this.world.ammoBush);
 
         this.camera.addChild(this.gameContainer);
         this.app.stage.addChild(this.camera);
@@ -295,7 +309,7 @@ export class GameManager {
             if (e.key === 'e' || e.key === 'E') {
                 this.controller.resetMouse()
                 if (this.player.sprite) {
-                    this.world.ammoBox.handleAmmoBoxInteraction(this.player.sprite);
+                    this.world.ammoBush.handleAmmoBushInteraction(this.player.sprite);
                 }
             }
         });
@@ -367,6 +381,8 @@ export class GameManager {
 
 private async setupGameWorld() {
 
+
+
         const j1Sprite = Sprite.from('j1');
         j1Sprite.x = 0 - this.GAME_WIDTH / 2;
         j1Sprite.y = 0;
@@ -395,7 +411,7 @@ private async setupGameWorld() {
             j1: j1Sprite,
             j2: j2Sprite,
             j3: j3Sprite,
-            j4: j4Sprite
+            j4: j4Sprite,
         }
 
         
@@ -668,8 +684,8 @@ private async setupGameWorld() {
         this.entities.killIndicators = [];
         this.gameState.scores.clear();
 
-        this.app.stage.removeChild(this.world.ammoBox);
-        this.world.ammoBox.destroy();
+        this.app.stage.removeChild(this.world.ammoBush);
+        this.world.ammoBush.destroy();
 
         // Clear all remaining state
         this.gameState.pendingCollisions.clear();
@@ -892,7 +908,7 @@ private async setupGameWorld() {
         this.updateEnemyProjectiles();
         this.cleanupDestroyedProjectiles(); 
         this.cleanupPendingCollisions();
-        this.world.ammoBox.update(this.player.sprite);
+        this.world.ammoBush.update(this.player.sprite);
 
     }
 

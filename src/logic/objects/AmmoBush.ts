@@ -2,18 +2,17 @@ import { Container, Sprite, Text } from 'pixi.js';
 import type { Player } from '../Player';
 import { testForAABB } from '../collision';
 
-export class AmmoBox extends Container {
+export class AmmoBush extends Container {
     private body: Sprite;
     private labelIsShowing: boolean = false;
     private socketManager: any; // Replace with actual socket manager type
     private floatingLabel: Text | null = null;
+    private ammoBox: Sprite; // Assuming 'ammoBush' is the correct asset alias
 
     // Animation properties
     private isAnimating: boolean = false;
     private fadeSpeed: number = 0.03; // Speed of fade animation (0.01 = slow, 0.1 = fast)
 
-    public readonly boxWidth = 100;
-    public readonly boxHeight = 100;
 
     constructor(x: number, y: number, socketManager: any) {
         super();
@@ -21,11 +20,14 @@ export class AmmoBox extends Container {
         this.socketManager = socketManager;
 
         // Create box
-        this.body = Sprite.from('ammoBox');
-        this.body.width = this.boxWidth;    
-        this.body.height = this.boxHeight;
+        this.body = Sprite.from('ammoBush');
+        this.body.anchor.set(0.5, 1);
+
+        this.ammoBox = Sprite.from('tomatoBasket');
+        this.ammoBox.anchor.set(-1, 1);
 
         this.addChild(this.body);
+        this.addChild(this.ammoBox);
         this.x = x;
         this.y = y;
     }
@@ -61,7 +63,7 @@ export class AmmoBox extends Container {
 
     }
 
-    public handleAmmoBoxInteraction(player: Player): void {
+    public handleAmmoBushInteraction(player: Player): void {
         console.log(`Handling ammo box interaction for player`);
         if (this.labelIsShowing === false || !player.getIsBystander()) return;
         this.socketManager.emit('toggleBystander', true);

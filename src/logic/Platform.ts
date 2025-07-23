@@ -1,16 +1,19 @@
-import { Graphics, Container } from 'pixi.js';
+import { Container, Sprite } from 'pixi.js';
 
 export class Platform extends Container {
-    private body: Graphics;
+    private body: Sprite;
     public readonly platformWidth = 500;
     public readonly platformHeight = 30;
 
-    constructor(x: number, y: number) {
+    constructor(x: number, y: number, type: 'one' | 'two') {
         super();
         
-        this.body = new Graphics()
-            .rect(0, 0, this.platformWidth, this.platformHeight)
-            .fill('#192328');
+
+        if (type === 'one') {
+            this.body = Sprite.from('platformOne');
+        } else  {
+            this.body = Sprite.from('platformTwo');
+        }
         
         this.addChild(this.body);
         this.x = x;

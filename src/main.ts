@@ -5,13 +5,20 @@ import H3Logo from './images/h3-logo.png';
 import liveBanner from './images/live-banner.png';
 import ian from './images/ian.png';
 import dan from './images/dan.png';
-import j1 from './images/j1-small-tv.png';
+import j1 from './images/j1-corrected.png';
 import j2 from './images/j2-small.png';
 import j3 from './images/j3.png';
 import j4 from './images/j4.png';
+import bush from './images/bush.png';
+import bushTree from './images/bush-right.png';
 import tomato from './images/tomato.png';
-import ammoBox from './images/ammobox.png';
-import platform from './images/platform.png';
+import ammoBush from './images/small-bush.png';
+import tomatoBasket from './images/tomato-basket.png';
+import platformOne from './images/platform-one.png';
+import platformTwo from './images/platform-two.png';
+
+
+
 import { SettingsManager } from './managers/SettingsManager';
 import { createLoadingScreen, removeLoadingScreen, updateLoadingProgress } from './logic/ui/Loading';
 
@@ -35,12 +42,17 @@ console.log('Starting game...');
             { alias: 'j3', src: j3 },
             { alias: 'j4', src: j4 },
             { alias: 'tomato', src: tomato },
-            { alias: 'ammoBox', src: ammoBox },
-            { alias: 'platform', src: platform },
+            { alias: 'ammoBush', src: ammoBush },
+            { alias: 'platformOne', src: platformOne },
+            { alias: 'platformTwo', src: platformTwo },
             { alias: 'h3Logo', src: H3Logo },
             { alias: 'liveBanner', src: liveBanner },
             { alias: 'ian', src: ian },
             { alias: 'dan', src: dan },
+            { alias: 'bush', src: bush },
+            { alias: 'bushTree', src: bushTree },
+            { alias: 'tomatoBasket', src: tomatoBasket },
+
         ];
 
         // Add all assets
