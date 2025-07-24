@@ -1,7 +1,7 @@
 import { Text, Graphics, Sprite, BitmapText } from 'pixi.js';
 import { CRTFilter } from 'pixi-filters';
 import { TypeText } from '../logic/ui/TypeText';
-import { YoutubeApiManager, type StatsResponse } from './YoutubeApiManager';
+import { YoutubeApiManager } from './YoutubeApiManager';
 import { formatDuration } from '../time';
 
 export interface TvScreen {
@@ -21,7 +21,6 @@ export class TvManager {
     private tvMask: Graphics | null = null;
     private currentTextObjects: (Text | BitmapText | TypeText)[] = [];
     private currentSprites: Sprite[] = [];
-    private apiPromise: Promise<any> | null = null;    
 
     // Screen queue system
     private screenQueue: TvScreen[] = [];

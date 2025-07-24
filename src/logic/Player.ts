@@ -46,6 +46,7 @@ export class Player extends Container {
     this.velocity = new Vector2(0, 0);
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.body.zIndex = 1000;
+
     this.addChild(this.body);
     // Create separate container for UI elements
     this.healthBarContainer = new Container();
@@ -102,7 +103,8 @@ export class Player extends Container {
         this.tomatoSprite.anchor.set(-0.25, -0.30);
         
         // Set z-index of the tomato sprite itself
-        this.tomatoSprite.zIndex = 10;
+        this.tomatoSprite.zIndex = 2000;
+
         this.addChild(this.tomatoSprite);
       }
   }
