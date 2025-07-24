@@ -1,7 +1,8 @@
 import { Text, Graphics, Sprite, BitmapText } from 'pixi.js';
 import { CRTFilter } from 'pixi-filters';
 import { TypeText } from '../logic/ui/TypeText';
-
+import { YoutubeApiManager, type StatsResponse } from './YoutubeApiManager';
+import { formatDuration } from '../time';
 
 export interface TvScreen {
     text: string;
@@ -20,6 +21,7 @@ export class TvManager {
     private tvMask: Graphics | null = null;
     private currentTextObjects: (Text | BitmapText | TypeText)[] = [];
     private currentSprites: Sprite[] = [];
+    private apiPromise: Promise<any> | null = null;    
 
     // Screen queue system
     private screenQueue: TvScreen[] = [];
@@ -359,22 +361,84 @@ export class TvManager {
     private async useApiScreenTemplate(screen: TvScreen): Promise<void> {
         if (!this.tvMask) return;
         
-        const mainTypeText = new TypeText({ 
-            text: `The H3 Show has been late a total of... 3 days, 5 hours and 12 minutes!`,
+        const apiData = await YoutubeApiManager.getInstance().getStats();
+
+        const statSpeed = 75; // Typing speed for stats
+
+        const introTitle = new TypeText({
+            text: 'Welcome to the H3 livestream late tracker!',
+            style: {
+                align: 'center',
+                fontFamily: '"Pixel", Arial, sans-serif',
+                fontStyle: 'normal',
+                fontSize: 34,
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453,
+            }
+        });
+
+
+
+
+
+        const generalStatsTitle = new TypeText({
+            text: 'General Stats',
+            style: {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif',
+                fontStyle: 'normal',
+                fontSize: 40,
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453
+            }
+        });
+
+        const totalLateTime = new TypeText({ 
+            typingSpeed: statSpeed,
+            text: `• Total late time: ${apiData.humanReadable}`,
             style:  {
                 align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
                 fontStyle: 'normal',
-                fontSize: 36, // Smaller font size
+                fontSize: 30, // Smaller font size
                 fill: '#ffffff',
                 wordWrap: true,
                 wordWrapWidth: 453, // Wrap text to fit TV screen
+                lineHeight: 33
+
             }
          })
 
-        mainTypeText.setPosition(50, 50); // Set position within the TV mask
-        mainTypeText.setAnchor(0, 0); // Set anchor to top-left
+        const averageLateTime = new TypeText({
+            typingSpeed: statSpeed,
+            text: `• Average late time: ${formatDuration(apiData.averageLateTime)}`,
+            style:  {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontStyle: 'normal',
+                fontSize: 30, // Smaller font size
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453, // Wrap text to fit TV screen
+                lineHeight: 33
+            }
+        });
 
+        const maxLateTime = new TypeText({
+            text: `• Max late time: ${formatDuration(apiData.maxLateTime)}!`,
+            style:  {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontStyle: 'normal',
+                fontSize: 30, // Smaller font size
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453, // Wrap text to fit TV screen
+                lineHeight: 33
+            }
+        });
 
         const tipText = new TypeText({
             text: 'Try picking up a tomato!',
@@ -388,18 +452,123 @@ export class TvManager {
                 wordWrapWidth: 453, // Wrap text to fit TV screen
             }
         });
-        tipText.setPosition(50, 225); // Set position below main text
-        tipText.setAnchor(0, 0); // Set anchor to top-left
+
+        this.addTextObject(introTitle.text);
+        this.currentTextObjects.push(introTitle);
+        introTitle.setPosition(75, 100); // Set position within the TV mask
+        introTitle.setAnchor(0, 0); // Set anchor to top-left
+        await introTitle.type();
+        introTitle.killCursor(); // Stop cursor blinking after intro
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before typing
+        this.clearScreen();
 
 
-        // Add to TV mask
-        this.addTextObject(mainTypeText.text);
+        this.addTextObject(generalStatsTitle.text);
+        this.currentTextObjects.push(generalStatsTitle);
+        generalStatsTitle.setPosition(50, 25); // Set position within the TV mask
+        generalStatsTitle.setAnchor(0, 0); // Set anchor to top-left
+        await generalStatsTitle.type();
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before showing next text
+        generalStatsTitle.killCursor()
+
+
+
+        // Total late time text
+        totalLateTime.setPosition(50, 80); // Set position within the TV mask
+        totalLateTime.setAnchor(0, 0); // Set anchor to top-left
+
+        this.addTextObject(totalLateTime.text);
+        this.currentTextObjects.push(totalLateTime);
+
+        await totalLateTime.type();
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait a bit before showing tip
+        totalLateTime.killCursor(); // Stop cursor blinking
+
+
+        this.addTextObject(averageLateTime.text);
+        this.addTextObject(maxLateTime.text);   
+        this.currentTextObjects.push(averageLateTime, maxLateTime);
+
+        averageLateTime.setPosition(50, 160); 
+        averageLateTime.setAnchor(0, 0); 
+        maxLateTime.setPosition(50, 240); 
+        maxLateTime.setAnchor(0, 0); 
+
+        await averageLateTime.type();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        averageLateTime.killCursor();
+        await maxLateTime.type();
+        await new Promise((resolve) => setTimeout(resolve, 15000));
+
+        maxLateTime.killCursor();
+        this.clearScreen();
+
+        // daily stats
+
+        const title = new TypeText({
+            text: 'Daily Average Late Times',
+            style: {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif',
+                fontStyle: 'normal',
+                fontSize: 40,
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453,
+            }
+        });
+
+        const dailyStatTexts = Object.entries(apiData.daily).map(([day, data]) => {
+            return new TypeText({
+                text: `• ${day.charAt(0).toUpperCase()}: ${formatDuration(data.totalLateTime / data.count)}`,
+                style: {
+                    align: 'left',
+                    fontFamily: '"Pixel", Arial, sans-serif',
+                    fontStyle: 'normal',
+                    fontSize: 30,
+                    fill: '#ffffff',
+                    wordWrap: true,
+                    wordWrapWidth: 453,
+                    
+                },
+                typingSpeed: 75
+            });
+        });
+
+        this.addTextObject(title.text);
+        this.currentTextObjects.push(title);
+        title.setPosition(50, 25);
+        title.setAnchor(0, 0);
+
+        
+        for (const statText of dailyStatTexts) {
+            this.addTextObject(statText.text);
+            this.currentTextObjects.push(statText);
+            statText.setAnchor(0, 0);
+            statText.setPosition(50, 75 + (dailyStatTexts.indexOf(statText) * 35));
+        }
+
+
+
+        await title.type();
+        title.killCursor();
+        for (const statText of dailyStatTexts) {
+            await statText.type();
+            await new Promise((resolve) => setTimeout(resolve, 1000)); // Delay between each daily stat
+            statText.killCursor(); // Stop cursor blinking after each stat
+        }
+        await new Promise((resolve) => setTimeout(resolve, 15000)); // Wait before showing tip
+        this.clearScreen();
+
+
+
+
+
+        // Tip text
+        tipText.setPosition(50, 50);
+        tipText.setAnchor(0, 0);
         this.addTextObject(tipText.text);
-        this.currentTextObjects.push(mainTypeText, tipText);
-        await mainTypeText.type();
-        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait a bit before showing tip
-        mainTypeText.killCursor(); // Stop cursor blinking
-
+        this.currentTextObjects.push(tipText);
 
         console.log('calling type for tipText');
         await tipText.type();

@@ -21,6 +21,7 @@
   "dependencies": {
     "@pixi/filter-crt": "^5.1.1",
     "@pixi/text": "^7.4.3",
+    "axios": "^1.11.0",
     "chart.js": "^4.5.0",
     "gsap": "^3.13.0",
     "howler": "^2.2.4",
