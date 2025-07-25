@@ -242,7 +242,7 @@ export class GameManager {
     private constructor(app: Application) {
         this.controller = new Controller();
 
-        this.socketManager = new SocketManager(config.SERVER_URL);
+        this.socketManager = new SocketManager(config.GAME_SERVER_URL);
 
         this.app = app;
         this.setupGameWorld()

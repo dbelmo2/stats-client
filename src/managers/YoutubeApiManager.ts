@@ -28,7 +28,7 @@ export class YoutubeApiManager {
     private baseUrl: string;
 
     private constructor() {
-        this.baseUrl = config.YOUTUBE_API_HOST;
+        this.baseUrl = config.YOUTUBE_API_URL;
     }
 
     public static getInstance(): YoutubeApiManager {
