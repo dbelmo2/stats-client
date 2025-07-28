@@ -101,8 +101,8 @@ export class GameManager {
         id: '',
         name: '',
         sprite: undefined,
+        disableInput: false,
         projectiles: [],
-        disableInput: false
     }
 
     private gameState: GameState = {
@@ -678,7 +678,7 @@ export class GameManager {
             this.gameState.accumulator += cappedFrameTime;
 
             while (this.gameState.accumulator >= this.MIN_MS_BETWEEN_TICKS) {
-                this.handleTick(this.MIN_S_BETWEEN_TICKS);
+                this.handleTick();
                 this.gameState.accumulator -= this.MIN_MS_BETWEEN_TICKS;
                 this.gameState.localTick += 1;
             }
@@ -749,13 +749,13 @@ export class GameManager {
     }
 
 
-    private handleTick(dt: number): void {
+    private handleTick(): void {
         if (this.player.sprite) {
             if (this.network.latestServerSnapshot.serverTick > this.network.latestServerSnapshotProcessed.serverTick) {
                 this.handleReconciliation();
             }
 
-            const playerInput = this.handlePlayerInput(dt);
+            const playerInput = this.handlePlayerInput();
             this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
             if (playerInput) {
                 this.handleShooting(playerInput);
@@ -772,50 +772,55 @@ export class GameManager {
 
     }
 
-    private handlePlayerInput(dt: number): InputPayload | undefined {
+    private handlePlayerInput(): InputPayload | undefined {
 
 
         if (!this.player.sprite) return; // No player to control
 
         const controllerState = this.controller.getState();
-        const inputVector = Vector2.createFromControllerState(controllerState);
-
-        if (this.player.disableInput) {
-            inputVector.x = 0; // Prevent input when overlay is active
-            inputVector.y = 0; // Prevent input when overlay is active
-            inputVector.mouse = undefined; // Prevent mouse input when overlay is active
+        // Convert mouse coordinates (GameManager responsibility)
+        if (controllerState.mouse) {
+            const { x, y } = this.convertCameraToWorldCoordinates(
+                controllerState.mouse.xR ?? 0, 
+                controllerState.mouse.yR ?? 0
+            );
+            controllerState.mouse.x = x;
+            controllerState.mouse.y = y;
         }
 
-        this.player.disableInput = this.ui.overlayActive; // Disable input when overlay is active
-        if (this.player.disableInput) inputVector.mouse = undefined; // Prevent mouse input when overlay is active
 
+
+        const { inputPayload, inputVector } = this.player.sprite.processInput(
+            controllerState,
+            this.MIN_S_BETWEEN_TICKS,
+            this.gameState.localTick,
+            this.BUFFER_SIZE,
+            this.player.disableInput,
+            this.ui.overlayActive
+        )
+
+        this.player.disableInput = this.ui.overlayActive;
+        this.controller.resetJump();
         this.controller.resetMouse();
-        if (inputVector.mouse) { // Convert camera to world coordinates
-            const { x, y } = this.convertCameraToWorldCoordinates(inputVector.mouse.x, inputVector.mouse.y);
-            inputVector.mouse.x = x;
-            inputVector.mouse.y = y;
-        }
-        const inputPayload: InputPayload = {
-            tick: this.gameState.localTick,
-            vector: inputVector,
-        };
 
+
+        // TODO: Move state and input buffers to player class. 
         const bufferIndex = this.gameState.localTick % this.BUFFER_SIZE;
-        this.controller.keys.up.pressed = false; // Reset up keys to prevent double jump
-        this.controller.keys.space.pressed = false; 
-
-
-        this.network.inputBuffer[bufferIndex] = inputPayload;
-        // We apply the input to the player
-        this.player.sprite.update(inputVector, dt, false);
-
-        // Add the updated state to the state buffer
         const stateVector = this.player.sprite.getPositionVector();
+        this.network.inputBuffer[bufferIndex] = inputPayload;
         this.network.stateBuffer[bufferIndex] = {
             tick: this.gameState.localTick,
             position: stateVector
         };
 
+      this.player.sprite.update(inputVector, this.MIN_S_BETWEEN_TICKS, false);
+
+        if (this.shouldBroadcastPlayerInput(inputVector)) this.broadcastPlayerInput(inputPayload);
+        return inputPayload;
+    }
+
+    private shouldBroadcastPlayerInput(inputVector: Vector2): boolean {
+        if (!this.player.sprite) return false;
         const lastProcessedInputVector = this.player.sprite.getLastProcessedInputVector();
         const justStoppedMoving = lastProcessedInputVector.x !== 0 || lastProcessedInputVector.y !== 0 // This is true when jump is pressed, but the player is not moving
             && inputVector.x === 0 && inputVector.y === 0;
@@ -824,14 +829,14 @@ export class GameManager {
             (
                 this.player.sprite.y !== this.GAME_HEIGHT
                 && this.player.sprite.getIsOnSurface() === false
-             ) // If the player is in the air TODO: Change this to isAFk === false?
+            ) // If the player is in the air TODO: Change this to isAFk === false?
             || inputVector.x !== 0 // Has horizontal input
             || inputVector.y !== 0 // Has verical input
             || inputVector.mouse // Has mouse input
             || justStoppedMoving // Or was moving last input but stopped moving this input
-        ) this.broadcastPlayerInput(inputPayload);
+        ) return true;
 
-        return inputPayload;
+        return false;
     }
 
     // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)

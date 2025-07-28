@@ -2,6 +2,7 @@ import { Graphics, Container, Text, TextStyle, Sprite } from 'pixi.js';
 import { Platform } from './Platform';
 import { Vector2 } from '../../systems/Vector';
 import { AudioManager } from '../../managers/AudioManager';
+import type { InputPayload } from '../../types/network.types';
 
 export interface PendingInput {
   seq: number; 
@@ -39,6 +40,10 @@ export class Player extends Container {
   private isOnSurface: boolean = false;
   private canDoubleJump = true;
   private isWalking = false;
+  
+
+
+
 
   constructor(x: number, y: number, gameBounds: any, username: string = 'Player',) {
     super();
@@ -88,6 +93,35 @@ export class Player extends Container {
     this.x = x;
     this.y = y;
 
+  }
+
+
+
+  public processInput(
+    controllerState: any,
+    dt: number,
+    localTick: number,
+    bufferSize: number = 100,
+    inputWasDisabled: boolean = false,
+    ignoreInput: boolean = false,
+  ): { inputPayload: InputPayload; inputVector: Vector2 } {
+      const inputVector = Vector2.createFromControllerState(controllerState);
+
+      if (inputWasDisabled) {
+          inputVector.x = 0; // Prevent input when overlay is active
+          inputVector.y = 0; // Prevent input when overlay is active
+          inputVector.mouse = undefined; // Prevent mouse input when overlay is active
+      }
+
+      if (ignoreInput) inputVector.mouse = undefined
+
+      const inputPayload: InputPayload = {
+          tick: localTick,
+          vector: inputVector,
+      };
+
+
+      return { inputPayload, inputVector };
   }
 
   public setIsBystander(value: boolean): void {

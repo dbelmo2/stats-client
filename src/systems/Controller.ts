@@ -104,6 +104,10 @@ export class Controller {
     this.resetMouse();
   }
 
+  public resetJump(): void {
+    this.keys.space.pressed = false;
+    this.keys.up.pressed = false;
+  }
 
   public resetMouse(): void {
     this.mouse.pressed = false;
