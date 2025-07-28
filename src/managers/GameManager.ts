@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Sprite } from 'pixi.js';
+import { Application, Container } from 'pixi.js';
 import { config } from '../utils/config';
 import { Player } from '../components/game/Player';
 import { Controller } from '../systems/Controller';
@@ -10,7 +10,6 @@ import { EnemyProjectile } from '../components/game/EnemyProjectile';
 import { testForAABB } from '../systems/Collision';
 import { ScoreDisplay } from '../components/ui/ScoreDisplay';
 import { GameOverDisplay } from '../components/ui/GameOverDisplay';
-import { Platform } from '../components/game/Platform';
 import { AmmoBush } from '../components/game/AmmoBush';
 import { KillIndicator } from '../components/ui/KillIndicator';
 import { PingDisplay } from '../components/ui/PingDisplay';
@@ -30,6 +29,8 @@ import { loginScreen } from '../components/ui/LoginScreen';
 import type { SettingsManager } from './SettingsManager';
 import type { InputPayload, NetworkState, PlayerScore, PlayerServerState, ProjectileServerState, ServerStateUpdate } from '../types/network.types';
 import type { GameState, PlayerData, WorldObjects } from '../types/game.types';
+import { SceneManager } from './SceneManager';
+
 
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
 // can start with low health. Once they take damage, the health bar updates to the correct value.
@@ -169,124 +170,32 @@ export class GameManager {
         this.socketManager = new SocketManager(config.GAME_SERVER_URL);
 
         this.app = app;
-        this.setupGameWorld()
         this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
         this.gameContainer = new Container();
+    
+        try {
+            this.world = SceneManager.getInstance().initialize(
+                app, 
+                {
+                    GAME_WIDTH: this.GAME_WIDTH,
+                    GAME_HEIGHT: this.GAME_HEIGHT,
+                    GAME_BOUNDS: this.GAME_BOUNDS
+                },
+                this.gameContainer,
+                this.socketManager
+            );
+            
+            console.log('Scene successfully initialized');
+        } catch (error) {
+            console.error('Failed to initialize scene:', error);
+            throw new Error('Game initialization failed');
+        }
 
         const devManager = DevModeManager.getInstance();
         devManager.initialize(app);
-        
-        // Create a background that extends beyond game bounds
-        const background = new Container();
-        const leftBgTop = new Graphics()
-            .rect(-this.GAME_WIDTH,  this.GAME_HEIGHT, this.GAME_WIDTH, this.GAME_HEIGHT + 500)
-            .fill('#1C252A');; //d  Dark gray color
-
-        const bottomBg = new Graphics()
-          .rect(0, this.GAME_HEIGHT, this.GAME_WIDTH * 2, 500)
-          .fill('#1D252A');  // Dark gray color
-
-        background.addChild(leftBgTop);
-        background.addChild(bottomBg);
-
-        const bush = Sprite.from('bush');
-        bush.anchor.set(1, -1);
-        bush.y = bush.y + 352;
-        bush.x = bush.x - 200;
-        
-        const bushTree = Sprite.from('bushTree');
-        bushTree.anchor.set(0, 0);
-        bushTree.x = this.GAME_WIDTH - 650;
-        bushTree.y = -250;
-
-        bottomBg.addChild(bush);
-        bottomBg.addChild(bushTree);
-
-
-        const grassHeight = this.GAME_HEIGHT - 47;; // Height of the grass tile
-
-
-
-        const grassOne = Sprite.from('grassOne');
-        grassOne.anchor.set(0, 0);
-        grassOne.zIndex = 100; // Ensure grass is on top of background
-        grassOne.x = -960;
-        grassOne.y = grassHeight;
-
-
-        const grassTwo = Sprite.from('grassOne');
-        grassTwo.anchor.set(0, 0);
-        grassTwo.zIndex = 100; // Ensure grass is on top of background
-        grassTwo.x = grassOne.x + grassOne.width;
-        grassTwo.y = grassHeight;
-
-        const grassThree = Sprite.from('grassOne');
-        grassThree.anchor.set(0, 0);
-        grassThree.zIndex = 100; // Ensure grass is on top of background
-        grassThree.x = grassTwo.x + grassTwo.width;
-        grassThree.y = grassHeight;
-
-        const grassFour = Sprite.from('grassOne');
-        grassFour.anchor.set(0, 0);
-        grassFour.zIndex = 100; // Ensure grass is on top of background
-        grassFour.x = grassThree.x + grassThree.width;
-        grassFour.y = grassHeight;
-
-        const grassFive = Sprite.from('grassOne');
-        grassFive.anchor.set(0, 0);
-        grassFive.zIndex = 100; // Ensure grass is on top of background
-        grassFive.x = grassFour.x + grassFour.width;    
-        grassFive.y = grassHeight;
-
-        const grassSix = Sprite.from('grassOne');
-        grassSix.anchor.set(0, 0);
-        grassSix.zIndex = 100; // Ensure grass is on top of background
-        grassSix.x = grassFive.x + grassFive.width;
-        grassSix.y = grassHeight;
-
-        const grassSeven = Sprite.from('grassOne');
-        grassSeven.anchor.set(0, 0);
-        grassSeven.zIndex = 100; // Ensure grass is on top of background
-        grassSeven.x = grassSix.x + grassSix.width;
-        grassSeven.y = grassHeight;
-
-        const grassEight = Sprite.from('grassOne');
-        grassEight.anchor.set(0, 0);
-        grassEight.zIndex = 100; // Ensure grass is on top of background
-        grassEight.x = grassSeven.x + grassSeven.width;
-        grassEight.y = grassHeight;
-
-
-
-
-        bottomBg.addChild(grassOne);
-        bottomBg.addChild(grassTwo);
-        bottomBg.addChild(grassThree);
-        bottomBg.addChild(grassFour);
-        bottomBg.addChild(grassFive);
-        bottomBg.addChild(grassSix);
-        bottomBg.addChild(grassSeven);
-        bottomBg.addChild(grassEight);
-
-        // Add background first so it's behind everything
-        this.gameContainer.addChild(background);
 
 
         this.ui.scoreDisplay = new ScoreDisplay();
-
-        // Create platforms
-        this.world.platforms.push(new Platform(115, this.GAME_HEIGHT - 250, 'two'))
-        this.world.platforms.push(new Platform(this.GAME_WIDTH - 610, this.GAME_HEIGHT - 250,'one'))
-        this.world.platforms.push(new Platform(115, this.GAME_HEIGHT - 500,'one'))
-        this.world.platforms.push(new Platform(this.GAME_WIDTH - 610, this.GAME_HEIGHT - 500,'two'))
-
-        for (const platform of this.world.platforms) {
-            this.gameContainer.addChild(platform);
-        }
-
-        // Create ammo box at right side of screen
-        this.world.ammoBush = new AmmoBush(-100, this.GAME_HEIGHT, this.socketManager);
-        this.gameContainer.addChild(this.world.ammoBush);
 
         this.camera.addChild(this.gameContainer);
         this.app.stage.addChild(this.camera);
@@ -367,44 +276,6 @@ export class GameManager {
         });
     }
 
-private async setupGameWorld() {
-
-
-
-        const j1Sprite = Sprite.from('j1');
-        j1Sprite.x = 0 - this.GAME_WIDTH / 2;
-        j1Sprite.y = 0;
-
-        const j2Sprite = Sprite.from('j2');
-        j2Sprite.x = 0 - this.GAME_WIDTH / 5;
-        j2Sprite.y = 0;
-
-        const j3Sprite = Sprite.from('j3');
-        j3Sprite.x = 0 - this.GAME_WIDTH / 2 ;
-        j3Sprite.y = 0;
-
-        const j4Sprite = Sprite.from('j4');
-        j4Sprite.x = 0;
-        j4Sprite.y = 0;
-
-        localStorage.debug = '*';
-
-        TvManager.getInstance().initialize(j1Sprite, this.GAME_WIDTH, this.GAME_HEIGHT);
-        this.app.stage.addChild(j4Sprite);
-        this.app.stage.addChild(j3Sprite);
-        this.app.stage.addChild(j2Sprite);
-        this.app.stage.addChild(j1Sprite);
-
-        this.world.backgroundAssets = {
-            j1: j1Sprite,
-            j2: j2Sprite,
-            j3: j3Sprite,
-            j4: j4Sprite,
-        }
-
-        
-
-    }
 
     private setupEventListeners(): void {
 
