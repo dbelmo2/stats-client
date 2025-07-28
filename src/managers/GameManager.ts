@@ -413,7 +413,24 @@ export class GameManager {
     private integrateProjectileUpdates(projectiles: ProjectileServerState[]): void {
         const activeProjectileIds = new Set(projectiles.map(p => p.id));
         this.cleanupProjectiles(activeProjectileIds);
-        this.updateProjectiles(projectiles);
+
+        const { enemyProjectiles } = this.entities;
+        const { destroyedProjectiles } = this.gameState;
+
+        for (const projectile of projectiles) {
+            if (projectile.ownerId === this.player.id) {
+                // Mark own projectiles as acknowledged when they appear in server state
+                const ownProjectile = this.player.projectiles.find(p => p.getId() === projectile.id);
+                if (ownProjectile) {
+                    ownProjectile.wasAcknowledged = true;
+                }
+            } else if (!enemyProjectiles.has(projectile.id) && !destroyedProjectiles.has(projectile.id)) {
+                // Only create new projectile if it hasn't been destroyed locally
+                const graphic = new EnemyProjectile(projectile.id, projectile.ownerId, projectile.x, projectile.y, projectile.vx, projectile.vy);
+                this.gameContainer.addChild(graphic);
+                enemyProjectiles.set(projectile.id, graphic);
+            }
+        }    
     }
 
     private cleanupProjectiles(activeIds: Set<string>): void {
@@ -440,25 +457,6 @@ export class GameManager {
         }
     }
 
-    private updateProjectiles(projectiles: ProjectileServerState[]): void {
-        const { enemyProjectiles } = this.entities;
-        const { destroyedProjectiles } = this.gameState;
-
-        for (const projectile of projectiles) {
-            if (projectile.ownerId === this.player.id) {
-                // Mark own projectiles as acknowledged when they appear in server state
-                const ownProjectile = this.player.projectiles.find(p => p.getId() === projectile.id);
-                if (ownProjectile) {
-                    ownProjectile.wasAcknowledged = true;
-                }
-            } else if (!enemyProjectiles.has(projectile.id) && !destroyedProjectiles.has(projectile.id)) {
-                // Only create new projectile if it hasn't been destroyed locally
-                const graphic = new EnemyProjectile(projectile.id, projectile.ownerId, projectile.x, projectile.y, projectile.vx, projectile.vy);
-                this.gameContainer.addChild(graphic);
-                enemyProjectiles.set(projectile.id, graphic);
-            }
-        }
-    }
 
     private cleanupPendingCollisions(): void {
         const now = Date.now();
@@ -495,7 +493,6 @@ export class GameManager {
     private cleanupSession = (): void => {
 
         this.app.ticker.stop();
-
 
         for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
             const projectile = this.player.projectiles[i];
@@ -554,7 +551,6 @@ export class GameManager {
 
     }
 
-    // TODO: Update to also integrate player controller states. 
     private integrateEnemyPlayers(): void {
         const enemyPlayers = this.network.latestServerSnapshot.players.filter(player => player.id !== this.player.id);
         for (const enemyPlayer of enemyPlayers) {
@@ -773,8 +769,6 @@ export class GameManager {
     }
 
     private handlePlayerInput(): InputPayload | undefined {
-
-
         if (!this.player.sprite) return; // No player to control
 
         const controllerState = this.controller.getState();
@@ -972,9 +966,6 @@ export class GameManager {
         this.ui.scoreDisplay.fixPosition();
         DevModeManager.getInstance().fixPositions();
     }
-
-
-
 
     private updateOwnProjectiles(): void {
         for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
