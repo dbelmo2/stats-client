@@ -1,6 +1,6 @@
 import { SettingsManager } from './SettingsManager';
-import { PingDisplay } from '../logic/ui/PingDisplay';
-import { FPSDisplay } from '../logic/ui/FPSDisplay';
+import { PingDisplay } from '../components/ui/PingDisplay';
+import { FPSDisplay } from '../components/ui/FPSDisplay';
 import { Application } from 'pixi.js';
 
 export class DevModeManager {

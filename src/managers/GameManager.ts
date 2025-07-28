@@ -1,22 +1,22 @@
 import { Application, Container, Graphics, Sprite } from 'pixi.js';
-import { config } from '../config';
-import { Player } from '../logic/Player';
-import { Controller } from '../logic/Controller';
+import { config } from '../utils/config';
+import { Player } from '../components/game/Player';
+import { Controller } from '../systems/Controller';
 import { SocketManager } from './SocketManager';
-import { EnemyPlayer } from '../logic/EnemyPlayer';
-import { Projectile } from '../logic/Projectile';
-import { EnemyProjectile } from '../logic/EnemyProjectile';
+import { EnemyPlayer } from '../components/game/EnemyPlayer';
+import { Projectile } from '../components/game/Projectile';
+import { EnemyProjectile } from '../components/game/EnemyProjectile';
 
-import { testForAABB } from '../logic/collision';
-import { ScoreDisplay } from '../logic/ui/ScoreDisplay';
-import { GameOverDisplay } from '../logic/ui/GameOverDisplay';
-import { Platform } from '../logic/Platform';
-import { AmmoBush } from '../logic/objects/AmmoBush';
-import { KillIndicator } from '../logic/ui/KillIndicator';
-import { PingDisplay } from '../logic/ui/PingDisplay';
-import { FPSDisplay } from '../logic/ui/FPSDisplay';
-import { Vector2 } from '../logic/Vector';
-import { ModalManager } from '../logic/ui/Modal';
+import { testForAABB } from '../systems/Collision';
+import { ScoreDisplay } from '../components/ui/ScoreDisplay';
+import { GameOverDisplay } from '../components/ui/GameOverDisplay';
+import { Platform } from '../components/game/Platform';
+import { AmmoBush } from '../components/game/AmmoBush';
+import { KillIndicator } from '../components/ui/KillIndicator';
+import { PingDisplay } from '../components/ui/PingDisplay';
+import { FPSDisplay } from '../components/ui/FPSDisplay';
+import { Vector2 } from '../systems/Vector';
+import { ModalManager } from '../components/ui/Modal';
 
 import h3Theme from '../sounds/h3-theme.mp3'
 import shootingAudio from '../sounds/shoot-sound.wav';
@@ -26,48 +26,23 @@ import walkingAudio from '../sounds/walking-grass-sound.flac';
 import { AudioManager } from './AudioManager';
 import { DevModeManager } from './DevModeManager';
 import { TvManager } from './TvManager';
-import { loginScreen } from '../logic/ui/LoginScreen';
+import { loginScreen } from '../components/ui/LoginScreen';
 import type { SettingsManager } from './SettingsManager';
+import type { InputPayload, NetworkState, PlayerScore, PlayerServerState, ProjectileServerState, ServerStateUpdate } from '../types/network.types';
+import type { GameState, PlayerData, WorldObjects } from '../types/game.types';
 
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
 // can start with low health. Once they take damage, the health bar updates to the correct value.
 // There seems to be an issue with projectiles stopping and then resuming after match ends and restarts
 // (serverside related)
-interface PlayerData {
-    id: string,
-    name: string,
-    sprite: Player | undefined,
-    projectiles: Projectile[],
-    disableInput: boolean
-}
-interface GameState {
-  phase: GamePhase;
-  scores: Map<string, number>;
-  localTick: number;
-  accumulator: number;
-  pendingCollisions: Map<string, { projectileId: string, timestamp: number }>;
-  destroyedProjectiles: Map<string, number>;
-}
 
-interface NetworkState {
-  latestServerSnapshot: ServerStateUpdate;
-  latestServerSnapshotProcessed: ServerStateUpdate;
-  inputBuffer: InputPayload[];
-  stateBuffer: StatePayload[];
-}
+
 
 interface EntityContainers {
   enemies: Map<string, EnemyPlayer>;
   enemyProjectiles: Map<string, EnemyProjectile>;
   killIndicators: KillIndicator[];
 }
-
-interface WorldObjects {
-  platforms: Platform[];
-  ammoBush: AmmoBush;
-  backgroundAssets: { [key: string]: Sprite };
-}
-
 interface UIElements {
   gameOverDisplay: GameOverDisplay | null;
   pingDisplay: PingDisplay;
@@ -89,63 +64,12 @@ interface CameraSettings {
     baseY: number; // Store the non-shaken position
     }
 
-
-type PlayerServerState = {
-  id: string;
-  vector: Vector2;
-  position: Vector2;
-  hp: number;
-  isBystander: boolean;
-  name: string;
-  tick: number;
-  vx: number;
-  vy: number;
-}
-
-type ProjectileServerState = {
-  id: string;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  ownerId: string;
-};
-
-type PlayerScore = {
-    playerId: string;
-    kills: number;
-    deaths: number;
-    name: string;
-}
-
-type ServerStateUpdate = {
-    players: PlayerServerState[];
-    projectiles: ProjectileServerState[];
-    scores: PlayerScore[];
-    serverTick: number;
-};
-
-type InputPayload = {
-    tick: number;
-    vector: Vector2;
-}
-
-type StatePayload = {
-    tick: number;
-    position: Vector2;
-}
 // TODO: Implement death prediciton for enemies (and self) on client (with servber confirmation)??
 // TODO: Add powerups???
 // Ideas:
 //  Fat Love:
 // - Defense (fat love eats all projectiles)
 // - offense (fat love shoots every projectile he ate in the direction of the mouse)
-
-
-type GamePhase = 'initializing' | 'ready' | 'active' | 'ended';
-
-
-
 
 
 export class GameManager {

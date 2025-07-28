@@ -1,8 +1,8 @@
 import { Text, Graphics, Sprite, BitmapText } from 'pixi.js';
 import { CRTFilter } from 'pixi-filters';
-import { TypeText } from '../logic/ui/TypeText';
+import { TypeText } from '../components/ui/TypeText';
 import { YoutubeApiManager } from './YoutubeApiManager';
-import { formatDuration } from '../time';
+import { formatDuration } from '../utils/time';
 
 export interface TvScreen {
     text: string;
@@ -12,10 +12,6 @@ export interface TvScreen {
     id?: string; // unique identifier
 }
 
-
-
-// TODO: Need to fix cursor...
-// Keep second text. Use this to measure 
 export class TvManager {
     private static instance: TvManager;
     private tvMask: Graphics | null = null;

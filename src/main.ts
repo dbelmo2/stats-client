@@ -20,7 +20,7 @@ import grassOne from './images/grass-tile-fuller.png';
 
 
 import { SettingsManager } from './managers/SettingsManager';
-import { createLoadingScreen, removeLoadingScreen, updateLoadingProgress } from './logic/ui/Loading';
+import { createLoadingScreen, removeLoadingScreen, updateLoadingProgress } from './components/ui/Loading';
 
 import './style.css';
 
