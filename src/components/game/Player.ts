@@ -104,7 +104,7 @@ export class Player extends Container {
     bufferSize: number = 100,
     inputWasDisabled: boolean = false,
     ignoreInput: boolean = false,
-  ): { inputPayload: InputPayload; inputVector: Vector2 } {
+  ): {  inputVector: Vector2 } {
       const inputVector = Vector2.createFromControllerState(controllerState);
 
       if (inputWasDisabled) {
@@ -115,13 +115,9 @@ export class Player extends Container {
 
       if (ignoreInput) inputVector.mouse = undefined
 
-      const inputPayload: InputPayload = {
-          tick: localTick,
-          vector: inputVector,
-      };
 
 
-      return { inputPayload, inputVector };
+      return { inputVector };
   }
 
   public setIsBystander(value: boolean): void {

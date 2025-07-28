@@ -773,18 +773,11 @@ export class GameManager {
 
         const controllerState = this.controller.getState();
         // Convert mouse coordinates (GameManager responsibility)
-        if (controllerState.mouse) {
-            const { x, y } = this.convertCameraToWorldCoordinates(
-                controllerState.mouse.xR ?? 0, 
-                controllerState.mouse.yR ?? 0
-            );
-            controllerState.mouse.x = x;
-            controllerState.mouse.y = y;
-        }
 
 
 
-        const { inputPayload, inputVector } = this.player.sprite.processInput(
+
+        const { inputVector } = this.player.sprite.processInput(
             controllerState,
             this.MIN_S_BETWEEN_TICKS,
             this.gameState.localTick,
@@ -794,20 +787,36 @@ export class GameManager {
         )
 
         this.player.disableInput = this.ui.overlayActive;
-        this.controller.resetJump();
         this.controller.resetMouse();
+        if (inputVector.mouse) {
+            const { x, y } = this.convertCameraToWorldCoordinates(
+                inputVector.mouse.x, 
+                inputVector.mouse.y
+            );
+            controllerState.mouse.x = x;
+            controllerState.mouse.y = y;
+        }
+
+
+        const inputPayload: InputPayload = {
+            vector: inputVector,
+            tick: this.gameState.localTick,
+        }
 
 
         // TODO: Move state and input buffers to player class. 
         const bufferIndex = this.gameState.localTick % this.BUFFER_SIZE;
-        const stateVector = this.player.sprite.getPositionVector();
+        this.controller.resetJump();
+
         this.network.inputBuffer[bufferIndex] = inputPayload;
+        this.player.sprite.update(inputVector, this.MIN_S_BETWEEN_TICKS, false);
+        const stateVector = this.player.sprite.getPositionVector();
+
         this.network.stateBuffer[bufferIndex] = {
             tick: this.gameState.localTick,
             position: stateVector
         };
 
-      this.player.sprite.update(inputVector, this.MIN_S_BETWEEN_TICKS, false);
 
         if (this.shouldBroadcastPlayerInput(inputVector)) this.broadcastPlayerInput(inputPayload);
         return inputPayload;
