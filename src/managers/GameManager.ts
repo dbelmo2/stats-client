@@ -543,8 +543,9 @@ export class GameManager {
         this.entities.killIndicators = [];
         this.gameState.scores.clear();
 
-        this.app.stage.removeChild(this.world.ammoBush);
-        this.world.ammoBush.destroy();
+
+        // Clean up the scene
+        SceneManager.getInstance().cleanup();
 
         // Clear all remaining state
         this.gameState.pendingCollisions.clear();
@@ -962,7 +963,7 @@ export class GameManager {
         this.camera.x = this.cameraSettings.currentX;
         this.camera.y = this.cameraSettings.currentY;
 
-        this.updateBackground(xOffset, yOffset);
+        SceneManager.getInstance().updateParallaxBackground(xOffset, yOffset);
 
         // Update position of UI elements relative to the camera
         this.ui.scoreDisplay.fixPosition();
@@ -1008,25 +1009,6 @@ export class GameManager {
             this.camera.y = this.cameraSettings.baseY;
             this.cameraSettings.shakeIntensity = 0;
         }
-    }
-
-    private updateBackground(offsetX: number, offsetY: number): void {
-        // Update background position based on camera offset
-        if (!this.world.backgroundAssets
-            || !this.world.backgroundAssets.j1
-            || !this.world.backgroundAssets.j2
-            || !this.world.backgroundAssets.j3
-            || !this.world.backgroundAssets.j4
-        ) return;
-        
-        this.world.backgroundAssets.j1.x += offsetX * 0.4;
-        this.world.backgroundAssets.j2.x += offsetX * 0.3;
-        this.world.backgroundAssets.j3.x += offsetX * 0.2;
-
-        this.world.backgroundAssets.j1.y += offsetY * 0.4;
-        this.world.backgroundAssets.j2.y += offsetY * 0.3;
-        this.world.backgroundAssets.j3.y += offsetY * 0.2;
-
     }
 
     private updateOwnProjectiles(): void {
