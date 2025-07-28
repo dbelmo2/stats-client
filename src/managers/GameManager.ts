@@ -842,7 +842,6 @@ export class GameManager {
     // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)
     private render(deltaMs: number): void {
         //this.updateCameraPosition();
-        this.updateCameraShake(deltaMs);
 
         this.checkForKills(this.network.latestServerSnapshot.scores);
         this.ui.scoreDisplay.updateScores(this.network.latestServerSnapshot.scores, this.player.id);
@@ -917,7 +916,6 @@ export class GameManager {
         );
 
         AudioManager.getInstance().play('shoot');
-        this.triggerCameraShake(4, 80); // 6 pixels intensity, 120ms duration
         this.player.projectiles.push(projectile);
         this.gameContainer.addChild(projectile);    
     }
@@ -975,46 +973,8 @@ export class GameManager {
         DevModeManager.getInstance().fixPositions();
     }
 
-        /**
-     * Trigger camera shake effect
-     * @param intensity - How strong the shake is (in pixels)
-     * @param duration - How long the shake lasts (in milliseconds)
-     */
-    private triggerCameraShake(intensity: number = 8, duration: number = 150): void {
-        //this.cameraSettings.shakeIntensity = intensity;
-        //this.cameraSettings.shakeDuration = duration;
-        //this.cameraSettings.shakeElapsed = 0;
-        console.log(`Camera shake triggered with intensity ${intensity} and duration ${duration}`);
-    }
 
-    /**
-     * Update camera shake - call this in your game loop
-     */
-    private updateCameraShake(deltaMs: number): void {
-        if (this.cameraSettings.shakeElapsed < this.cameraSettings.shakeDuration) {
-            this.cameraSettings.shakeElapsed += deltaMs;
-            
-            // Calculate shake progress (0 to 1)
-            const progress = this.cameraSettings.shakeElapsed / this.cameraSettings.shakeDuration;
-            
-            // Use easing function to make shake feel more natural (strong start, fade out)
-            const easedProgress = 1 - Math.pow(progress, 2);
-            const currentIntensity = this.cameraSettings.shakeIntensity * easedProgress;
-            
-            // Generate random shake offset
-            const shakeX = (Math.random() - 0.5) * 2 * currentIntensity;
-            const shakeY = (Math.random() - 0.5) * 2 * currentIntensity;
-            
-            // Apply shake to camera position
-            this.camera.x = this.cameraSettings.baseX + shakeX;
-            this.camera.y = this.cameraSettings.baseY + shakeY;
-        } else {
-            // Shake finished, reset to base position
-            this.camera.x = this.cameraSettings.baseX;
-            this.camera.y = this.cameraSettings.baseY;
-            this.cameraSettings.shakeIntensity = 0;
-        }
-    }
+
 
     private updateOwnProjectiles(): void {
         for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
