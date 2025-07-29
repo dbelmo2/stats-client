@@ -27,6 +27,7 @@ export class Player extends Container {
 
   private damageFlashTimeout?: NodeJS.Timeout;
   private healthBarContainer: Container;
+  private healthBarBg: Graphics;
   private platforms: Platform[] = [];
   private body: Graphics;
   private gameBounds: { left: number; right: number; top: number; bottom: number } | null = null;
@@ -68,22 +69,23 @@ export class Player extends Container {
     this.nameText = new Text({ text: username, style: nameStyle });
     this.nameText.x = this.body.width / 2; // Center the text
     this.nameText.anchor.set(0.5, 1); // Center horizontally, align bottom
-    this.nameText.y = -20; // Position above health bar
     this.nameText.style.fontFamily = 'Pixel, sans-serif'; // Set font family
     this.nameText.style.fontSize = 20; // Set font size
     this.healthBarContainer.addChild(this.nameText);
 
 
     // Create health bar background
-    const healthBarBg = new Graphics()
+    this.healthBarBg = new Graphics()
       .rect(0, -15, this.HEALTH_BAR_WIDTH, this.HEALTH_BAR_HEIGHT)
       .fill(0x333333);
-    this.healthBarContainer.addChild(healthBarBg);
+    this.healthBarContainer.addChild(this.healthBarBg);
 
-    // Create health bar
+    // Create health bara
     this.healthBar = new Graphics();
     this.updateHealthBar();
     this.healthBarContainer.addChild(this.healthBar);
+
+    this.healthBarBg.visible = false;
 
     // Set pivot to bottom center for better physics alignment
     this.pivot.set(25, 50); // half width, full height
@@ -98,9 +100,6 @@ export class Player extends Container {
 
   public processInput(
     controllerState: any,
-    dt: number,
-    localTick: number,
-    bufferSize: number = 100,
     inputWasDisabled: boolean = false,
     ignoreInput: boolean = false,
   ): {  inputVector: Vector2 } {
@@ -125,18 +124,34 @@ export class Player extends Container {
       this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#B069DB');
 
       if (this.isBystander === false) {
-        this.tomatoSprite = Sprite.from('tomato');
-        this.tomatoSprite.width = 30;
-        this.tomatoSprite.height = 30;
-        // Set anchor to center the sprite horizontally
-        this.tomatoSprite.anchor.set(-0.25, -0.30);
-        
-        // Set z-index of the tomato sprite itself
-        this.tomatoSprite.zIndex = 2000;
-
-        this.addChild(this.tomatoSprite);
+        this.makeHealthBarVisible();
+        this.makeTomatoSpriteVisible();
       }
+
   }
+
+
+  private makeHealthBarVisible(): void {
+    if (this.healthBarContainer) {
+      this.healthBarContainer.visible = true;
+      this.healthBarBg.visible = true;
+      this.nameText.y = -20;
+    }
+  }
+
+  private makeTomatoSpriteVisible(): void {
+      this.tomatoSprite = Sprite.from('tomato');
+      this.tomatoSprite.width = 30;
+      this.tomatoSprite.height = 30;
+      // Set anchor to center the sprite horizontally
+      this.tomatoSprite.anchor.set(-0.25, -0.30);
+      
+      // Set z-index of the tomato sprite itself
+      this.tomatoSprite.zIndex = 2000;
+
+      this.addChild(this.tomatoSprite);
+  }
+
   
   public getIsBystander(): boolean {
       return this.isBystander;
@@ -147,6 +162,8 @@ export class Player extends Container {
   }
 
   private updateHealthBar(): void {
+      if (this.isBystander) return;
+    
       this.healthBar.clear();
       const healthPercentage = this.predictedHealth / this.maxHealth;
       const barWidth = this.HEALTH_BAR_WIDTH * healthPercentage;
@@ -162,6 +179,7 @@ export class Player extends Container {
   }
 
   public revertPrediction(): void {
+      if (this.isBystander) return; // Do not revert prediction for bystanders
       // Revert to server-authoritative health
       this.predictedHealth = this.serverHealth;
       this.updateHealthBar();
@@ -332,6 +350,7 @@ export class Player extends Container {
 
 
   setHealth(updatedServerHealth: number): void {
+      if (this.isBystander) return; // Do not update health for bystanders
       this.serverHealth = updatedServerHealth;
       // Only lower predicted health if server health is lower
       // NOTE: this will likely break if health regen is introduced
@@ -351,6 +370,7 @@ export class Player extends Container {
   }
 
   damage(amount: number = 10) {
+    if (this.isBystander) return; // Do not apply damage to bystanders
     this.predictedHealth = Math.max(0, this.predictedHealth - amount);
     this.updateHealthBar();
 

@@ -779,9 +779,6 @@ export class GameManager {
 
         const { inputVector } = this.player.sprite.processInput(
             controllerState,
-            this.MIN_S_BETWEEN_TICKS,
-            this.gameState.localTick,
-            this.BUFFER_SIZE,
             this.player.disableInput,
             this.ui.overlayActive
         )
