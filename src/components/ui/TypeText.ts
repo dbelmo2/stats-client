@@ -36,7 +36,7 @@ export class TypeText {
 
     constructor(options: TypeWriterOptions) {
         this.fullText = options.text;
-        this.typingSpeed = options.typingSpeed || 150;
+        this.typingSpeed = options.typingSpeed || 75;
         this.blinkSpeed = options.blinkSpeed || 400;
         this.pauseOnDots = options.pauseOnDots ?? true;
         this.pauseDuration = options.pauseDuration || 2000;

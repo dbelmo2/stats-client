@@ -2,7 +2,6 @@ import { Graphics, Container, Text, TextStyle, Sprite } from 'pixi.js';
 import { Platform } from './Platform';
 import { Vector2 } from '../../systems/Vector';
 import { AudioManager } from '../../managers/AudioManager';
-import type { InputPayload } from '../../types/network.types';
 
 export interface PendingInput {
   seq: number; 

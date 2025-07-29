@@ -5,7 +5,16 @@ export interface StatsResponse {
     humanReadable: any;
     totalLateTime: number;
     averageLateTime: number;
-    maxLateTime: number;
+    mostRecent: {
+        lateTime: number,
+        title: string,
+        videoid: string,
+    },
+    max: {
+        lateTime: number,
+        title: string,
+        videoid: string,
+    }
     daily: {
         sunday: { count: number; totalLateTime: number };
         monday: { count: number; totalLateTime: number };
@@ -16,6 +25,7 @@ export interface StatsResponse {
         saturday: { count: number; totalLateTime: number };
     },
     lastUpdateDate: string;
+    streamCount: number;
 }
 
 interface ErrorResponse {

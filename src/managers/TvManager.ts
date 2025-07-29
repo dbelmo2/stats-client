@@ -1,8 +1,8 @@
 import { Text, Graphics, Sprite, BitmapText } from 'pixi.js';
 import { CRTFilter } from 'pixi-filters';
 import { TypeText } from '../components/ui/TypeText';
-import { YoutubeApiManager } from './YoutubeApiManager';
-import { formatDuration } from '../utils/time';
+import { YoutubeApiManager, type StatsResponse } from './YoutubeApiManager';
+import { formatDuration, formatToString } from '../utils/time';
 
 export interface TvScreen {
     text: string;
@@ -153,13 +153,11 @@ export class TvManager {
         if (this.isDisplaying && screen.priority !== undefined && screen?.priority > 10) {
             // High priority screen - interrupt current
             console.log(`TvManager: Interrupting current screen with high priority: "${screen.text}"`);
-
             this.screenQueue.unshift(screen);
             this.skipcurrentScreen();
         } else {
             // Add to queue
-                        console.log(`TvManager: Queued screen: "${screen.text}"`);
-
+            console.log(`TvManager: Queued screen: "${screen.text}"`);
             this.screenQueue.push(screen);
         }
         
@@ -350,18 +348,11 @@ export class TvManager {
 
 
 
- 
 
-
-    private async useApiScreenTemplate(screen: TvScreen): Promise<void> {
-        if (!this.tvMask) return;
-        
-        const apiData = await YoutubeApiManager.getInstance().getStats();
-
-        const statSpeed = 75; // Typing speed for stats
-
+    private async showApiIntro(): Promise<void> {
+        this.clearScreen();
         const introTitle = new TypeText({
-            text: 'Welcome to the H3 livestream late tracker!',
+            text: 'Welcome to the H3 Show late tracker!',
             style: {
                 align: 'center',
                 fontFamily: '"Pixel", Arial, sans-serif',
@@ -369,46 +360,63 @@ export class TvManager {
                 fontSize: 34,
                 fill: '#ffffff',
                 wordWrap: true,
-                wordWrapWidth: 453,
+                wordWrapWidth: 350,
             }
         });
 
+        this.addTextObject(introTitle.text);
+        introTitle.setPosition(100, 100); // Set position within the TV mask
+        introTitle.setAnchor(0, 0); // Set anchor to top-left
+        await introTitle.type();
+        introTitle.killCursor(); // Stop cursor blinking after intro
+        await new Promise((resolve) => setTimeout(resolve, 3000)); // Wait before typing
+        this.clearScreen();
+    }
 
+    private async showApiTotalLateTime(apiData: StatsResponse): Promise<void> {
+        this.clearScreen();
+        const totalLateTimeFormatted = formatDuration(apiData.totalLateTime);
 
-
-
-        const generalStatsTitle = new TypeText({
-            text: 'General Stats',
+        const totalStatsTitle = new TypeText({
+            text: 'And finally... the H3 Show has been late a grand total of...',
             style: {
                 align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif',
                 fontStyle: 'normal',
-                fontSize: 40,
+                fontSize: 30,
                 fill: '#ffffff',
                 wordWrap: true,
                 wordWrapWidth: 453
             }
         });
 
-        const totalLateTime = new TypeText({ 
-            typingSpeed: statSpeed,
-            text: `• Total late time: ${apiData.humanReadable}`,
-            style:  {
-                align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
-                fontStyle: 'normal',
-                fontSize: 30, // Smaller font size
-                fill: '#ffffff',
-                wordWrap: true,
-                wordWrapWidth: 453, // Wrap text to fit TV screen
-                lineHeight: 33
 
-            }
-         })
+        this.addTextObject(totalStatsTitle.text);   
+        totalStatsTitle.setPosition(50, 25);
+        totalStatsTitle.setAnchor(0, 0); // Set anchor to top-left
+        await totalStatsTitle.type();
+        totalStatsTitle.killCursor();
 
-        const averageLateTime = new TypeText({
-            typingSpeed: statSpeed,
-            text: `• Average late time: ${formatDuration(apiData.averageLateTime)}`,
+        // Build a string with only time units that have values > 0
+        let totalLateString = '';
+
+        if (totalLateTimeFormatted.days > 0) {
+            totalLateString += `  • ${totalLateTimeFormatted.days} days\n`;
+        }
+        if (totalLateTimeFormatted.hours > 0) {
+            totalLateString += `  • ${totalLateTimeFormatted.hours} hours\n`;
+        }
+        if (totalLateTimeFormatted.minutes > 0) {
+            totalLateString += `  • ${totalLateTimeFormatted.minutes} minutes\n`;
+        }
+        if (totalLateTimeFormatted.seconds > 0) {
+            totalLateString += `  • ${totalLateTimeFormatted.seconds} seconds`;
+        }
+
+        totalLateString += '...'
+
+        const totalLateTime = new TypeText({
+            text: totalLateString,
             style:  {
                 align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
@@ -420,93 +428,255 @@ export class TvManager {
                 lineHeight: 33
             }
         });
-
-        const maxLateTime = new TypeText({
-            text: `• Max late time: ${formatDuration(apiData.maxLateTime)}!`,
-            style:  {
-                align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
-                fontStyle: 'normal',
-                fontSize: 30, // Smaller font size
-                fill: '#ffffff',
-                wordWrap: true,
-                wordWrapWidth: 453, // Wrap text to fit TV screen
-                lineHeight: 33
-            }
-        });
-
-        const tipText = new TypeText({
-            text: 'Try picking up a tomato!',
-            style: {
-                align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
-                fontStyle: 'normal',
-                fontSize: 36, // Smaller font size for tips
-                fill: '#ffffff',
-                wordWrap: true,
-                wordWrapWidth: 453, // Wrap text to fit TV screen
-            }
-        });
-
-        this.addTextObject(introTitle.text);
-        this.currentTextObjects.push(introTitle);
-        introTitle.setPosition(75, 100); // Set position within the TV mask
-        introTitle.setAnchor(0, 0); // Set anchor to top-left
-        await introTitle.type();
-        introTitle.killCursor(); // Stop cursor blinking after intro
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before typing
-        this.clearScreen();
-
-
-        this.addTextObject(generalStatsTitle.text);
-        this.currentTextObjects.push(generalStatsTitle);
-        generalStatsTitle.setPosition(50, 25); // Set position within the TV mask
-        generalStatsTitle.setAnchor(0, 0); // Set anchor to top-left
-        await generalStatsTitle.type();
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before showing next text
-        generalStatsTitle.killCursor()
-
-
-
-        // Total late time text
-        totalLateTime.setPosition(50, 80); // Set position within the TV mask
-        totalLateTime.setAnchor(0, 0); // Set anchor to top-left
-
         this.addTextObject(totalLateTime.text);
-        this.currentTextObjects.push(totalLateTime);
+        totalLateTime.setPosition(50, totalStatsTitle.text.y + totalStatsTitle.text.height + 20);
+        totalLateTime.setAnchor(0, 0);
 
         await totalLateTime.type();
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait a bit before showing tip
-        totalLateTime.killCursor(); // Stop cursor blinking
+        totalLateTime.killCursor();
 
 
-        this.addTextObject(averageLateTime.text);
-        this.addTextObject(maxLateTime.text);   
-        this.currentTextObjects.push(averageLateTime, maxLateTime);
-
-        averageLateTime.setPosition(50, 160); 
-        averageLateTime.setAnchor(0, 0); 
-        maxLateTime.setPosition(50, 240); 
-        maxLateTime.setAnchor(0, 0); 
-
-        await averageLateTime.type();
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        averageLateTime.killCursor();
-        await maxLateTime.type();
-        await new Promise((resolve) => setTimeout(resolve, 15000));
-
-        maxLateTime.killCursor();
-        this.clearScreen();
-
-        // daily stats
-
-        const title = new TypeText({
-            text: 'Daily Average Late Times',
+        const bottomText = new TypeText({
+            text: 'He can\'t keep getting away with this!',
             style: {
                 align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif',
                 fontStyle: 'normal',
-                fontSize: 40,
+                fontSize: 30,
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453
+            }
+        });
+
+        this.addTextObject(bottomText.text);
+        bottomText.setPosition(50, totalLateTime.text.y + totalLateTime.text.height + 20);
+        bottomText.setAnchor(0, 0);
+        await bottomText.type();
+        await new Promise((resolve) => setTimeout(resolve, 10000)); // Wait a bit before showing tip
+        this.clearScreen();
+    }
+
+    private async showApiMaxLateTime(apiData: StatsResponse): Promise<void> {
+        this.clearScreen();
+        const maxLateTitle = new TypeText({
+            text: `The most late episode, "${apiData.max.title}", has a total late time of...`,
+            style: {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontStyle: 'normal',
+                fontSize: 30,
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453
+            },
+            pauseOnDots: false
+        });
+
+        
+        const maxLateTimeFormatted = formatDuration(apiData.max.lateTime);
+
+        const maxLateString = maxLateTimeFormatted.hours > 0 ? `  • ${maxLateTimeFormatted.hours} hours\n  • ${maxLateTimeFormatted.minutes} minutes\n  • ${maxLateTimeFormatted.seconds} seconds`
+            : `  • ${maxLateTimeFormatted.minutes} minutes\n  • ${maxLateTimeFormatted.seconds} seconds`;
+
+        const maxLateTime = new TypeText({
+            text: maxLateString,
+            style:  {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontStyle: 'normal',
+                fontSize: 30, // Smaller font size
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453, // Wrap text to fit TV screen
+                lineHeight: 33
+            }
+        });
+
+        
+        this.addTextObject(maxLateTitle.text);
+        this.addTextObject(maxLateTime.text);   
+
+        maxLateTitle.setPosition(50, 25);
+        maxLateTitle.setAnchor(0, 0);
+
+
+        await maxLateTitle.type();
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before typing
+        maxLateTitle.killCursor();
+
+        maxLateTime.setPosition(50, maxLateTitle.text.y + maxLateTitle.text.height + 20); 
+        maxLateTime.setAnchor(0, 0); 
+
+        await maxLateTime.type();
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+        this.clearScreen();
+    }
+
+    private async showApiMostRecent(apiData: StatsResponse): Promise<void> {
+        this.clearScreen();
+        const wasLate = apiData.mostRecent.lateTime > 0;
+        const mostRecentTitle = new TypeText({
+            text: `The most recent episode "${apiData.mostRecent.title}" was ${wasLate ? 'late' : 'on time!'} by...`,
+            style: {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontStyle: 'normal',
+                fontSize: 30,
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453,
+                
+            },
+            pauseOnDots: false,
+        });
+
+        const mostRecentTimeFormatted = formatDuration(apiData.mostRecent.lateTime);       
+        this.addTextObject(mostRecentTitle.text);
+        mostRecentTitle.setPosition(50, 25);
+        mostRecentTitle.setAnchor(0, 0);
+        await mostRecentTitle.type();
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before typing
+        mostRecentTitle.killCursor();
+
+        if (wasLate) {
+            // Build the string with only time units that have values > 0
+            let mostRecentString = '';
+
+            if (mostRecentTimeFormatted.days > 0) {
+                mostRecentString += `  • ${mostRecentTimeFormatted.days} days\n`;
+            }
+            if (mostRecentTimeFormatted.hours > 0) {
+                mostRecentString += `  • ${mostRecentTimeFormatted.hours} hours\n`;
+            }
+            if (mostRecentTimeFormatted.minutes > 0) {
+                mostRecentString += `  • ${mostRecentTimeFormatted.minutes} minutes\n`;
+            }
+            if (mostRecentTimeFormatted.seconds > 0) {
+                mostRecentString += `  • ${mostRecentTimeFormatted.seconds} seconds`;
+            }
+
+            const mostRecentTime = new TypeText({
+                text: mostRecentString,
+                style:  {
+                    align: 'left',
+                    fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                    fontStyle: 'normal',
+                    fontSize: 30, // Smaller font size
+                    fill: '#ffffff',
+                    wordWrap: true,
+                    wordWrapWidth: 453, // Wrap text to fit TV screen
+                    lineHeight: 33
+                }
+            });
+            this.addTextObject(mostRecentTime.text);
+
+            mostRecentTime.setPosition(50, mostRecentTitle.text.y + mostRecentTitle.text.height + 20); 
+            mostRecentTime.setAnchor(0, 0); 
+
+            await mostRecentTime.type();
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+        this.clearScreen();
+
+    }
+
+    private async showApiAverageLateTime(apiData: StatsResponse): Promise<void> {
+        this.clearScreen();
+        const averageLateTimeTitle = new TypeText({
+            text: `With a total of ${apiData.streamCount} episodes, the show has an average late time of...`,
+            style:  {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontStyle: 'normal',
+                fontSize: 30, // Smaller font size
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453, // Wrap text to fit TV screen
+                lineHeight: 33
+            }
+        });
+
+
+
+        this.addTextObject(averageLateTimeTitle.text);
+        averageLateTimeTitle.setPosition(50, 25);
+        averageLateTimeTitle.setAnchor(0, 0);
+        await averageLateTimeTitle.type();
+        averageLateTimeTitle.killCursor();
+
+
+        const formattedTime = formatDuration(apiData.averageLateTime);
+        let averageLateString = '';
+        if (formattedTime.days > 0) {
+            averageLateString += `  • ${formattedTime.days} days\n`;
+        }
+        if (formattedTime.hours > 0) {
+            averageLateString += `  • ${formattedTime.hours} hours\n`;
+        }
+        if (formattedTime.minutes > 0) {
+            averageLateString += `  • ${formattedTime.minutes} minutes\n`;
+        }
+        if (formattedTime.seconds > 0) {
+            averageLateString += `  • ${formattedTime.seconds} seconds`;
+        }
+
+        const averageLateTime = new TypeText({
+            text: averageLateString,
+            style:  {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontStyle: 'normal',
+                fontSize: 30, // Smaller font size
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453, // Wrap text to fit TV screen
+                lineHeight: 33
+            }
+        });
+
+
+        const bottomText = new TypeText({
+            text: 'Let\'s see how that changes throughout the week...',
+            style: {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontStyle: 'normal',
+                fontSize: 30,
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453
+            }
+        });
+
+        this.addTextObject(averageLateTime.text);
+        averageLateTime.setPosition(50, averageLateTimeTitle.text.y + averageLateTimeTitle.text.height + 20);
+        averageLateTime.setAnchor(0, 0);
+
+        this.addTextObject(bottomText.text);
+        bottomText.setPosition(50, averageLateTime.text.y + averageLateTime.text.height + 50);
+        bottomText.setAnchor(0, 0);
+        
+        await averageLateTime.type();
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait before showing tip
+        averageLateTime.killCursor(); // Stop cursor blinking after average time
+        await bottomText.type();
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait before showing daily stats
+        this.clearScreen();
+        await this.showApiDailyAverageLateTimes(apiData);
+    }
+ 
+    private async showApiDailyAverageLateTimes(apiData: StatsResponse): Promise<void> {
+        this.clearScreen();
+        // daily stat
+        const title = new TypeText({
+            text: 'Average Late Times by Day',
+            style: {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif',
+                fontStyle: 'normal',
+                fontSize: 30,
                 fill: '#ffffff',
                 wordWrap: true,
                 wordWrapWidth: 453,
@@ -515,7 +685,7 @@ export class TvManager {
 
         const dailyStatTexts = Object.entries(apiData.daily).map(([day, data]) => {
             return new TypeText({
-                text: `• ${day.charAt(0).toUpperCase()}: ${formatDuration(data.totalLateTime / data.count)}`,
+                text: `•  ${day.charAt(0).toUpperCase()} (${data.count} ep${data.count === 1 ? '' : 's'}): ${formatToString(data.totalLateTime / data.count)}`,
                 style: {
                     align: 'left',
                     fontFamily: '"Pixel", Arial, sans-serif',
@@ -531,14 +701,12 @@ export class TvManager {
         });
 
         this.addTextObject(title.text);
-        this.currentTextObjects.push(title);
         title.setPosition(50, 25);
         title.setAnchor(0, 0);
 
         
         for (const statText of dailyStatTexts) {
             this.addTextObject(statText.text);
-            this.currentTextObjects.push(statText);
             statText.setAnchor(0, 0);
             statText.setPosition(50, 75 + (dailyStatTexts.indexOf(statText) * 35));
         }
@@ -547,34 +715,65 @@ export class TvManager {
 
         await title.type();
         title.killCursor();
+
+        let index = 0;
         for (const statText of dailyStatTexts) {
             await statText.type();
             await new Promise((resolve) => setTimeout(resolve, 1000)); // Delay between each daily stat
-            statText.killCursor(); // Stop cursor blinking after each stat
+            if (index !== dailyStatTexts.length - 1) statText.killCursor(); // Stop cursor blinking after each stat
+            index++;
         }
         await new Promise((resolve) => setTimeout(resolve, 15000)); // Wait before showing tip
         this.clearScreen();
 
+    }   
 
 
-
+    private async showTip(): Promise<void> {
+        this.clearScreen();
+        const tipText = new TypeText({
+            text: 'Try picking up a tomato!',
+            style: {
+                align: 'left',
+                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontStyle: 'normal',
+                fontSize: 34, // Smaller font size for tips
+                fill: '#ffffff',
+                wordWrap: true,
+                wordWrapWidth: 453, // Wrap text to fit TV screen
+            }
+        });
 
         // Tip text
-        tipText.setPosition(50, 50);
+        tipText.setPosition(50, 25);
         tipText.setAnchor(0, 0);
         this.addTextObject(tipText.text);
-        this.currentTextObjects.push(tipText);
-
-        console.log('calling type for tipText');
         await tipText.type();
+
+    }
+
+
+
+    private async useApiScreenTemplate(screen: TvScreen): Promise<void> {
+        if (!this.tvMask) return;
+        
+        const apiData = await YoutubeApiManager.getInstance().getStats();
+        await this.showApiIntro();
+        await this.showApiMostRecent(apiData);
+        await this.showApiMaxLateTime(apiData);
+        await this.showApiAverageLateTime(apiData);
+        await this.showApiTotalLateTime(apiData);
+        await this.showTip();
 
         // Set up screen tracking
         this.currentScreen = screen;
         this.screenTimer = 0;
         this.isDisplaying = true;
 
-     
     }
+
+
+  
 
     private async useLiveScreenTemplate(screen: TvScreen): Promise<void> {
         if (!this.tvMask) return;

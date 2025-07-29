@@ -1,6 +1,39 @@
 
 
-export const formatDuration = (seconds: number): string => {
+
+export interface DurationObject {
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
+
+export const formatDuration = (seconds: number): DurationObject => {
+  const units = [
+    { label: 'days',   value: 86400 },
+    { label: 'hours',  value: 3600 },
+    { label: 'minutes', value: 60 },
+    { label: 'seconds', value: 1 },
+  ];
+
+  const result = {} as DurationObject;
+
+  for (const { label, value } of units) {
+    if (seconds >= value) {
+      const amount = Math.floor(seconds / value);
+      seconds %= value;
+      result[label as keyof DurationObject] = amount;
+    }
+  }
+
+  console.log('result', result);
+  return result;
+
+}
+
+
+export const formatToString = (seconds: number): string => {
   const units = [
     { label: 'day',   value: 86400 },
     { label: 'hour',  value: 3600 },
@@ -20,5 +53,3 @@ export const formatDuration = (seconds: number): string => {
 
   return result.length > 0 ? result.join(', ') : '0 seconds';
 };
-
-
