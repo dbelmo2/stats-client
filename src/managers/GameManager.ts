@@ -38,6 +38,10 @@ import { SceneManager } from './SceneManager';
 // (serverside related)
 
 
+//TODO: Issues in API...
+// Latest livestream not updated in stats. 
+// duplicate keys (when live stream scheduled and when it actually starts?)
+
 
 interface EntityContainers {
   enemies: Map<string, EnemyPlayer>;
@@ -774,25 +778,25 @@ export class GameManager {
         const controllerState = this.controller.getState();
         // Convert mouse coordinates (GameManager responsibility)
 
+        if (controllerState.mouse.justReleased && controllerState.mouse.xR !== undefined && controllerState.mouse.yR !== undefined) {
+            const { x, y } = this.convertCameraToWorldCoordinates(
+                controllerState.mouse.xR, 
+                controllerState.mouse.yR
+            );
+            controllerState.mouse.xR = x;
+            controllerState.mouse.yR = y;
+        }
 
+        const inputVector = Vector2.createFromControllerState(controllerState);
 
-
-        const { inputVector } = this.player.sprite.processInput(
-            controllerState,
-            this.player.disableInput,
-            this.ui.overlayActive
-        )
+        if (this.player.disableInput || this.ui.overlayActive) {
+            inputVector.x = 0; // Prevent input when overlay is active
+            inputVector.y = 0; // Prevent input when overlay is active
+            inputVector.mouse = undefined; // Prevent mouse input when overlay is active
+        }
 
         this.player.disableInput = this.ui.overlayActive;
         this.controller.resetMouse();
-        if (inputVector.mouse) {
-            const { x, y } = this.convertCameraToWorldCoordinates(
-                inputVector.mouse.x, 
-                inputVector.mouse.y
-            );
-            controllerState.mouse.x = x;
-            controllerState.mouse.y = y;
-        }
 
 
         const inputPayload: InputPayload = {

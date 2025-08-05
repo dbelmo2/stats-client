@@ -515,9 +515,16 @@ export class TvManager {
 
     private async showApiMostRecent(apiData: StatsResponse): Promise<void> {
         this.clearScreen();
-        const wasLate = apiData.mostRecent.lateTime > 0;
+        const wasOnTime = apiData.mostRecent.scheduledStartTime === apiData.mostRecent.actualStartTime;
+        let wasLate = false;
+        if (wasOnTime === false) {
+            wasLate = apiData.mostRecent.lateTime > 0;
+        }
+        const textString = `The most recent episode "${apiData.mostRecent.title}" was ${wasOnTime ? 'on time!' : `${wasLate ? 'late by...' : 'early!'}`}`
+
+
         const mostRecentTitle = new TypeText({
-            text: `The most recent episode "${apiData.mostRecent.title}" was ${wasLate ? 'late' : 'on time!'} by...`,
+            text: textString,
             style: {
                 align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
@@ -536,10 +543,10 @@ export class TvManager {
         mostRecentTitle.setPosition(50, 25);
         mostRecentTitle.setAnchor(0, 0);
         await mostRecentTitle.type();
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before typing
-        mostRecentTitle.killCursor();
-
         if (wasLate) {
+            await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before typing
+            mostRecentTitle.killCursor();
+
             // Build the string with only time units that have values > 0
             let mostRecentString = '';
 

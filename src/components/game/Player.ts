@@ -101,21 +101,9 @@ export class Player extends Container {
   public processInput(
     controllerState: any,
     inputWasDisabled: boolean = false,
-    ignoreInput: boolean = false,
+    overlayActive: boolean = false,
   ): {  inputVector: Vector2 } {
-      const inputVector = Vector2.createFromControllerState(controllerState);
 
-      if (inputWasDisabled) {
-          inputVector.x = 0; // Prevent input when overlay is active
-          inputVector.y = 0; // Prevent input when overlay is active
-          inputVector.mouse = undefined; // Prevent mouse input when overlay is active
-      }
-
-      if (ignoreInput) inputVector.mouse = undefined
-
-
-
-      return { inputVector };
   }
 
   public setIsBystander(value: boolean): void {

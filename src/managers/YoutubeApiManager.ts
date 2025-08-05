@@ -9,6 +9,8 @@ export interface StatsResponse {
         lateTime: number,
         title: string,
         videoid: string,
+        actualStartTime: string,
+        scheduledStartTime: string,
     },
     max: {
         lateTime: number,
