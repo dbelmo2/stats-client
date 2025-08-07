@@ -310,6 +310,10 @@ export class GameManager {
         this.socketManager.on('disconnect', this.cleanupSession);
         this.socketManager.on('afkWarning', this.handleAfkWarning);
         this.socketManager.on('afkRemoved', this.handleAfkRemoved);
+        this.socketManager.on('showIsLive', () => {
+            console.log('!!!!Live screen triggered!!!!');
+            TvManager.getInstance().displayLiveScreen();
+        });
         this.socketManager.on('stateUpdate', (data: ServerStateUpdate) => {
             this.network.latestServerSnapshot = data;
         });
@@ -408,11 +412,6 @@ export class GameManager {
         }
     }
     
-
-
-
-
-
 
     private integrateProjectileUpdates(projectiles: ProjectileServerState[]): void {
         const activeProjectileIds = new Set(projectiles.map(p => p.id));

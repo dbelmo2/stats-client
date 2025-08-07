@@ -96,16 +96,6 @@ export class Player extends Container {
 
   }
 
-
-
-  public processInput(
-    controllerState: any,
-    inputWasDisabled: boolean = false,
-    overlayActive: boolean = false,
-  ): {  inputVector: Vector2 } {
-
-  }
-
   public setIsBystander(value: boolean): void {
       this.isBystander = value;
       this.body.clear();

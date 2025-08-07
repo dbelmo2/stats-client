@@ -12,6 +12,8 @@ export interface TvScreen {
     id?: string; // unique identifier
 }
 
+// TODO: Fix bug where tv screen continues to update after being skipped/cleared. (the ui clears successfully,
+// but the logs show its still updating)
 export class TvManager {
     private static instance: TvManager;
     private tvMask: Graphics | null = null;
@@ -76,6 +78,8 @@ export class TvManager {
     }
 
 
+    
+
     public async startTv(): Promise<void> {
         if (!this.tvMask) {
             console.error('TvManager: TV mask not initialized. Call initialize() first.');
@@ -86,12 +90,8 @@ export class TvManager {
         this.clearScreen();
         
         // Display default screen
-        
-        console.log('TvManager initialized with TV mask');
-
         this.displayDefaultScreen();
         this.displayApiScreen();
-        this.displayLiveScreen(); // Show live screen for 10 seconds
 
     }   
 
@@ -106,10 +106,11 @@ export class TvManager {
         });
     }
 
-    private displayLiveScreen(duration?: number): void {
+    public displayLiveScreen(duration?: number): void {
+        console.log('TvManager: Displaying live screen');
         this.displayScreen({
             text: 'live',
-            priority: 1,
+            priority: 10000,
             id: 'live',
             template: 'live',
             duration: duration ?? 10000
@@ -302,6 +303,7 @@ export class TvManager {
         if (this.screenQueue.length === 0) {
             this.isDisplaying = false;
             this.displayDefaultScreen();
+            this.displayApiScreen();
             return;
         }
         
