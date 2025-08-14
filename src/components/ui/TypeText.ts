@@ -23,7 +23,7 @@ export class TypeText {
     // Intervals
     private typeInterval: NodeJS.Timeout | null = null;
     private blinkInterval: NodeJS.Timeout | null = null;
-    
+
     // State tracking
     private index: number = 0;
     private dotCount: number = 0;
@@ -104,8 +104,8 @@ export class TypeText {
         this.textObject.text = this.currentText;
         
         // Start cursor blinking
-        this.startCursorBlink();
-        
+        this.startCursorBlink(this.textObject.text);
+
         // Create promise for type completion
         return new Promise<void>((resolve) => {
             this.typeResolve = resolve;
@@ -171,7 +171,7 @@ export class TypeText {
     public cleanupTyping(): void {
         this.stopTyping();
     }
-    
+
     /**
      * Clean up cursor interval only
      */
@@ -184,8 +184,10 @@ export class TypeText {
      */
     public destroy(): void {
         console.log('TypeWriter: Full cleanup');
-        this.stopTyping();
+        
+        // Stop all intervals first
         this.stopCursorBlink();
+        this.stopTyping();
         
         // Cancel any pending promises
         if (this.typeResolve) {
@@ -193,8 +195,14 @@ export class TypeText {
             this.typeResolve = null;
         }
         
-        // Destroy the text object
-        this.textObject.destroy();
+        // Reset state
+        this.isTyping = false;
+        this.typingComplete = true;
+        
+        // Destroy the text object if it exists and hasn't been destroyed
+        if (this.textObject && !this.textObject.destroyed) {
+            this.textObject.destroy();
+        }
     }
     
     /**
@@ -206,8 +214,6 @@ export class TypeText {
                 // If paused, just return
                 return;
             }
-
-
             if (this.index < this.fullText.length) {
                 // Remove cursor, add new character, add cursor back
                 this.currentText = this.currentText.slice(0, -1); // Remove cursor
@@ -255,10 +261,18 @@ export class TypeText {
     /**
      * Start cursor blinking
      */
-    private startCursorBlink(): void {
+    private startCursorBlink(textId: string): void {
         this.blinkInterval = setInterval(() => {
+            // Check if the text object still exists and hasn't been destroyed
+            if (!this.textObject || this.textObject.destroyed || !this.textObject.text) {
+                console.warn(`TypeWriter: Text object destroyed or missing for textId: ${textId}, stopping blink interval`);
+                if (this.blinkInterval) {
+                    clearInterval(this.blinkInterval);
+                    this.blinkInterval = null;
+                }
+                return;
+            }
             const isCursorVisible = this.textObject.text.endsWith(this.cursor);
-            
             // Instead of removing cursor, replace with space to maintain consistent width
             if (isCursorVisible) {
                 // Replace cursor with space
@@ -281,7 +295,7 @@ export class TypeText {
             this.blinkInterval = null;
         }
     }
-    
+
     /**
      * Update the full text (useful for dynamic content)
      */
