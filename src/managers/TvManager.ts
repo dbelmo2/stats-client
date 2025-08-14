@@ -5,30 +5,22 @@ import { YoutubeApiManager, type StatsResponse } from './YoutubeApiManager';
 import { formatDuration, formatToString } from '../utils/time';
 
 export interface TvScreen {
-    text: string;
-    template?: 'default' | 'api' | 'live'; // 'default' for regular screens, 'api' for API data
-    duration?: number; // milliseconds, 0 = permanent
-    priority?: number; // higher = more important
     id?: string; // unique identifier
+    priority?: number; // higher = more important
+    showScreen(): Promise<void>; // Each screen handles its own display logic
 }
 
-// TODO: Fix bug where tv screen continues to update after being skipped/cleared. (the ui clears successfully,
-// but the logs show its still updating)
 export class TvManager {
     private static instance: TvManager;
     private tvMask: Graphics | null = null;
-    private currentTextObjects: (Text | BitmapText | TypeText)[] = [];
+    private currentTextObjects: (Text | BitmapText)[] = [];
+    private currentTypeTextObjects: TypeText[] = []; // Track TypeText instances separately
     private currentSprites: Sprite[] = [];
 
     // Screen queue system
     private screenQueue: TvScreen[] = [];
-    private currentScreen: TvScreen | null = null;
-    private screenTimer: number = 0;
-    private isDisplaying: boolean = false;
+    private isProcessingQueue: boolean = false;
     
-    // Default settings
-    private readonly defaultDuration: number = 5000; // 5 seconds
-
     private intervals: NodeJS.Timeout[] = [];
     private CRTFilter: CRTFilter | null = null;
     
@@ -65,20 +57,14 @@ export class TvManager {
             vignettingAlpha: 1,
             vignettingBlur: 0.45,
             time: 0
-
-
         });
         this.tvMask.filters = [this.CRTFilter];
 
-        // Clear any existing text objects
+        // Clear any existing content
         this.clearScreen();
         
         j1Sprite.addChild(this.tvMask);
-
     }
-
-
-    
 
     public async startTv(): Promise<void> {
         if (!this.tvMask) {
@@ -86,42 +72,177 @@ export class TvManager {
             return;
         }
         
-        // Clear any existing text objects
+        // Clear any existing content
         this.clearScreen();
         
-        // Display default screen
-        this.displayDefaultScreen();
-        this.displayApiScreen();
+        console.log('TvManager initialized with TV mask');
 
-    }   
+        // Add initial screens to queue in order
+        this.queueDefaultScreen();
+        console.log('queue after default screen:', this.screenQueue);
+        
+        // Wait for API screens to be added
+        await this.queueApiScreens();
+        console.log('queue after API screens:', this.screenQueue);
+        
+        this.queueLiveScreenNormal(); // Use normal priority for initial sequence
+        console.log('queue after live screen:', this.screenQueue);
 
+        // Start processing the queue
+        this.processQueue();
+    }
 
-    private displayApiScreen(duration?: number): void {
-        this.displayScreen({
-            text: 'api',
+    /**
+     * Process the queue continuously
+     */
+    private async processQueue(): Promise<void> {
+        if (this.isProcessingQueue) return;
+        
+        this.isProcessingQueue = true;
+        
+        while (this.screenQueue.length > 0) {
+            // Sort by priority (higher first)
+            //this.screenQueue.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+            console.log(`queue before processing:`, this.screenQueue);
+            const screen = this.screenQueue.shift()!;
+            console.log(`TvManager: Processing screen with ID: ${screen.id} and priority ${screen.priority}`);
+            
+            try {
+                await screen.showScreen();
+            } catch (error) {
+                console.log('TvManager: Screen interrupted or error occurred:', error);
+                // Clear screen on error/interruption
+                this.clearScreen();
+            }
+        }
+        
+        this.isProcessingQueue = false;
+        
+        // If queue is empty, add default screen and continue
+        this.queueDefaultScreen();
+        this.processQueue();
+    }
+
+    /**
+     * Add API screens to queue
+     */
+    private async queueApiScreens(): Promise<void> {
+        const apiData = await YoutubeApiManager.getInstance().getStats();
+
+        this.screenQueue.push({
+            id: 'api-intro',
             priority: 1,
-            id: 'api',
-            template: 'api',
-            duration: duration ?? 2000
+            showScreen: () => this.showApiIntro()
+        });
+        
+        this.screenQueue.push({
+            id: 'api-most-recent',
+            priority: 1,
+            showScreen: async () => {
+                return this.showApiMostRecent(apiData);
+            }
+        });
+        
+        this.screenQueue.push({
+            id: 'api-max-late',
+            priority: 1,
+            showScreen: async () => {
+                return this.showApiMaxLateTime(apiData);
+            }
+        });
+        
+        this.screenQueue.push({
+            id: 'api-average-late',
+            priority: 1,
+            showScreen: async () => {
+                return this.showApiAverageLateTime(apiData);
+            }
+        });
+        
+        this.screenQueue.push({
+            id: 'api-total-late',
+            priority: 1,
+            showScreen: async () => {
+                return this.showApiTotalLateTime(apiData);
+            }
+        });
+        
+        this.screenQueue.push({
+            id: 'api-tip',
+            priority: 1,
+            showScreen: () => this.showTip()
         });
     }
 
-    public displayLiveScreen(duration?: number): void {
-        console.log('TvManager: Displaying live screen');
-        this.displayScreen({
-            text: 'live',
-            priority: 10000,
-            id: 'live',
-            template: 'live',
-            duration: duration ?? 10000
+    /**
+     * Add live screen to queue with high priority (for external calls)
+     */
+    public queueLiveScreen(): void {
+        this.addHighPriorityScreen({
+            id: 'live-screen',
+            priority: 10, // Higher priority to interrupt current content
+            showScreen: () => this.showLiveScreen()
         });
     }
 
-    private async useLogoTemplate(screen: TvScreen): Promise<void> {
+    /**
+     * Add live screen to queue with normal priority (for internal sequencing)
+     */
+    private queueLiveScreenNormal(): void {
+        this.screenQueue.push({
+            id: 'live-screen',
+            priority: 1,
+            showScreen: () => this.showLiveScreen()
+        });
+    }
+
+    /**
+     * Add default screen to queue
+     */
+    private queueDefaultScreen(): void {
+        this.screenQueue.push({
+            id: 'default-screen',
+            priority: 1,
+            showScreen: () => this.showDefaultScreen()
+        });
+    }
+
+    /**
+     * Add a screen to the queue
+     */
+    public addToQueue(screen: TvScreen): void {
+        this.screenQueue.push(screen);
+        console.log(`TvManager: Added screen "${screen.id}" to queue`);
+    }
+
+    /**
+     * Add a high priority screen (interrupts current)
+     */
+    public addHighPriorityScreen(screen: TvScreen): void {
+        // Add to front of queue
+        this.screenQueue.unshift(screen);
+        console.log(`TvManager: Added high priority screen "${screen.id}" to front of queue`);
+        
+        // Clear current screen to force immediate processing
+        this.clearScreen();
+        
+        // Reset processing flag to allow immediate restart
+        this.isProcessingQueue = false;
+        
+        // Start processing immediately if not already processing
+        setTimeout(() => this.processQueue(), 0);
+    }
+
+    /**
+     * Show default/logo screen
+     */
+    private async showDefaultScreen(): Promise<void> {
         if (!this.tvMask) {
-            console.error('TvManager: TV mask not initialized. Call initialize() first.');
+            console.error('TvManager: TV mask not initialized');
             return;
         }
+        
+        this.clearScreen(); // Ensure screen is cleared before showing logo
         
         const logo = Sprite.from('h3Logo');
         logo.anchor.set(0.5);
@@ -138,52 +259,42 @@ export class TvManager {
         logo.y = this.tvMask.height / 2;
         this.addSprite(logo);
 
-        // Set up screen tracking
-        this.currentScreen = screen;
-        this.screenTimer = 0;
-        this.isDisplaying = true;
+        // Show for 5 seconds
+        await new Promise(resolve => setTimeout(resolve, 5000));
     }
-    
 
 
     /**
-     * Display a screen on the TV screen
+     * Display immediate high priority screen
      */
-    public displayScreen(screen: TvScreen): void {
-        // Add to queue if not immediate
-        if (this.isDisplaying && screen.priority !== undefined && screen?.priority > 10) {
-            // High priority screen - interrupt current
-            console.log(`TvManager: Interrupting current screen with high priority: "${screen.text}"`);
-            this.screenQueue.unshift(screen);
-            this.skipcurrentScreen();
-        } else {
-            // Add to queue
-            console.log(`TvManager: Queued screen: "${screen.text}"`);
-            this.screenQueue.push(screen);
-        }
-        
-        // Start processing if not already displaying
-        if (!this.isDisplaying) {
-            console.log(`TvManager: Started displaying screen: "${screen.text}"`);
-            this.processNextScreen();
-        }
-    }
-    
-
-    /**
-     * Display immediate screen (bypasses queue)
-     */
-    public displayImmediate(text: string, duration: number = this.defaultDuration): void {
-        this.displayScreen({
-            text,
-            duration,
-            priority: 100, // Highest priority
-            id: 'immediate_' + Date.now()
+    public displayImmediate(message: string): void {
+        this.addHighPriorityScreen({
+            id: 'immediate_' + Date.now(),
+            priority: 100,
+            showScreen: async () => {
+                this.clearScreen();
+                const text = new TypeText({
+                    text: message,
+                    style: {
+                        align: 'center',
+                        fontFamily: '"Pixel", Arial, sans-serif',
+                        fontSize: 32,
+                        fill: '#ffffff',
+                        wordWrap: true,
+                        wordWrapWidth: 450
+                    }
+                });
+                this.addTypeTextObject(text);
+                text.setPosition(this.tvMask!.width / 2, this.tvMask!.height / 2);
+                text.setAnchor(0.5, 0.5);
+                await text.type();
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
         });
     }
-    
+
     /**
-     * Display game stats on the TV
+     * Display game stats (converted to new system)
      */
     public displayGameStats(stats: { 
         totalPlayers?: number, 
@@ -191,164 +302,205 @@ export class TvManager {
         currentLeader?: string,
         remainingTime?: string 
     }): void {
-        let screen = '';
+        let message = '';
         
         if (stats.totalPlayers) {
-            screen += `Players Online: ${stats.totalPlayers}\n`;
+            message += `Players Online: ${stats.totalPlayers}\n`;
         }
         
         if (stats.currentLeader) {
-            screen += `Leader: ${stats.currentLeader}\n`;
+            message += `Leader: ${stats.currentLeader}\n`;
         }
         
         if (stats.matchTime) {
-            screen += `Match Time: ${stats.matchTime}\n`;
+            message += `Match Time: ${stats.matchTime}\n`;
         }
         
         if (stats.remainingTime) {
-            screen += `Time Left: ${stats.remainingTime}`;
+            message += `Time Left: ${stats.remainingTime}`;
         }
         
-        this.displayScreen({
-            text: screen.trim(),
-            duration: 3000,
+        this.addToQueue({
+            id: 'game_stats',
             priority: 5,
-            id: 'game_stats'
+            showScreen: async () => {
+                this.clearScreen();
+                const text = new TypeText({
+                    text: message.trim(),
+                    style: {
+                        align: 'left',
+                        fontFamily: '"Pixel", Arial, sans-serif',
+                        fontSize: 28,
+                        fill: '#ffffff',
+                        wordWrap: true,
+                        wordWrapWidth: 450
+                    }
+                });
+                this.addTypeTextObject(text);
+                text.setPosition(50, 50);
+                text.setAnchor(0, 0);
+                await text.type();
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
         });
     }
-    
+
     /**
-     * Display kill feed screens
+     * Display kill feed
      */
     public displayKillFeed(killer: string, victim: string): void {
-        this.displayScreen({
-            text: `${killer} eliminated ${victim}!`,
-            duration: 2000,
+        this.addHighPriorityScreen({
+            id: 'kill_feed_' + Date.now(),
             priority: 7,
-            id: 'kill_feed_' + Date.now()
+            showScreen: async () => {
+                this.clearScreen();
+                const text = new TypeText({
+                    text: `${killer} eliminated ${victim}!`,
+                    style: {
+                        align: 'center',
+                        fontFamily: '"Pixel", Arial, sans-serif',
+                        fontSize: 32,
+                        fill: '#ff0000',
+                        wordWrap: true,
+                        wordWrapWidth: 450
+                    }
+                });
+                this.addTypeTextObject(text);
+                text.setPosition(this.tvMask!.width / 2, this.tvMask!.height / 2);
+                text.setAnchor(0.5, 0.5);
+                await text.type();
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
         });
     }
-    
+
     /**
      * Display match events
      */
     public displayMatchEvent(event: 'start' | 'end' | 'warning', details?: string): void {
-        let screen = '';
+        let message = '';
         let priority = 8;
         
         switch (event) {
             case 'start':
-                screen = 'Match Starting!';
-                if (details) screen += `\n${details}`;
+                message = 'Match Starting!';
+                if (details) message += `\n${details}`;
                 break;
             case 'end':
-                screen = 'Match Ended!';
-                if (details) screen += `\n${details}`;
+                message = 'Match Ended!';
+                if (details) message += `\n${details}`;
                 priority = 9;
                 break;
             case 'warning':
-                screen = details || 'Warning!';
+                message = details || 'Warning!';
                 priority = 9;
                 break;
         }
         
-        this.displayScreen({
-            text: screen,
-            duration: 4000,
+        this.addHighPriorityScreen({
+            id: `match_${event}_${Date.now()}`,
             priority,
-            id: `match_${event}_${Date.now()}`
+            showScreen: async () => {
+                this.clearScreen();
+                const text = new TypeText({
+                    text: message,
+                    style: {
+                        align: 'center',
+                        fontFamily: '"Pixel", Arial, sans-serif',
+                        fontSize: 32,
+                        fill: '#ffff00',
+                        wordWrap: true,
+                        wordWrapWidth: 450
+                    }
+                });
+                this.addTypeTextObject(text);
+                text.setPosition(this.tvMask!.width / 2, this.tvMask!.height / 2);
+                text.setAnchor(0.5, 0.5);
+                await text.type();
+                await new Promise(resolve => setTimeout(resolve, 4000));
+            }
         });
     }
-    
+
     /**
-     * Clear all screens and display default
+     * Clear all screens and reset queue
      */
     public clearAll(): void {
         this.screenQueue = [];
-        this.skipcurrentScreen();
-        this.displayDefaultScreen();
-    }
-    
-    /**
-     * Display default/idle screen
-     */
-    public displayDefaultScreen(duration?: number): void {
-        this.displayScreen({
-            text: 'default',
-            priority: 1,
-            id: 'default',
-            duration: duration ?? 5000
-        });
-    }
-    
-    /**
-     * Update method - call this in your game loop
-     */
-    public update(deltaMs: number): void {
-        if (!this.isDisplaying) return;
-        
-        // Update screen timer
-        if (this.currentScreen && this.currentScreen.duration && this.currentScreen.duration > 0) {
-            this.screenTimer += deltaMs;
-            if (this.screenTimer >= this.currentScreen.duration) {
-                this.finishcurrentScreen();
-            }
-        }
-    }
-    
-    /**
-     * Process the next screen in queue
-     */
-    private processNextScreen(): void {
-        if (this.screenQueue.length === 0) {
-            this.isDisplaying = false;
-            this.displayDefaultScreen();
-            this.displayApiScreen();
-            return;
-        }
-        
-        // Sort by priority (higher first)
-        this.screenQueue.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-        
-        const screen = this.screenQueue.shift()!;
-        console.log(`TvManager: Processing screen: "${screen.text}" with priority ${screen.priority} and duration ${screen.duration}`);
-        this.showScreen(screen);
-    }
-    
-    /**
-     * Display the actual screen on screen
-     */
-    private showScreen(screen: TvScreen): void {
-        if (!this.tvMask) {
-            console.warn('TvManager: TV mask not initialized');
-            return;
-        }
-        
-        // Clear any existing text objects
         this.clearScreen();
-        
+    }
 
-        switch (screen.template) {
-            case 'api': {
-                this.useApiScreenTemplate(screen);
-                break;
-            }
-            case 'live': {
-                this.useLiveScreenTemplate(screen);
-                break;
-            }
-            default: {
-                this.useLogoTemplate(screen);
-            }
-
-
-        
-        console.log(`TvManager: Displaying screen: "${screen.text}"`);
+    /**
+     * Get queue length
+     */
+    public getQueueLength(): number {
+        return this.screenQueue.length;
+    }
+    
+    /**
+     * Remove specific screen from queue
+     */
+    public removeScreen(id: string): boolean {
+        const index = this.screenQueue.findIndex(screen => screen.id === id);
+        if (index !== -1) {
+            this.screenQueue.splice(index, 1);
+            return true;
         }
+        return false;
     }
 
 
 
+
+
+    // API Screen methods (keeping all the existing screen logic)
+    /**
+     * Show live screen
+     */
+    private async showLiveScreen(): Promise<void> {
+        if (!this.tvMask) return;
+
+        this.clearScreen();
+
+        const banner = Sprite.from('liveBanner');
+        const ianSprite = Sprite.from('ian');
+        const danSprite = Sprite.from('dan');
+
+        banner.anchor.set(0.5);
+        ianSprite.anchor.set(0.5);
+        danSprite.anchor.set(0.5);
+
+        banner.width = this.tvMask.width * 0.65;
+        banner.height = this.tvMask.height * 0.65;
+        banner.x = this.tvMask.width / 2;
+        banner.y = this.tvMask.height / 2 - 75;
+
+        const ianAspectRatio = ianSprite.height / ianSprite.width;
+        const danAspectRatio = danSprite.height / danSprite.width;
+
+        const ianWidth = this.tvMask.width * 0.25;
+        const danWidth = this.tvMask.width * 0.25;
+
+        const ianHeight = ianWidth * ianAspectRatio;
+        const danHeight = danWidth * danAspectRatio;
+
+        ianSprite.width = ianWidth;
+        ianSprite.height = ianHeight;
+        ianSprite.x = (ianWidth / 2) + 5;
+        ianSprite.y = this.tvMask.height - (ianHeight / 2) - 15;
+
+        danSprite.width = danWidth;
+        danSprite.height = danHeight;
+        danSprite.x = this.tvMask.width - (danWidth / 2) - 15;
+        danSprite.y = this.tvMask.height - (danHeight / 2) - 15;
+
+        this.addSprite(banner);
+        this.addSprite(ianSprite);
+        this.addSprite(danSprite);
+
+        // Show for 10 seconds
+        await new Promise(resolve => setTimeout(resolve, 10000));
+    }
 
 
     private async showApiIntro(): Promise<void> {
@@ -366,12 +518,12 @@ export class TvManager {
             }
         });
 
-        this.addTextObject(introTitle.text);
-        introTitle.setPosition(100, 100); // Set position within the TV mask
-        introTitle.setAnchor(0, 0); // Set anchor to top-left
+        this.addTypeTextObject(introTitle);
+        introTitle.setPosition(100, 100);
+        introTitle.setAnchor(0, 0);
         await introTitle.type();
-        introTitle.killCursor(); // Stop cursor blinking after intro
-        await new Promise((resolve) => setTimeout(resolve, 3000)); // Wait before typing
+        introTitle.killCursor();
+        await new Promise((resolve) => setTimeout(resolve, 3000));
         this.clearScreen();
     }
 
@@ -392,14 +544,12 @@ export class TvManager {
             }
         });
 
-
-        this.addTextObject(totalStatsTitle.text);   
+        this.addTypeTextObject(totalStatsTitle);   
         totalStatsTitle.setPosition(50, 25);
-        totalStatsTitle.setAnchor(0, 0); // Set anchor to top-left
+        totalStatsTitle.setAnchor(0, 0);
         await totalStatsTitle.type();
         totalStatsTitle.killCursor();
 
-        // Build a string with only time units that have values > 0
         let totalLateString = '';
 
         if (totalLateTimeFormatted.days > 0) {
@@ -421,22 +571,21 @@ export class TvManager {
             text: totalLateString,
             style:  {
                 align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontFamily: '"Pixel", Arial, sans-serif',
                 fontStyle: 'normal',
-                fontSize: 30, // Smaller font size
+                fontSize: 30,
                 fill: '#ffffff',
                 wordWrap: true,
-                wordWrapWidth: 453, // Wrap text to fit TV screen
+                wordWrapWidth: 453,
                 lineHeight: 33
             }
         });
-        this.addTextObject(totalLateTime.text);
+        this.addTypeTextObject(totalLateTime);
         totalLateTime.setPosition(50, totalStatsTitle.text.y + totalStatsTitle.text.height + 20);
         totalLateTime.setAnchor(0, 0);
 
         await totalLateTime.type();
         totalLateTime.killCursor();
-
 
         const bottomText = new TypeText({
             text: 'He can\'t keep getting away with this!',
@@ -451,11 +600,11 @@ export class TvManager {
             }
         });
 
-        this.addTextObject(bottomText.text);
+        this.addTypeTextObject(bottomText);
         bottomText.setPosition(50, totalLateTime.text.y + totalLateTime.text.height + 20);
         bottomText.setAnchor(0, 0);
         await bottomText.type();
-        await new Promise((resolve) => setTimeout(resolve, 10000)); // Wait a bit before showing tip
+        await new Promise((resolve) => setTimeout(resolve, 10000));
         this.clearScreen();
     }
 
@@ -465,7 +614,7 @@ export class TvManager {
             text: `The most late episode, "${apiData.max.title}", has a total late time of...`,
             style: {
                 align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontFamily: '"Pixel", Arial, sans-serif',
                 fontStyle: 'normal',
                 fontSize: 30,
                 fill: '#ffffff',
@@ -475,7 +624,6 @@ export class TvManager {
             pauseOnDots: false
         });
 
-        
         const maxLateTimeFormatted = formatDuration(apiData.max.lateTime);
 
         const maxLateString = maxLateTimeFormatted.hours > 0 ? `  • ${maxLateTimeFormatted.hours} hours\n  • ${maxLateTimeFormatted.minutes} minutes\n  • ${maxLateTimeFormatted.seconds} seconds`
@@ -485,26 +633,24 @@ export class TvManager {
             text: maxLateString,
             style:  {
                 align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontFamily: '"Pixel", Arial, sans-serif',
                 fontStyle: 'normal',
-                fontSize: 30, // Smaller font size
+                fontSize: 30,
                 fill: '#ffffff',
                 wordWrap: true,
-                wordWrapWidth: 453, // Wrap text to fit TV screen
+                wordWrapWidth: 453,
                 lineHeight: 33
             }
         });
 
-        
-        this.addTextObject(maxLateTitle.text);
-        this.addTextObject(maxLateTime.text);   
+        this.addTypeTextObject(maxLateTitle);
+        this.addTypeTextObject(maxLateTime);   
 
         maxLateTitle.setPosition(50, 25);
         maxLateTitle.setAnchor(0, 0);
 
-
         await maxLateTitle.type();
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before typing
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         maxLateTitle.killCursor();
 
         maxLateTime.setPosition(50, maxLateTitle.text.y + maxLateTitle.text.height + 20); 
@@ -518,38 +664,32 @@ export class TvManager {
     private async showApiMostRecent(apiData: StatsResponse): Promise<void> {
         this.clearScreen();
         const wasOnTime = apiData.mostRecent.scheduledStartTime === apiData.mostRecent.actualStartTime;
-        let wasLate = false;
-        if (wasOnTime === false) {
-            wasLate = apiData.mostRecent.lateTime > 0;
-        }
+        const wasLate = !wasOnTime && apiData.mostRecent.lateTime > 0;
         const textString = `The most recent episode "${apiData.mostRecent.title}" was ${wasOnTime ? 'on time!' : `${wasLate ? 'late by...' : 'early!'}`}`
-
 
         const mostRecentTitle = new TypeText({
             text: textString,
             style: {
                 align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontFamily: '"Pixel", Arial, sans-serif',
                 fontStyle: 'normal',
                 fontSize: 30,
                 fill: '#ffffff',
                 wordWrap: true,
                 wordWrapWidth: 453,
-                
             },
             pauseOnDots: false,
         });
 
         const mostRecentTimeFormatted = formatDuration(apiData.mostRecent.lateTime);       
-        this.addTextObject(mostRecentTitle.text);
+        this.addTypeTextObject(mostRecentTitle);
         mostRecentTitle.setPosition(50, 25);
         mostRecentTitle.setAnchor(0, 0);
         await mostRecentTitle.type();
-        if (wasLate) {
-            await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before typing
-            mostRecentTitle.killCursor();
+        if (wasLate) await new Promise((resolve) => setTimeout(resolve, 2000));
+        mostRecentTitle.killCursor();
 
-            // Build the string with only time units that have values > 0
+        if (wasLate) {
             let mostRecentString = '';
 
             if (mostRecentTimeFormatted.days > 0) {
@@ -569,16 +709,16 @@ export class TvManager {
                 text: mostRecentString,
                 style:  {
                     align: 'left',
-                    fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                    fontFamily: '"Pixel", Arial, sans-serif',
                     fontStyle: 'normal',
-                    fontSize: 30, // Smaller font size
+                    fontSize: 30,
                     fill: '#ffffff',
                     wordWrap: true,
-                    wordWrapWidth: 453, // Wrap text to fit TV screen
+                    wordWrapWidth: 453,
                     lineHeight: 33
                 }
             });
-            this.addTextObject(mostRecentTime.text);
+            this.addTypeTextObject(mostRecentTime);
 
             mostRecentTime.setPosition(50, mostRecentTitle.text.y + mostRecentTitle.text.height + 20); 
             mostRecentTime.setAnchor(0, 0); 
@@ -588,7 +728,6 @@ export class TvManager {
 
         await new Promise((resolve) => setTimeout(resolve, 10000));
         this.clearScreen();
-
     }
 
     private async showApiAverageLateTime(apiData: StatsResponse): Promise<void> {
@@ -597,24 +736,21 @@ export class TvManager {
             text: `With a total of ${apiData.streamCount} episodes, the show has an average late time of...`,
             style:  {
                 align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontFamily: '"Pixel", Arial, sans-serif',
                 fontStyle: 'normal',
-                fontSize: 30, // Smaller font size
+                fontSize: 30,
                 fill: '#ffffff',
                 wordWrap: true,
-                wordWrapWidth: 453, // Wrap text to fit TV screen
+                wordWrapWidth: 453,
                 lineHeight: 33
             }
         });
 
-
-
-        this.addTextObject(averageLateTimeTitle.text);
+        this.addTypeTextObject(averageLateTimeTitle);
         averageLateTimeTitle.setPosition(50, 25);
         averageLateTimeTitle.setAnchor(0, 0);
         await averageLateTimeTitle.type();
         averageLateTimeTitle.killCursor();
-
 
         const formattedTime = formatDuration(apiData.averageLateTime);
         let averageLateString = '';
@@ -635,22 +771,21 @@ export class TvManager {
             text: averageLateString,
             style:  {
                 align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontFamily: '"Pixel", Arial, sans-serif',
                 fontStyle: 'normal',
-                fontSize: 30, // Smaller font size
+                fontSize: 30,
                 fill: '#ffffff',
                 wordWrap: true,
-                wordWrapWidth: 453, // Wrap text to fit TV screen
+                wordWrapWidth: 453,
                 lineHeight: 33
             }
         });
-
 
         const bottomText = new TypeText({
             text: 'Let\'s see how that changes throughout the week...',
             style: {
                 align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontFamily: '"Pixel", Arial, sans-serif',
                 fontStyle: 'normal',
                 fontSize: 30,
                 fill: '#ffffff',
@@ -659,26 +794,25 @@ export class TvManager {
             }
         });
 
-        this.addTextObject(averageLateTime.text);
+        this.addTypeTextObject(averageLateTime);
         averageLateTime.setPosition(50, averageLateTimeTitle.text.y + averageLateTimeTitle.text.height + 20);
         averageLateTime.setAnchor(0, 0);
 
-        this.addTextObject(bottomText.text);
+        this.addTypeTextObject(bottomText);
         bottomText.setPosition(50, averageLateTime.text.y + averageLateTime.text.height + 50);
         bottomText.setAnchor(0, 0);
         
         await averageLateTime.type();
-        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait before showing tip
-        averageLateTime.killCursor(); // Stop cursor blinking after average time
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        averageLateTime.killCursor();
         await bottomText.type();
-        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait before showing daily stats
+        await new Promise((resolve) => setTimeout(resolve, 5000));
         this.clearScreen();
         await this.showApiDailyAverageLateTimes(apiData);
     }
  
     private async showApiDailyAverageLateTimes(apiData: StatsResponse): Promise<void> {
         this.clearScreen();
-        // daily stat
         const title = new TypeText({
             text: 'Average Late Times by Day',
             style: {
@@ -703,24 +837,20 @@ export class TvManager {
                     fill: '#ffffff',
                     wordWrap: true,
                     wordWrapWidth: 453,
-                    
                 },
                 typingSpeed: 75
             });
         });
 
-        this.addTextObject(title.text);
+        this.addTypeTextObject(title);
         title.setPosition(50, 25);
         title.setAnchor(0, 0);
 
-        
         for (const statText of dailyStatTexts) {
-            this.addTextObject(statText.text);
+            this.addTypeTextObject(statText);
             statText.setAnchor(0, 0);
             statText.setPosition(50, 75 + (dailyStatTexts.indexOf(statText) * 35));
         }
-
-
 
         await title.type();
         title.killCursor();
@@ -728,15 +858,13 @@ export class TvManager {
         let index = 0;
         for (const statText of dailyStatTexts) {
             await statText.type();
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // Delay between each daily stat
-            if (index !== dailyStatTexts.length - 1) statText.killCursor(); // Stop cursor blinking after each stat
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            if (index !== dailyStatTexts.length - 1) statText.killCursor();
             index++;
         }
-        await new Promise((resolve) => setTimeout(resolve, 15000)); // Wait before showing tip
+        await new Promise((resolve) => setTimeout(resolve, 15000));
         this.clearScreen();
-
     }   
-
 
     private async showTip(): Promise<void> {
         this.clearScreen();
@@ -744,112 +872,33 @@ export class TvManager {
             text: 'Try picking up a tomato!',
             style: {
                 align: 'left',
-                fontFamily: '"Pixel", Arial, sans-serif', // Use web-safe font
+                fontFamily: '"Pixel", Arial, sans-serif',
                 fontStyle: 'normal',
-                fontSize: 34, // Smaller font size for tips
+                fontSize: 34,
                 fill: '#ffffff',
                 wordWrap: true,
-                wordWrapWidth: 453, // Wrap text to fit TV screen
+                wordWrapWidth: 453,
             }
         });
 
-        // Tip text
         tipText.setPosition(50, 25);
         tipText.setAnchor(0, 0);
-        this.addTextObject(tipText.text);
+        this.addTypeTextObject(tipText);
         await tipText.type();
-
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Add delay to see the tip
     }
 
-
-
-    private async useApiScreenTemplate(screen: TvScreen): Promise<void> {
-        if (!this.tvMask) return;
-        
-        const apiData = await YoutubeApiManager.getInstance().getStats();
-        await this.showApiIntro();
-        await this.showApiMostRecent(apiData);
-        await this.showApiMaxLateTime(apiData);
-        await this.showApiAverageLateTime(apiData);
-        await this.showApiTotalLateTime(apiData);
-        await this.showTip();
-
-        // Set up screen tracking
-        this.currentScreen = screen;
-        this.screenTimer = 0;
-        this.isDisplaying = true;
-
-    }
-
-
-  
-
-    private async useLiveScreenTemplate(screen: TvScreen): Promise<void> {
-        if (!this.tvMask) return;
-
-        this.clearScreen();
-
-        const banner = Sprite.from('liveBanner');
-        const ianSprite = Sprite.from('ian');
-        const danSprite = Sprite.from('dan');
-
-        banner.anchor.set(0.5);
-        ianSprite.anchor.set(0.5);
-        danSprite.anchor.set(0.5);
-
-
-        banner.width = this.tvMask.width * 0.65; // Scale to fit TV mask
-        banner.height = this.tvMask.height * 0.65; // Adjust height to fit
-        banner.x = this.tvMask.width / 2;
-        banner.y = this.tvMask.height / 2 - 75; // Position above center
-
-
-
-        // Calculate the aspect ratio for each sprite
-        const ianAspectRatio = ianSprite.height / ianSprite.width;
-        const danAspectRatio = danSprite.height / danSprite.width;
-
-        // Set the desired width based on TV mask size
-        const ianWidth = this.tvMask.width * 0.25;
-        const danWidth = this.tvMask.width * 0.25;
-
-        // Calculate heights that maintain the aspect ratio
-        const ianHeight = ianWidth * ianAspectRatio;
-        const danHeight = danWidth * danAspectRatio;
-
-
-        ianSprite.width = ianWidth; // Scale to fit TV mask
-        ianSprite.height = ianHeight; // Adjust height
-        ianSprite.x = (ianWidth / 2) + 5;
-        ianSprite.y = this.tvMask.height - (ianHeight / 2) - 15; // Position at bottom left
-
-
-        danSprite.width = danWidth; // Scale to fit TV mask
-        danSprite.height = danHeight; // Adjust height
-        danSprite.x = this.tvMask.width - (danWidth / 2) - 15; // Position at bottom right
-        danSprite.y = this.tvMask.height - (danHeight / 2) - 15; // Position at bottom right
-
-        this.addSprite(banner);
-        this.addSprite(ianSprite);
-        this.addSprite(danSprite);
-
-        // Set up screen tracking
-        this.currentScreen = screen;
-        this.screenTimer = 0;
-        this.isDisplaying = true;
- 
-    }
-
-
-        /**
-     * Add a text object to the TV mask and track it
+    /**
+     * Add a TypeText object to the TV mask and track it
      */
-    private addTextObject(textObj: Text | BitmapText): void {
+    private addTypeTextObject(typeTextObj: TypeText): void {
         if (!this.tvMask) return;
         
-        this.currentTextObjects.push(textObj);
-        this.tvMask.addChild(textObj);
+        this.currentTypeTextObjects.push(typeTextObj);
+        this.currentTextObjects.push(typeTextObj.text);
+        this.tvMask.addChild(typeTextObj.text);
     }
+
 
 
     private addSprite(sprite: Sprite): void {
@@ -858,18 +907,23 @@ export class TvManager {
         this.tvMask.addChild(sprite);
     }
 
-
     private clearScreen(): void {
         if (!this.tvMask) return;
 
+        // Clean up TypeText instances first (this will stop cursor blinking intervals)
+        for (const typeTextObj of this.currentTypeTextObjects) {
+            typeTextObj.destroy(); // This will clean up intervals and destroy the PIXI text object
+        }
+        this.currentTypeTextObjects = [];
+
+        // Clean up remaining text objects
         for (const textObject of this.currentTextObjects) {
-            const pixiText = textObject instanceof TypeText ? textObject.text : textObject;
-            this.tvMask.removeChild(pixiText);
+            this.tvMask.removeChild(textObject);
             textObject.destroy(); // Clean up PIXI object
         }
-
         this.currentTextObjects = [];
 
+        // Clean up sprites
         for (const sprite of this.currentSprites) {
             this.tvMask.removeChild(sprite);
             sprite.destroy(); // Clean up PIXI object
@@ -877,61 +931,13 @@ export class TvManager {
         this.currentSprites = [];
     }
 
-
-    /**
-     * Finish current screen and process next
-     */
-    private finishcurrentScreen(): void {
-        this.currentScreen = null;
-        this.screenTimer = 0;
-        this.processNextScreen();
-    }
-    
-    /**
-     * Skip current screen immediately
-     */
-    private skipcurrentScreen(): void {
-        this.clearScreen();
-        this.finishcurrentScreen();
-    }
-
-
-    /**
-     * Get current screen info
-     */
-    public getcurrentScreen(): TvScreen | null {
-        return this.currentScreen;
-    }
-    
-    /**
-     * Get queue length
-     */
-    public getQueueLength(): number {
-        return this.screenQueue.length;
-    }
-    
-    /**
-     * Remove specific screen from queue
-     */
-    public removeScreen(id: string): boolean {
-        const index = this.screenQueue.findIndex(msg => msg.id === id);
-        if (index !== -1) {
-            this.screenQueue.splice(index, 1);
-            return true;
-        }
-        return false;
-    }
-    
     /**
      * Cleanup when game session ends
      */
     public cleanup(): void {
         this.screenQueue = [];
-        this.currentScreen = null;
-        this.screenTimer = 0;
-        this.isDisplaying = false;
+        this.isProcessingQueue = false;
         this.intervals.forEach(interval => clearInterval(interval));
         this.clearScreen();
-
     }
 }

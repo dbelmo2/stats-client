@@ -312,7 +312,7 @@ export class GameManager {
         this.socketManager.on('afkRemoved', this.handleAfkRemoved);
         this.socketManager.on('showIsLive', () => {
             console.log('!!!!Live screen triggered!!!!');
-            TvManager.getInstance().displayLiveScreen();
+            TvManager.getInstance().queueLiveScreen();
         });
         this.socketManager.on('stateUpdate', (data: ServerStateUpdate) => {
             this.network.latestServerSnapshot = data;
@@ -494,7 +494,7 @@ export class GameManager {
     }
 
     private cleanupSession = (): void => {
-
+        console.warn('Socket closed. Cleaning up session...');
         this.app.ticker.stop();
 
         for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
@@ -849,8 +849,6 @@ export class GameManager {
         this.checkForKills(this.network.latestServerSnapshot.scores);
         this.ui.scoreDisplay.updateScores(this.network.latestServerSnapshot.scores, this.player.id);
         this.updateDevDisplays(deltaMs);
-
-        TvManager.getInstance().update(deltaMs);
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
