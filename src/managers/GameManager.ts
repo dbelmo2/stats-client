@@ -345,7 +345,20 @@ export class GameManager {
             this.gameState.phase = 'active';
         });        
     }
-    
+
+    private handleDisconnectedWarning = () => {
+        ModalManager.getInstance().showModal({
+            title: "Disconnected Warning",
+            message: "Connection lost. Please check your internet connection or try again later.",
+            buttonText: "Reconnect",
+            buttonAction: () => {
+                // Attempt to reconnect the player - force reload to bypass cache
+                window.location.reload();
+            },
+            isWarning: true
+        });
+    }
+
     private handleAfkWarning = ({ message }: { message: string}) => {
         console.warn(`[SocketManager] AFK Warning: ${message}`);
         ModalManager.getInstance().showModal({
@@ -551,7 +564,7 @@ export class GameManager {
         this.gameState.pendingCollisions.clear();
         this.gameState.destroyedProjectiles.clear();
 
-
+        this.handleDisconnectedWarning();
     }
 
     private integrateEnemyPlayers(): void {
