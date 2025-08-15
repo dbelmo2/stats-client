@@ -85,9 +85,6 @@ export class TvManager {
         await this.queueApiScreens();
         console.log('queue after API screens:', this.screenQueue);
         
-        this.queueLiveScreenNormal(); // Use normal priority for initial sequence
-        console.log('queue after live screen:', this.screenQueue);
-
         // Start processing the queue
         this.processQueue();
     }
@@ -110,9 +107,9 @@ export class TvManager {
             try {
                 await screen.showScreen();
             } catch (error) {
-                console.log('TvManager: Screen interrupted or error occurred:', error);
-                // Clear screen on error/interruption
+                console.error('TvManager: Screen interrupted or error occurred:', error);
                 this.clearScreen();
+                continue;
             }
         }
         
@@ -120,6 +117,7 @@ export class TvManager {
         
         // If queue is empty, add default screen and continue
         this.queueDefaultScreen();
+        this.queueApiScreens();
         this.processQueue();
     }
 
@@ -186,17 +184,6 @@ export class TvManager {
     }
 
     /**
-     * Add live screen to queue with normal priority (for internal sequencing)
-     */
-    private queueLiveScreenNormal(): void {
-        this.screenQueue.push({
-            id: 'live-screen',
-            priority: 1,
-            showScreen: () => this.showLiveScreen()
-        });
-    }
-
-    /**
      * Add default screen to queue
      */
     private queueDefaultScreen(): void {
@@ -223,14 +210,6 @@ export class TvManager {
         this.screenQueue.unshift(screen);
         console.log(`TvManager: Added high priority screen "${screen.id}" to front of queue`);
         
-        // Clear current screen to force immediate processing
-        this.clearScreen();
-        
-        // Reset processing flag to allow immediate restart
-        this.isProcessingQueue = false;
-        
-        // Start processing immediately if not already processing
-        setTimeout(() => this.processQueue(), 0);
     }
 
     /**
@@ -556,13 +535,13 @@ export class TvManager {
             totalLateString += `  • ${totalLateTimeFormatted.days} days\n`;
         }
         if (totalLateTimeFormatted.hours > 0) {
-            totalLateString += `  • ${totalLateTimeFormatted.hours} hours\n`;
+            totalLateString += `  • ${totalLateTimeFormatted.hours} hour(s)\n`;
         }
         if (totalLateTimeFormatted.minutes > 0) {
-            totalLateString += `  • ${totalLateTimeFormatted.minutes} minutes\n`;
+            totalLateString += `  • ${totalLateTimeFormatted.minutes} minute(s)\n`;
         }
         if (totalLateTimeFormatted.seconds > 0) {
-            totalLateString += `  • ${totalLateTimeFormatted.seconds} seconds`;
+            totalLateString += `  • ${totalLateTimeFormatted.seconds} second(s)`;
         }
 
         totalLateString += '...'
@@ -626,8 +605,8 @@ export class TvManager {
 
         const maxLateTimeFormatted = formatDuration(apiData.max.lateTime);
 
-        const maxLateString = maxLateTimeFormatted.hours > 0 ? `  • ${maxLateTimeFormatted.hours} hours\n  • ${maxLateTimeFormatted.minutes} minutes\n  • ${maxLateTimeFormatted.seconds} seconds`
-            : `  • ${maxLateTimeFormatted.minutes} minutes\n  • ${maxLateTimeFormatted.seconds} seconds`;
+        const maxLateString = maxLateTimeFormatted.hours > 0 ? `  • ${maxLateTimeFormatted.hours} hour(s)\n  • ${maxLateTimeFormatted.minutes} minute(s)\n  • ${maxLateTimeFormatted.seconds} second(s)`
+            : `  • ${maxLateTimeFormatted.minutes} minutes\n  • ${maxLateTimeFormatted.seconds} second(s)`;
 
         const maxLateTime = new TypeText({
             text: maxLateString,
@@ -667,6 +646,9 @@ export class TvManager {
         const wasLate = !wasOnTime && apiData.mostRecent.lateTime > 0;
         const textString = `The most recent episode "${apiData.mostRecent.title}" was ${wasOnTime ? 'on time!' : `${wasLate ? 'late by...' : 'early!'}`}`
 
+
+
+
         const mostRecentTitle = new TypeText({
             text: textString,
             style: {
@@ -687,9 +669,9 @@ export class TvManager {
         mostRecentTitle.setAnchor(0, 0);
         await mostRecentTitle.type();
         if (wasLate) await new Promise((resolve) => setTimeout(resolve, 2000));
-        mostRecentTitle.killCursor();
 
         if (wasLate) {
+            mostRecentTitle.killCursor();
             let mostRecentString = '';
 
             if (mostRecentTimeFormatted.days > 0) {
@@ -727,6 +709,7 @@ export class TvManager {
         }
 
         await new Promise((resolve) => setTimeout(resolve, 10000));
+        if (!wasLate) mostRecentTitle.killCursor();
         this.clearScreen();
     }
 
