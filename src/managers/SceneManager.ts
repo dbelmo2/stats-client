@@ -210,7 +210,7 @@ export class SceneManager {
         // Create background sprites
         const j1Sprite = Sprite.from('j1');
         j1Sprite.x = 0 - this.config!.GAME_WIDTH / 2;
-        j1Sprite.y = 0;
+        j1Sprite.y = -270;
         
         const j2Sprite = Sprite.from('j2');
         j2Sprite.x = 0 - this.config!.GAME_WIDTH / 5;

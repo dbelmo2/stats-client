@@ -38,9 +38,6 @@ import { SceneManager } from './SceneManager';
 // (serverside related)
 
 
-//TODO: Issues in API...
-// Latest livestream not updated in stats. 
-// duplicate keys (when live stream scheduled and when it actually starts?)
 
 
 interface EntityContainers {

@@ -41,7 +41,7 @@ export class TvManager {
         this.tvMask = new Graphics().rect(0, 0, 553, 348).fill('#394241');
         this.tvMask.rotation = -0.187; // Rotate the mask to match the TV angle
         this.tvMask.x = GAME_WIDTH - 248;
-        this.tvMask.y = GAME_HEIGHT / 2 - 162;
+        this.tvMask.y = (GAME_HEIGHT / 2) + 108;
         this.tvMask.stroke({
             color: '#292826',
             width: 10
