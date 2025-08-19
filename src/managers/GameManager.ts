@@ -6,6 +6,7 @@ import { SocketManager } from './SocketManager';
 import { EnemyPlayer } from '../components/game/EnemyPlayer';
 import { Projectile } from '../components/game/Projectile';
 import { EnemyProjectile } from '../components/game/EnemyProjectile';
+import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
 
 import { testForAABB } from '../systems/Collision';
 import { ScoreDisplay } from '../components/ui/ScoreDisplay';
@@ -17,11 +18,6 @@ import { FPSDisplay } from '../components/ui/FPSDisplay';
 import { Vector2 } from '../systems/Vector';
 import { ModalManager } from '../components/ui/Modal';
 
-import h3Theme from '../sounds/h3-theme.mp3'
-import shootingAudio from '../sounds/shoot-sound.wav';
-import impactAudio from '../sounds/impact-sound.wav';
-import jumpAudio from '../sounds/swipe-sound.mp3';
-import walkingAudio from '../sounds/walking-grass-sound.flac'; 
 import { AudioManager } from './AudioManager';
 import { DevModeManager } from './DevModeManager';
 import { TvManager } from './TvManager';
@@ -66,7 +62,7 @@ interface CameraSettings {
     baseY: number; // Store the non-shaken position
     }
 
-// TODO: Implement death prediciton for enemies (and self) on client (with servber confirmation)??
+// TODO: Implement death prediction for enemies (and self) on client (with server confirmation)??
 // TODO: Add powerups???
 // Ideas:
 //  Fat Love:
@@ -166,54 +162,64 @@ export class GameManager {
     };
 
     private constructor(app: Application) {
-        this.controller = new Controller();
-
-        this.socketManager = new SocketManager(config.GAME_SERVER_URL);
-
-        this.app = app;
-        this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
-        this.gameContainer = new Container();
-    
         try {
-            this.world = SceneManager.getInstance().initialize(
-                app, 
-                {
-                    GAME_WIDTH: this.GAME_WIDTH,
-                    GAME_HEIGHT: this.GAME_HEIGHT,
-                    GAME_BOUNDS: this.GAME_BOUNDS
-                },
-                this.gameContainer,
-                this.socketManager
-            );
-            
-            console.log('Scene successfully initialized');
-        } catch (error) {
-            console.error('Failed to initialize scene:', error);
-            throw new Error('Game initialization failed');
-        }
+            this.controller = new Controller();
+            this.socketManager = new SocketManager(config.GAME_SERVER_URL);
 
-        const devManager = DevModeManager.getInstance();
-        devManager.initialize(app);
-
-
-        this.ui.scoreDisplay = new ScoreDisplay();
-
-        this.camera.addChild(this.gameContainer);
-        this.app.stage.addChild(this.camera);
-        this.app.stage.addChild(this.ui.scoreDisplay);
-
-        // Add E key handler
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'e' || e.key === 'E') {
-                this.controller.resetMouse()
-                if (this.player.sprite) {
-                    this.world.ammoBush.handleAmmoBushInteraction(this.player.sprite);
-                }
+            this.app = app;
+            this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
+            this.gameContainer = new Container();
+        
+            try {
+                this.world = SceneManager.getInstance().initialize(
+                    app, 
+                    {
+                        GAME_WIDTH: this.GAME_WIDTH,
+                        GAME_HEIGHT: this.GAME_HEIGHT,
+                        GAME_BOUNDS: this.GAME_BOUNDS
+                    },
+                    this.gameContainer,
+                    this.socketManager
+                );
+                
+                console.log('Scene successfully initialized');
+            } catch (error) {
+                ErrorHandler.getInstance().handleCriticalError(
+                    error as Error,
+                    ErrorType.INITIALIZATION,
+                    { component: 'SceneManager' }
+                );
+                throw error;
             }
-        });
 
+            const devManager = DevModeManager.getInstance();
+            devManager.initialize(app);
 
+            this.ui.scoreDisplay = new ScoreDisplay();
 
+            this.camera.addChild(this.gameContainer);
+            this.app.stage.addChild(this.camera);
+            this.app.stage.addChild(this.ui.scoreDisplay);
+
+            // Add E key handler
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'e' || e.key === 'E') {
+                    this.controller.resetMouse()
+                    if (this.player.sprite) {
+                        this.world.ammoBush.handleAmmoBushInteraction(this.player.sprite);
+                    }
+                }
+            });
+
+        } catch (error) {
+            ErrorHandler.getInstance().handleCriticalError(
+                error as Error,
+                ErrorType.INITIALIZATION,
+                { component: 'GameManager' },
+                true // Should reload on critical initialization failure
+            );
+            throw error;
+        }
     }
     
 
@@ -240,41 +246,17 @@ export class GameManager {
 
 
     private initializeAudio(): void {
-        const audioManager = AudioManager.getInstance();
-        
-        // Register game sounds
-        audioManager.registerSound('shoot', {
-            src: [shootingAudio],
-            volume: 0.30
-        }, 'sfx');
-        
-        audioManager.registerSound('impact', {
-            src: [impactAudio],
-            volume: 0.35
-        }, 'sfx');
-
-        audioManager.registerSound('jump', {
-            src: [jumpAudio],
-            volume: 0.70
-        }, 'sfx');
-        
-        audioManager.registerSound('walking', {
-            src: [walkingAudio],
-            volume: 0.50,
-            loop: true
-        }, 'sfx');
-
-        audioManager.registerSound('theme', {
-            src: [h3Theme],
-            loop: true,
-            volume: 0.50
-        }, 'music');
-        
-        // Preload all sounds
-        audioManager.preloadAll().then(() => {
-            // Start background music
-            audioManager.play('theme');
-        });
+        try {
+            const audioManager = AudioManager.getInstance();
+            audioManager.initialize();
+            
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.AUDIO,
+                { phase: 'initialization' }
+            );
+        }
     }
 
 
@@ -298,54 +280,109 @@ export class GameManager {
     }
 
     private async setupNetworking(region: string): Promise<void> {
-        const id = this.socketManager.getId();
-        if (!id) throw new Error('Socket ID is undefined');
-        this.player.id = id;
+        try {
+            const id = this.socketManager.getId();
+            if (!id) {
+                const error = new Error('Socket ID is undefined');
+                ErrorHandler.getInstance().handleError(error, ErrorType.SOCKET, { phase: 'id_retrieval' });
+                throw error;
+            }
+            this.player.id = id;
 
-        this.socketManager.joinQueue(this.player.name, region);
-        this.socketManager.on('gameOver', this.handleGameOver);
-        this.socketManager.on('disconnect', this.cleanupSession);
-        this.socketManager.on('afkWarning', this.handleAfkWarning);
-        this.socketManager.on('afkRemoved', this.handleAfkRemoved);
-        this.socketManager.on('showIsLive', () => {
-            console.log('!!!!Live screen triggered!!!!');
-            TvManager.getInstance().queueLiveScreen();
-        });
-        this.socketManager.on('stateUpdate', (data: ServerStateUpdate) => {
-            this.network.latestServerSnapshot = data;
-        });
+            this.socketManager.joinQueue(this.player.name, region);
+            this.socketManager.on('gameOver', this.handleGameOver);
+            this.socketManager.on('disconnect', this.cleanupSession);
+            this.socketManager.on('afkWarning', this.handleAfkWarning);
+            this.socketManager.on('afkRemoved', this.handleAfkRemoved);
+            this.socketManager.on('showIsLive', () => {
+                try {
+                    console.log('!!!!Live screen triggered!!!!');
+                    TvManager.getInstance().queueLiveScreen();
+                } catch (error) {
+                    ErrorHandler.getInstance().handleError(
+                        error as Error,
+                        ErrorType.SOCKET,
+                        { event: 'showIsLive' }
+                    );
+                }
+            });
+            this.socketManager.on('stateUpdate', (data: ServerStateUpdate) => {
+                try {
+                    this.network.latestServerSnapshot = data;
+                } catch (error) {
+                    ErrorHandler.getInstance().handleError(
+                        error as Error,
+                        ErrorType.SOCKET,
+                        { event: 'stateUpdate', hasData: !!data }
+                    );
+                }
+            });
 
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.NETWORK,
+                { phase: 'setup', region }
+            );
+            throw error;
+        }
     }
 
 
     private handleGameOver = (scores: PlayerScore[]) => {
-        this.controller.resetMouse();
-        this.gameState.phase = 'ended';
-        this.gameState.pendingCollisions.clear();
-
-        this.ui.gameOverDisplay = new GameOverDisplay(scores, this.player.id);
-        this.ui.gameOverDisplay.x = this.app.screen.width / 2;
-        this.ui.gameOverDisplay.y = this.app.screen.height / 3;
-        this.app.stage.addChild(this.ui.gameOverDisplay);
-
-        this.socketManager.once('matchReset', () => {
-            this.player.projectiles = [];
-            this.entities.enemyProjectiles.clear();
+        try {
+            this.controller.resetMouse();
+            this.gameState.phase = 'ended';
             this.gameState.pendingCollisions.clear();
-            this.gameState.destroyedProjectiles.clear();
 
-            if (this.ui.gameOverDisplay) {
-                this.app.stage.removeChild(this.ui.gameOverDisplay);
-                this.ui.gameOverDisplay.destroy();
-                this.ui.gameOverDisplay = null;
-            }
-            this.gameState.phase = 'active';
-        });        
+            this.ui.gameOverDisplay = new GameOverDisplay(scores, this.player.id);
+            this.ui.gameOverDisplay.x = this.app.screen.width / 2;
+            this.ui.gameOverDisplay.y = this.app.screen.height / 3;
+            this.app.stage.addChild(this.ui.gameOverDisplay);
+
+            this.socketManager.once('matchReset', () => {
+                try {
+                    this.player.projectiles = [];
+                    this.entities.enemyProjectiles.clear();
+                    this.gameState.pendingCollisions.clear();
+                    this.gameState.destroyedProjectiles.clear();
+
+                    if (this.ui.gameOverDisplay) {
+                        this.app.stage.removeChild(this.ui.gameOverDisplay);
+                        this.ui.gameOverDisplay.destroy();
+                        this.ui.gameOverDisplay = null;
+                    }
+                    this.gameState.phase = 'active';
+                } catch (error) {
+                    ErrorHandler.getInstance().handleError(
+                        error as Error,
+                        ErrorType.GAME_STATE,
+                        { event: 'matchReset', phase: 'cleanup' }
+                    );
+                }
+            });
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.GAME_STATE,
+                { event: 'gameOver', scoresCount: scores?.length || 0 }
+            );
+        }
     }
 
     private handleDisconnectedWarning = () => {
+        ErrorHandler.getInstance().handleError(
+            'Connection lost detected',
+            ErrorType.NETWORK,
+            { 
+                phase: 'disconnect_warning',
+                playerId: this.player.id,
+                timestamp: Date.now()
+            }
+        );
+        
         ModalManager.getInstance().showModal({
-            title: "Disconnected Warning",
+            title: "Connection Lost",
             message: "Connection lost. Please check your internet connection or try again later.",
             buttonText: "Reconnect",
             buttonAction: () => {
@@ -357,32 +394,49 @@ export class GameManager {
     }
 
     private handleAfkWarning = ({ message }: { message: string}) => {
-        console.warn(`[SocketManager] AFK Warning: ${message}`);
-        ModalManager.getInstance().showModal({
-            title: "AFK Warning",
-            message: "You have been inactive for too long. Please move or click to continue playing.",
-            buttonText: "OK",
-            buttonAction: () => {
-                // Send a small movement to show the player is active
+        try {
+            console.warn(`[SocketManager] AFK Warning: ${message}`);
+            ModalManager.getInstance().showModal({
+                title: "AFK Warning",
+                message: "You have been inactive for too long. Please move or click to continue playing.",
+                buttonText: "OK",
+                buttonAction: () => {
+                    // Send a small movement to show the player is active
 
-            },
-            isWarning: true
-        });
+                },
+                isWarning: true
+            });
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.SOCKET,
+                { event: 'afkWarning', message }
+            );
+        }
     }
     
     private handleAfkRemoved = ({ message }: { message: string}) => {
-        console.warn(`[SocketManager] AFK Removed: ${message}`);
-        ModalManager.getInstance().showModal({
-            title: "Removed for Inactivity",
-            message: "You have been removed from the game due to inactivity. Please reload the page to rejoin.",
-            buttonText: "Reload Page",
-            buttonAction: () => {
-                window.location.reload();
-            },
-            isWarning: false
-        });
+        try {
+            console.warn(`[SocketManager] AFK Removed: ${message}`);
+            ModalManager.getInstance().showModal({
+                title: "Removed for Inactivity",
+                message: "You have been removed from the game due to inactivity. Please reload the page to rejoin.",
+                buttonText: "Reload Page",
+                buttonAction: () => {
+                    window.location.reload();
+                },
+                isWarning: true
+            });
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.SOCKET,
+                { event: 'afkRemoved', message }
+            );
+            // Fallback: if modal fails, still try to reload
+            setTimeout(() => window.location.reload(), 3000);
+        }
     }
-
 
     private integrateStateUpdate(): void {
         const { players, projectiles } = this.network.latestServerSnapshot;
@@ -504,64 +558,77 @@ export class GameManager {
     }
 
     private cleanupSession = (): void => {
-        console.warn('Socket closed. Cleaning up session...');
-        this.app.ticker.stop();
+        try {
+            console.warn('Socket closed. Cleaning up session...');
+            ErrorHandler.getInstance().logWarning(
+                'Socket connection closed, initiating cleanup',
+                ErrorType.SOCKET,
+                { playerId: this.player.id }
+            );
 
-        for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
-            const projectile = this.player.projectiles[i];
-            this.app.stage.removeChild(projectile);
-            projectile.destroy();
+            this.app.ticker.stop();
+
+            for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
+                const projectile = this.player.projectiles[i];
+                this.app.stage.removeChild(projectile);
+                projectile.destroy();
+            }
+            this.player.projectiles = [];
+
+            const { enemyProjectiles, enemies } = this.entities;
+
+            for (const [_, projectile] of enemyProjectiles) {
+                this.app.stage.removeChild(projectile);
+                projectile.destroy();
+            }
+            enemyProjectiles.clear();
+
+            // Clean up enemy players
+            for (const [_, enemy] of enemies) {
+                this.app.stage.removeChild(enemy);
+                enemy.destroy();
+            }
+            enemies.clear();
+
+            // Clean up self
+            if (this.player.sprite) {
+                this.app.stage.removeChild(this.player.sprite);
+                this.player.sprite.destroy();
+                this.player.sprite = undefined;
+            }
+
+            for (const platform of this.world.platforms) {
+                this.app.stage.removeChild(platform);
+                platform.destroy();
+            }
+
+            DevModeManager.getInstance().cleanup();
+
+            // Clean up kill indicators
+            for (const indicator of this.entities.killIndicators) {
+                this.gameContainer.removeChild(indicator);
+                indicator.destroy();
+            }
+            this.entities.killIndicators = [];
+            this.gameState.scores.clear();
+
+            // Clean up the scene
+            SceneManager.getInstance().cleanup();
+
+            // Clear all remaining state
+            this.gameState.pendingCollisions.clear();
+            this.gameState.destroyedProjectiles.clear();
+
+            this.handleDisconnectedWarning();
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.GAME_STATE,
+                { phase: 'cleanup', playerId: this.player.id }
+            );
+            // Still show disconnect warning even if cleanup fails
+            this.handleDisconnectedWarning();
         }
-        this.player.projectiles = [];
-
-
-        const { enemyProjectiles, enemies } = this.entities;
-
-        for (const [_, projectile] of enemyProjectiles) {
-            this.app.stage.removeChild(projectile);
-            projectile.destroy();
-        }
-        enemyProjectiles.clear();
-
-        // Clean up enemy players
-        for (const [_, enemy] of enemies) {
-            this.app.stage.removeChild(enemy);
-            enemy.destroy();
-        }
-        enemies.clear();
-
-        // Clean up self
-        if (this.player.sprite) {
-            this.app.stage.removeChild(this.player.sprite);
-            this.player.sprite.destroy();
-            this.player.sprite = undefined;
-        }
-
-        for (const platform of this.world.platforms) {
-            this.app.stage.removeChild(platform);
-            platform.destroy();
-        }
-
-
-        DevModeManager.getInstance().cleanup();
-
-        // Clean up kill indicators
-        for (const indicator of this.entities.killIndicators) {
-            this.gameContainer.removeChild(indicator);
-            indicator.destroy();
-        }
-        this.entities.killIndicators = [];
-        this.gameState.scores.clear();
-
-
-        // Clean up the scene
-        SceneManager.getInstance().cleanup();
-
-        // Clear all remaining state
-        this.gameState.pendingCollisions.clear();
-        this.gameState.destroyedProjectiles.clear();
-
-        this.handleDisconnectedWarning();
     }
 
     private integrateEnemyPlayers(): void {
@@ -678,29 +745,46 @@ export class GameManager {
     // as well as a high FPS of the renderer. Might need to play with these values
     // with the broadcast rate to the server in mind.
     private setupGameLoop(): void {
-        this.app.ticker.maxFPS = 60;
+        try {
+            this.app.ticker.maxFPS = 60;
 
-        this.app.ticker.add((delta) => {
-            const elapsedMS = delta.elapsedMS;
-            const cappedFrameTime = Math.min(elapsedMS, 100); 
+            this.app.ticker.add((delta) => {
+                try {
+                    const elapsedMS = delta.elapsedMS;
+                    const cappedFrameTime = Math.min(elapsedMS, 100); 
 
-            this.gameState.accumulator += cappedFrameTime;
+                    this.gameState.accumulator += cappedFrameTime;
 
-            while (this.gameState.accumulator >= this.MIN_MS_BETWEEN_TICKS) {
-                this.handleTick();
-                this.gameState.accumulator -= this.MIN_MS_BETWEEN_TICKS;
-                this.gameState.localTick += 1;
-            }
+                    while (this.gameState.accumulator >= this.MIN_MS_BETWEEN_TICKS) {
+                        this.handleTick();
+                        this.gameState.accumulator -= this.MIN_MS_BETWEEN_TICKS;
+                        this.gameState.localTick += 1;
+                    }
 
-            // Note: Pixijs calls render() at the end of the ticker loop, sod we don't
-            // need to decouple rendering from the accumulator logic.
-            this.render(elapsedMS);
-
-        });
-
+                    // Note: Pixijs calls render() at the end of the ticker loop, sod we don't
+                    // need to decouple rendering from the accumulator logic.
+                    this.render(elapsedMS);
+                } catch (error) {
+                    ErrorHandler.getInstance().handleCriticalError(
+                        error as Error,
+                        ErrorType.GAME_STATE,
+                        { phase: 'game_loop', error: 'Critical error in game loop' }
+                    );
+                    
+                    // Stop the game loop to prevent cascading errors
+                    this.app.ticker.stop();
+                }
+            });
+        } catch (error) {
+            ErrorHandler.getInstance().handleCriticalError(
+                error as Error,
+                ErrorType.GAME_STATE,
+                { phase: 'setup_game_loop', error: 'Failed to setup game loop' }
+            );
+            throw error; // Re-throw as this is critical for game functionality
+        }
     }
 
-    
     private handleReconciliation(): void {
         this.network.latestServerSnapshotProcessed = this.network.latestServerSnapshot;
         const selfData = this.network.latestServerSnapshotProcessed.players.find(player => player.id === this.player.id);
@@ -759,26 +843,40 @@ export class GameManager {
 
 
     private handleTick(): void {
-        if (this.player.sprite) {
-            if (this.network.latestServerSnapshot.serverTick > this.network.latestServerSnapshotProcessed.serverTick) {
-                this.handleReconciliation();
+        try {
+            if (this.player.sprite) {
+                if (this.network.latestServerSnapshot.serverTick > this.network.latestServerSnapshotProcessed.serverTick) {
+                    this.handleReconciliation();
+                }
+
+                const playerInput = this.handlePlayerInput();
+                this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
+                if (playerInput) {
+                    this.handleShooting(playerInput);
+                    this.player.sprite.setLastProcessedInputVector(playerInput.vector);
+                }     
             }
 
-            const playerInput = this.handlePlayerInput();
-            this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
-            if (playerInput) {
-                this.handleShooting(playerInput);
-                this.player.sprite.setLastProcessedInputVector(playerInput.vector);
-            }     
+            this.integrateStateUpdate();
+            this.updateOwnProjectiles();
+            this.updateEnemyProjectiles();
+            this.cleanupDestroyedProjectiles(); 
+            this.cleanupPendingCollisions();
+            this.world.ammoBush.update(this.player.sprite);
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.GAME_STATE,
+                {
+                    phase: 'tick',
+                    localTick: this.gameState.localTick,
+                    hasPlayerSprite: !!this.player.sprite
+                }
+            );
+            
+            // Log error but don't break the game loop
+            console.error('Error in handleTick:', error);
         }
-
-        this.integrateStateUpdate();
-        this.updateOwnProjectiles();
-        this.updateEnemyProjectiles();
-        this.cleanupDestroyedProjectiles(); 
-        this.cleanupPendingCollisions();
-        this.world.ammoBush.update(this.player.sprite);
-
     }
 
     private handlePlayerInput(): InputPayload | undefined {

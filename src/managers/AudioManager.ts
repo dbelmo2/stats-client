@@ -1,6 +1,13 @@
 import { Howl, Howler } from 'howler';
 import { SettingsManager } from './SettingsManager';
 
+import h3Theme from '../sounds/h3-theme.mp3'
+import shootingAudio from '../sounds/shoot-sound.wav';
+import impactAudio from '../sounds/impact-sound.wav';
+import jumpAudio from '../sounds/swipe-sound.mp3';
+import walkingAudio from '../sounds/walking-grass-sound.flac';
+import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
+
 type AudioCategory = 'sfx' | 'music' | 'ui' | 'ambient';
 
 export interface SoundConfig {
@@ -53,6 +60,56 @@ export class AudioManager {
             AudioManager.instance = new AudioManager();
         }
         return AudioManager.instance;
+    }
+
+
+    /**
+     * Initialize by registering default sounds and preloading them.
+     */
+    public initialize(): void {
+        this.registerDefaultSounds();
+                
+        // Preload all sounds
+        this.preloadAll().then(() => {
+            // Start background music
+            this.play('theme');
+        }).catch((error) => {
+            ErrorHandler.getInstance().handleError(
+                error,
+                ErrorType.AUDIO,
+                { phase: 'preload' }
+            );
+        });
+        
+    }
+
+    private registerDefaultSounds(): void {
+        this.registerSound('shoot', {
+            src: [shootingAudio],
+            volume: 0.30
+        }, 'sfx');
+        
+        this.registerSound('impact', {
+            src: [impactAudio],
+            volume: 0.35
+        }, 'sfx');
+
+        this.registerSound('jump', {
+            src: [jumpAudio],
+            volume: 0.70
+        }, 'sfx');
+        
+        this.registerSound('walking', {
+            src: [walkingAudio],
+            volume: 0.50,
+            loop: true
+        }, 'sfx');
+
+        this.registerSound('theme', {
+            src: [h3Theme],
+            loop: true,
+            volume: 0.50
+        }, 'music');
     }
 
     public registerSound(soundId: string, config: SoundConfig, category: AudioCategory = 'sfx'): void {
