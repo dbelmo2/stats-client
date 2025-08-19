@@ -1,11 +1,11 @@
 import { Container, Sprite, Text } from 'pixi.js';
 import type { Player } from '../../components/game/Player';
 import { testForAABB } from '../../systems/Collision';
-
+import type { SocketManager } from '../../managers/SocketManager';
 export class AmmoBush extends Container {
     private body: Sprite;
     private labelIsShowing: boolean = false;
-    private socketManager: any; // Replace with actual socket manager type
+    private socketManager: SocketManager; // Replace with actual socket manager type
     private floatingLabel: Text | null = null;
     private ammoBox: Sprite; // Assuming 'ammoBush' is the correct asset alias
 
@@ -47,10 +47,7 @@ export class AmmoBush extends Container {
 
     
     public update(player?: Player): void {
-
         this.updateFadeAnimation();
-
-
         if (!player || !player.getIsBystander()) {
             this.hideLabel();
             return;
@@ -60,7 +57,6 @@ export class AmmoBush extends Container {
         } else {
             this.hideLabel();
         }
-
     }
 
     public handleAmmoBushInteraction(player: Player): void {
@@ -77,13 +73,13 @@ export class AmmoBush extends Container {
             this.floatingLabel = new Text({
                 text: 'Press E',
                 style: {
-                    fontFamily: 'Pixel', // Ensure this font is loaded
+                    fontFamily: 'Pixel',
                     fontSize: 26,
                     fill: 0xffffff,
                 }   
             });
             this.floatingLabel.anchor.set(0.5);
-            this.floatingLabel.position.set(50, -50);
+            this.floatingLabel.position.set(135, -100);
             this.floatingLabel.alpha = 0; // Start invisible
             this.addChild(this.floatingLabel);
         }
