@@ -317,6 +317,41 @@ export class AudioManager {
                 { phase: 'applyVolumeSettings' }
             );
         }
+
+
+    }
+
+    public setMusicVolume(volume: number): void {
+        try {
+            const soundsArray = Array.from(this.sounds.values());
+            const music = soundsArray.find((sound) => sound.category === 'music');
+            if (music) {
+                music.howl.volume(volume);
+            }
+        } catch (error) {
+            console.error('Unable to set music volume:', error);
+            ErrorHandler.getInstance().handleError(error as Error,
+                ErrorType.AUDIO,
+                { phase: 'setMusicVolume', volume }
+            );
+        }
+
+    }
+
+    public setSoundEffectsVolume(volume: number): void {
+        try {
+            const soundsArray = Array.from(this.sounds.values());
+            const sfx = soundsArray.find((sound) => sound.category === 'sfx');
+            if (sfx) {
+                sfx.howl.volume(volume);
+            }
+        } catch (error) {
+            console.error('Unable to set sound effects volume:', error);
+            ErrorHandler.getInstance().handleError(error as Error,
+                ErrorType.AUDIO,
+                { phase: 'setSoundEffectsVolume', volume }
+            );
+        }
     }
 
     private getAdjustedVolume(baseVolume: number, category: AudioCategory): number {
@@ -398,8 +433,10 @@ export class AudioManager {
     private handleSettingsChange(type: string, value: any): void {
         switch (type) {
             case 'Music Volume':
+                this.setMusicVolume(value);
+                break;
             case 'Sound Effects Volume':
-                this.applyVolumeSettings();
+                this.setSoundEffectsVolume(value);
                 break;
             case 'Mute All Sound':
                 if (value) {
