@@ -96,8 +96,12 @@ export class SettingsManager {
         this.createSettingsButton();
     }
 
-    public onSettingsChange(callback: (type: string, value: any) => void): void {
+    public onSettingsChange(callback: (type: string, value: any) => void): () => void {
         this.onSettingsChangeCallbacks.push(callback);
+        const removeListenerCallback = () => {
+            this.onSettingsChangeCallbacks = this.onSettingsChangeCallbacks.filter(cb => cb !== callback);
+        };
+        return removeListenerCallback;
     }
 
     private createSettingsButton(): void {
