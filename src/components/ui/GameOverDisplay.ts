@@ -1,4 +1,4 @@
-import { Container, Text, TextStyle } from 'pixi.js';
+import { Container, Text, TextStyle, Graphics } from 'pixi.js';
 
 type PlayerScore = {
     playerId: string;
@@ -14,8 +14,19 @@ export class GameOverDisplay extends Container {
     constructor(scores: PlayerScore[], selfId: string) {
         super();
 
+        // Create transparent black background with rounded corners
+        const background = new Graphics();
+        const backgroundWidth = window.innerWidth / 4;
+        const backgroundHeight = (window.innerHeight / 2) + 100;
+        const borderRadius = 20; // Adjust this value to change the roundness
+        
+        background.roundRect(0, 0, backgroundWidth, backgroundHeight, borderRadius);
+        background.fill({ color: 0x000000, alpha: 0.7 }); // Black with 70% opacity
+        background.position.set(-window.innerWidth / 8, -window.innerHeight / 8); // Center the background
+        this.addChild(background);
+
         const winnerStyle = new TextStyle({
-            fontFamily: 'Arial',
+            fontFamily: 'Pixel',
             fontSize: 40,
             fontWeight: 'bold',
             fill: '#ffffff',
@@ -24,7 +35,7 @@ export class GameOverDisplay extends Container {
         });
 
         const scoreStyle = new TextStyle({
-            fontFamily: 'Arial',
+            fontFamily: 'Pixel',
             fontSize: 20,
             fill: '#cccccc',
             align: 'center'
@@ -54,7 +65,7 @@ export class GameOverDisplay extends Container {
         const nextRoundText = new Text({
             text: `Next round starting ${secondCount} seconds...`,
             style: new TextStyle({
-                fontFamily: 'Arial',
+                fontFamily: 'Pixel',
                 fontSize: 20,
                 fill: '#ffffff',
                 align: 'center'
@@ -77,6 +88,7 @@ export class GameOverDisplay extends Container {
     }
 
     destroy(): void {
+        // Clean up children and timer
         this.removeChildren().forEach(child => child.destroy());
         if (this.timerId) {
             clearInterval(this.timerId);
