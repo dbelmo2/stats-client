@@ -51,9 +51,6 @@ export class AudioManager {
 
     }
 
-
-
-
     public static getInstance(): AudioManager {
         if (!AudioManager.instance) {
             AudioManager.instance = new AudioManager();

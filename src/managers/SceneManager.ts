@@ -4,6 +4,42 @@ import { AmmoBush } from '../components/game/AmmoBush';
 import { TvManager } from './TvManager';
 import type { SocketManager } from './SocketManager';
 import type { WorldObjects } from '../types/game.types';
+import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
+
+// Scene configuration constants
+const SCENE_CONSTANTS = {
+    BACKGROUND_COLORS: {
+        LEFT_TOP: '#1C252A',
+        BOTTOM: '#1D252A'
+    },
+    GRASS: {
+        HEIGHT_OFFSET: 47,
+        START_X: -960,
+        TILE_COUNT: 8,
+        Z_INDEX: 100
+    },
+    PARALLAX_MULTIPLIERS: {
+        J1: 0.4,
+        J2: 0.3,
+        J3: 0.2
+    },
+    PLATFORM_OFFSETS: {
+        SMALL: 610,
+        LARGE: 115,
+        Y_LEVEL_1: 250,
+        Y_LEVEL_2: 500
+    },
+    AMMO_BUSH: {
+        X_POSITION: -100
+    },
+    DECORATIONS: {
+        BUSH_Y_OFFSET: 352,
+        BUSH_X_OFFSET: -200,
+        BUSH_TREE_X_OFFSET: 650,
+        BUSH_TREE_Y_OFFSET: -250
+    },
+    DEBUG_BOUNDS_TIMEOUT: 5000
+} as const;
 
 export interface SceneConfig {
     GAME_WIDTH: number;
@@ -17,10 +53,10 @@ export interface SceneConfig {
 }
 
 export interface BackgroundAssets {
-    j1: Sprite;
-    j2: Sprite;
-    j3: Sprite;
-    j4: Sprite;
+    j1: Sprite | null;
+    j2: Sprite | null;
+    j3: Sprite | null;
+    j4: Sprite | null;
 }
 
 export class SceneManager {
@@ -61,30 +97,47 @@ export class SceneManager {
         gameContainer: Container, 
         socketManager: SocketManager
     ): WorldObjects {
-        console.log('SceneManager: Initializing...');
-        
-        this.app = app;
-        this.config = config;
-        this.gameContainer = gameContainer;
-        this.isInitialized = true;
-        
-        // Initialize world objects
-        this.world = {
-            platforms: [],
-            ammoBush: undefined as unknown as AmmoBush,
-            backgroundAssets: {}
-        };
-        
         try {
+            console.log('SceneManager: Initializing...');
+            
+            // Validate input parameters
+            if (!app) {
+                throw new Error('Application instance is required');
+            }
+            if (!config) {
+                throw new Error('Scene configuration is required');
+            }
+            if (!gameContainer) {
+                throw new Error('Game container is required');
+            }
+            if (!socketManager) {
+                throw new Error('Socket manager is required');
+            }
+            
+            this.app = app;
+            this.config = config;
+            this.gameContainer = gameContainer;
+            this.isInitialized = true;
+            
+            // Initialize world objects
+            this.world = {
+                platforms: [],
+                ammoBush: undefined as unknown as AmmoBush,
+                backgroundAssets: {}
+            };
+            
             this.setupScene(socketManager);
             console.log('SceneManager: Initialization complete');
+            
+            return this.world;
         } catch (error) {
-            console.error('SceneManager: Error during initialization:', error);
-            this.isInitialized = false;
-            throw error;
+            ErrorHandler.getInstance().handleCriticalError(
+                error as Error,
+                ErrorType.INITIALIZATION,
+                { phase: 'initialize' }
+            );
+            throw error; // Re-throw as this is critical for game functionality
         }
-        
-        return this.world;
     }
     
     /**
@@ -111,8 +164,7 @@ export class SceneManager {
      * Main scene setup orchestration
      */
     private setupScene(socketManager: SocketManager): void {
-        this.ensureInitialized();
-        
+        this.ensureInitialized();        
         console.log('SceneManager: Setting up scene...');
         this.createBackground();
         this.setupParallaxBackground();
@@ -125,79 +177,131 @@ export class SceneManager {
      * Create the main background elements
      */
     private createBackground(): void {
-        this.ensureInitialized();
-        
-        this.backgroundContainer = new Container();
-        
-        // Create extended background areas
-        const leftBgTop = new Graphics()
-            .rect(-this.config!.GAME_WIDTH, this.config!.GAME_HEIGHT, this.config!.GAME_WIDTH, this.config!.GAME_HEIGHT + 500)
-            .fill('#1C252A');
-        
-        const bottomBg = new Graphics()
-            .rect(0, this.config!.GAME_HEIGHT, this.config!.GAME_WIDTH * 2, 500)
-            .fill('#1D252A');
-        
-        this.backgroundContainer.addChild(leftBgTop);
-        this.backgroundContainer.addChild(bottomBg);
-        
-        // Add decorative elements
-        this.addDecorations(bottomBg);
-        
-        // Create grass ground
-        this.createGrass(bottomBg);
-        
-        // Add background to game container
-        this.gameContainer!.addChild(this.backgroundContainer);
+        try {
+            this.ensureInitialized();
+            
+            this.backgroundContainer = new Container();
+            
+            // Create extended background areas
+            const leftBgTop = new Graphics()
+                .rect(-this.config!.GAME_WIDTH, this.config!.GAME_HEIGHT, this.config!.GAME_WIDTH, this.config!.GAME_HEIGHT + 500)
+                .fill(SCENE_CONSTANTS.BACKGROUND_COLORS.LEFT_TOP);
+            
+            const bottomBg = new Graphics()
+                .rect(0, this.config!.GAME_HEIGHT, this.config!.GAME_WIDTH * 2, 500)
+                .fill(SCENE_CONSTANTS.BACKGROUND_COLORS.BOTTOM);
+            
+            this.backgroundContainer.addChild(leftBgTop);
+            this.backgroundContainer.addChild(bottomBg);
+            
+            // Add decorative elements
+            this.addDecorations(bottomBg);
+            
+            // Create grass ground
+            this.createGrass(bottomBg);
+            
+            // Add background to game container
+            this.gameContainer!.addChild(this.backgroundContainer);
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.RENDERING,
+                { phase: 'createBackground' }
+            );
+        }
     }
     
+    /**
+     * Helper method to safely create sprite with validation
+     */
+    private createSpriteFromTexture(textureName: string, context: string): Sprite | null {
+        try {
+            const sprite = Sprite.from(textureName);
+            if (!sprite.texture || sprite.texture.width === 0 || sprite.texture.height === 0) {
+                throw new Error(`Invalid or missing texture: ${textureName}`);
+            }
+            return sprite;
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.RENDERING,
+                { phase: 'createSprite', textureName, context }
+            );
+            return null;
+        }
+    }
+
     /**
      * Add decorative elements to the background
      */
     private addDecorations(bottomBg: Graphics): void {
-        this.ensureInitialized();
-        
-        // Bush decoration
-        const bush = Sprite.from('bush');
-        bush.anchor.set(1, -1);
-        bush.y = bush.y + 352;
-        bush.x = bush.x - 200;
-        
-        // Bush tree decoration
-        const bushTree = Sprite.from('bushTree');
-        bushTree.anchor.set(0, 0);
-        bushTree.x = this.config!.GAME_WIDTH - 650;
-        bushTree.y = -250;
-        
-        bottomBg.addChild(bush);
-        bottomBg.addChild(bushTree);
+        try {
+            this.ensureInitialized();
+            
+            // Bush decoration
+            const bush = this.createSpriteFromTexture('bush', 'addDecorations');
+            if (bush) {
+                bush.anchor.set(1, -1);
+                bush.y = bush.y + SCENE_CONSTANTS.DECORATIONS.BUSH_Y_OFFSET;
+                bush.x = bush.x + SCENE_CONSTANTS.DECORATIONS.BUSH_X_OFFSET;
+                bottomBg.addChild(bush);
+            }
+            
+            // Bush tree decoration
+            const bushTree = this.createSpriteFromTexture('bushTree', 'addDecorations');
+            if (bushTree) {
+                bushTree.anchor.set(0, 0);
+                bushTree.x = this.config!.GAME_WIDTH - SCENE_CONSTANTS.DECORATIONS.BUSH_TREE_X_OFFSET;
+                bushTree.y = SCENE_CONSTANTS.DECORATIONS.BUSH_TREE_Y_OFFSET;
+                bottomBg.addChild(bushTree);
+            }
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.RENDERING,
+                { phase: 'addDecorations' }
+            );
+        }
     }
     
     /**
      * Create grass ground tiles
      */
     private createGrass(bottomBg: Graphics): void {
-        this.ensureInitialized();
-        
-        const grassHeight = this.config!.GAME_HEIGHT - 47;
-        let grassTileWidth = 0; // Approximate width of grass tile
-        const startX = -960;
-        const numberOfTiles = 8;
-        
-        this.grassSprites = [];
-        
-        for (let i = 0; i < numberOfTiles; i++) {
-            const grass = Sprite.from('grassOne');
-            if (grassTileWidth === 0) {
-                grassTileWidth = grass.width;
-            }   
-            grass.anchor.set(0, 0);
-            grass.zIndex = 100; // Ensure grass is on top of background
-            grass.x = startX + (i * grassTileWidth);
-            grass.y = grassHeight;
+        try {
+            this.ensureInitialized();
             
-            this.grassSprites.push(grass);
-            bottomBg.addChild(grass);
+            const grassHeight = this.config!.GAME_HEIGHT - SCENE_CONSTANTS.GRASS.HEIGHT_OFFSET;
+            let grassTileWidth = 0; // Approximate width of grass tile
+            const startX = SCENE_CONSTANTS.GRASS.START_X;
+            const numberOfTiles = SCENE_CONSTANTS.GRASS.TILE_COUNT;
+            
+            this.grassSprites = [];
+            
+            for (let i = 0; i < numberOfTiles; i++) {
+                const grass = this.createSpriteFromTexture('grassOne', 'createGrass');
+                if (!grass) {
+                    console.warn(`Failed to create grass tile ${i}, skipping`);
+                    continue;
+                }
+                
+                if (grassTileWidth === 0) {
+                    grassTileWidth = grass.width;
+                }   
+                grass.anchor.set(0, 0);
+                grass.zIndex = SCENE_CONSTANTS.GRASS.Z_INDEX; // Ensure grass is on top of background
+                grass.x = startX + (i * grassTileWidth);
+                grass.y = grassHeight;
+                
+                this.grassSprites.push(grass);
+                bottomBg.addChild(grass);
+            }
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.RENDERING,
+                { phase: 'createGrass' }
+            );
         }
     }
     
@@ -205,59 +309,93 @@ export class SceneManager {
      * Setup parallax background layers
      */
     private setupParallaxBackground(): void {
-        this.ensureInitialized();
-        
-        // Create background sprites
-        const j1Sprite = Sprite.from('j1');
-        j1Sprite.x = 0 - this.config!.GAME_WIDTH / 2;
-        j1Sprite.y = -270;
-        
-        const j2Sprite = Sprite.from('j2');
-        j2Sprite.x = 0 - this.config!.GAME_WIDTH / 5;
-        j2Sprite.y = 0;
-        
-        const j3Sprite = Sprite.from('j3');
-        j3Sprite.x = 0 - this.config!.GAME_WIDTH / 2;
-        j3Sprite.y = 0;
-        
-        const j4Sprite = Sprite.from('j4');
-        j4Sprite.x = 0;
-        j4Sprite.y = 0;
-        
-        // Add to stage in correct order (back to front)
-        this.app!.stage.addChild(j4Sprite);
-        this.app!.stage.addChild(j3Sprite);
-        this.app!.stage.addChild(j2Sprite);
-        this.app!.stage.addChild(j1Sprite);
-        
-        // Store references
-        this.world!.backgroundAssets = {
-            j1: j1Sprite,
-            j2: j2Sprite,
-            j3: j3Sprite,
-            j4: j4Sprite,
-        };
+        try {
+            this.ensureInitialized();
+            
+            // Create background sprites with validation
+            const j1Sprite = this.createSpriteFromTexture('j1', 'setupParallaxBackground');
+            const j2Sprite = this.createSpriteFromTexture('j2', 'setupParallaxBackground');
+            const j3Sprite = this.createSpriteFromTexture('j3', 'setupParallaxBackground');
+            const j4Sprite = this.createSpriteFromTexture('j4', 'setupParallaxBackground');
+            
+            // Configure sprites if they were created successfully
+
+            if (j4Sprite) {
+                j4Sprite.x = 0;
+                j4Sprite.y = 0;
+                this.app!.stage.addChild(j4Sprite);
+            }
+            
+            if (j3Sprite) {
+                j3Sprite.x = 0 - this.config!.GAME_WIDTH / 2;
+                j3Sprite.y = 0;
+                this.app!.stage.addChild(j3Sprite);
+            }
+            
+
+            if (j2Sprite) {
+                j2Sprite.x = 0 - this.config!.GAME_WIDTH / 5;
+                j2Sprite.y = 0;
+                this.app!.stage.addChild(j2Sprite);
+            }
+            
+            if (j1Sprite) {
+                j1Sprite.x = 0 - this.config!.GAME_WIDTH / 2;
+                j1Sprite.y = -270;
+                this.app!.stage.addChild(j1Sprite);
+            }
+            
+            // Store references (even if some are null)
+            this.world!.backgroundAssets = {
+                j1: j1Sprite,
+                j2: j2Sprite,
+                j3: j3Sprite,
+                j4: j4Sprite,
+            };
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.RENDERING,
+                { phase: 'setupParallaxBackground' }
+            );
+        }
     }
     
     /**
      * Create game platforms
      */
     private createPlatforms(): void {
-        this.ensureInitialized();
-        
-        const platformConfigs = [
-            { x: 115, y: this.config!.GAME_HEIGHT - 250, type: 'two' as const },
-            { x: this.config!.GAME_WIDTH - 610, y: this.config!.GAME_HEIGHT - 250, type: 'one' as const },
-            { x: 115, y: this.config!.GAME_HEIGHT - 500, type: 'one' as const },
-            { x: this.config!.GAME_WIDTH - 610, y: this.config!.GAME_HEIGHT - 500, type: 'two' as const },
-        ];
-        
-        this.world!.platforms = [];
-        
-        for (const config of platformConfigs) {
-            const platform = new Platform(config.x, config.y, config.type);
-            this.world!.platforms.push(platform);
-            this.gameContainer!.addChild(platform);
+        try {
+            this.ensureInitialized();
+            
+            const platformConfigs = [
+                { x: SCENE_CONSTANTS.PLATFORM_OFFSETS.LARGE, y: this.config!.GAME_HEIGHT - SCENE_CONSTANTS.PLATFORM_OFFSETS.Y_LEVEL_1, type: 'two' as const },
+                { x: this.config!.GAME_WIDTH - SCENE_CONSTANTS.PLATFORM_OFFSETS.SMALL, y: this.config!.GAME_HEIGHT - SCENE_CONSTANTS.PLATFORM_OFFSETS.Y_LEVEL_1, type: 'one' as const },
+                { x: SCENE_CONSTANTS.PLATFORM_OFFSETS.LARGE, y: this.config!.GAME_HEIGHT - SCENE_CONSTANTS.PLATFORM_OFFSETS.Y_LEVEL_2, type: 'one' as const },
+                { x: this.config!.GAME_WIDTH - SCENE_CONSTANTS.PLATFORM_OFFSETS.SMALL, y: this.config!.GAME_HEIGHT - SCENE_CONSTANTS.PLATFORM_OFFSETS.Y_LEVEL_2, type: 'two' as const },
+            ];
+            
+            this.world!.platforms = [];
+            
+            for (const config of platformConfigs) {
+                try {
+                    const platform = new Platform(config.x, config.y, config.type);
+                    this.world!.platforms.push(platform);
+                    this.gameContainer!.addChild(platform);
+                } catch (platformError) {
+                    ErrorHandler.getInstance().handleError(
+                        platformError as Error,
+                        ErrorType.RENDERING,
+                        { phase: 'createSinglePlatform', config }
+                    );
+                }
+            }
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.RENDERING,
+                { phase: 'createPlatforms' }
+            );
         }
     }
     
@@ -265,23 +403,41 @@ export class SceneManager {
      * Create ammo bush
      */
     private createAmmoBush(socketManager: SocketManager): void {
-        this.ensureInitialized();
-        
-        this.world!.ammoBush = new AmmoBush(-100, this.config!.GAME_HEIGHT, socketManager);
-        this.gameContainer!.addChild(this.world!.ammoBush);
+        try {
+            this.ensureInitialized();
+            
+            this.world!.ammoBush = new AmmoBush(SCENE_CONSTANTS.AMMO_BUSH.X_POSITION, this.config!.GAME_HEIGHT, socketManager);
+            this.gameContainer!.addChild(this.world!.ammoBush);
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.GAME_STATE,
+                { phase: 'createAmmoBush' }
+            );
+        }
     }
     
     /**
      * Initialize TV Manager
      */
     private initializeTvManager(): void {
-        this.ensureInitialized();
-        
-        if (this.world!.backgroundAssets.j1) {
-            TvManager.getInstance().initialize(
-                this.world!.backgroundAssets.j1, 
-                this.config!.GAME_WIDTH, 
-                this.config!.GAME_HEIGHT
+        try {
+            this.ensureInitialized();
+            
+            if (this.world!.backgroundAssets.j1) {
+                TvManager.getInstance().initialize(
+                    this.world!.backgroundAssets.j1, 
+                    this.config!.GAME_WIDTH, 
+                    this.config!.GAME_HEIGHT
+                );
+            } else {
+                console.warn('SceneManager: Cannot initialize TvManager - j1 background asset not available');
+            }
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.INITIALIZATION,
+                { phase: 'initializeTvManager' }
             );
         }
     }
@@ -290,30 +446,43 @@ export class SceneManager {
      * Update parallax background based on camera movement
      */
     public updateParallaxBackground(offsetX: number, offsetY: number): void {
-        if (!this.isReady()) {
-            console.warn('SceneManager: updateParallaxBackground called before initialization');
-            return;
+        try {
+            if (!this.isReady()) {
+                console.warn('SceneManager: updateParallaxBackground called before initialization');
+                return;
+            }
+            
+            // Validate input parameters
+            if (typeof offsetX !== 'number' || typeof offsetY !== 'number') {
+                console.warn('SceneManager: Invalid offset parameters for parallax update');
+                return;
+            }
+            
+            if (!this.world!.backgroundAssets) return;
+            
+            const { j1, j2, j3 } = this.world!.backgroundAssets;
+            
+            if (j1) {
+                j1.x += offsetX * SCENE_CONSTANTS.PARALLAX_MULTIPLIERS.J1;
+                j1.y += offsetY * SCENE_CONSTANTS.PARALLAX_MULTIPLIERS.J1;
+            }
+            
+            if (j2) {
+                j2.x += offsetX * SCENE_CONSTANTS.PARALLAX_MULTIPLIERS.J2;
+                j2.y += offsetY * SCENE_CONSTANTS.PARALLAX_MULTIPLIERS.J2;
+            }
+            
+            if (j3) {
+                j3.x += offsetX * SCENE_CONSTANTS.PARALLAX_MULTIPLIERS.J3;
+                j3.y += offsetY * SCENE_CONSTANTS.PARALLAX_MULTIPLIERS.J3;
+            }
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.RENDERING,
+                { phase: 'updateParallaxBackground', offsetX, offsetY }
+            );
         }
-        
-        if (!this.world!.backgroundAssets) return;
-        
-        const { j1, j2, j3 } = this.world!.backgroundAssets;
-        
-        if (j1) {
-            j1.x += offsetX * 0.4;
-            j1.y += offsetY * 0.4;
-        }
-        
-        if (j2) {
-            j2.x += offsetX * 0.3;
-            j2.y += offsetY * 0.3;
-        }
-        
-        if (j3) {
-            j3.x += offsetX * 0.2;
-            j3.y += offsetY * 0.2;
-        }
-        
     }
     
     /**
@@ -356,15 +525,37 @@ export class SceneManager {
      * Add custom platform at runtime
      */
     public addPlatform(x: number, y: number, type: 'one' | 'two'): Platform | null {
-        if (!this.isReady()) {
-            console.warn('SceneManager: addPlatform called before initialization');
+        try {
+            if (!this.isReady()) {
+                console.warn('SceneManager: addPlatform called before initialization');
+                return null;
+            }
+            
+            // Validate input parameters
+            if (typeof x !== 'number' || typeof y !== 'number') {
+                throw new Error('Invalid coordinates: x and y must be numbers');
+            }
+            
+            if (isNaN(x) || isNaN(y)) {
+                throw new Error('Invalid coordinates: x and y cannot be NaN');
+            }
+            
+            if (type !== 'one' && type !== 'two') {
+                throw new Error('Invalid platform type: must be "one" or "two"');
+            }
+            
+            const platform = new Platform(x, y, type);
+            this.world!.platforms.push(platform);
+            this.gameContainer!.addChild(platform);
+            return platform;
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.VALIDATION,
+                { phase: 'addPlatform', x, y, type }
+            );
             return null;
         }
-        
-        const platform = new Platform(x, y, type);
-        this.world!.platforms.push(platform);
-        this.gameContainer!.addChild(platform);
-        return platform;
     }
     
     /**
@@ -510,7 +701,7 @@ export class SceneManager {
                 this.gameContainer.removeChild(debugGraphics);
                 debugGraphics.destroy();
             }
-        }, 5000);
+        }, SCENE_CONSTANTS.DEBUG_BOUNDS_TIMEOUT);
     }
     
     /**
@@ -520,6 +711,29 @@ export class SceneManager {
         if (SceneManager.instance) {
             SceneManager.instance.cleanup();
             SceneManager.instance = undefined as any;
+        }
+    }
+
+    /**
+     * Comprehensive destroy method for proper cleanup
+     */
+    public destroy(): void {
+        try {
+            console.log('SceneManager: Destroying instance...');
+            
+            // First cleanup all resources
+            this.cleanup();
+            
+            // Reset static instance
+            SceneManager.instance = undefined as any;
+            
+            console.log('SceneManager: Instance destroyed');
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error,
+                ErrorType.MEMORY,
+                { phase: 'destroy' }
+            );
         }
     }
 }

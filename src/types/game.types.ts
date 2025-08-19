@@ -24,7 +24,12 @@ export interface GameState {
 export interface WorldObjects {
     platforms: Platform[];
     ammoBush: AmmoBush;
-    backgroundAssets: Record<string, Sprite>;
+    backgroundAssets: {
+        j1?: Sprite | null;
+        j2?: Sprite | null;
+        j3?: Sprite | null;
+        j4?: Sprite | null;
+    };
 }
 
 export type GamePhase = 'waiting' | 'active' | 'ended';
