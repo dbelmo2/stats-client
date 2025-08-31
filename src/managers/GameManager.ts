@@ -26,6 +26,7 @@ import type { SettingsManager } from './SettingsManager';
 import type { InputPayload, NetworkState, PlayerScore, PlayerServerState, ProjectileServerState, ServerStateUpdate } from '../types/network.types';
 import type { GameState, PlayerData, WorldObjects } from '../types/game.types';
 import { SceneManager } from './SceneManager';
+import { CameraManager } from './CameraManager';
 
 
 // Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
@@ -50,17 +51,7 @@ interface UIElements {
   overlayActive: boolean;
 }
 
-interface CameraSettings {
-  lerpFactor: number;
-  currentX: number;
-  currentY: number;
-    // Add shake properties
-    shakeIntensity: number;
-    shakeDuration: number;
-    shakeElapsed: number;
-    baseX: number; // Store the non-shaken position
-    baseY: number; // Store the non-shaken position
-    }
+
 
 // TODO: Implement death prediction for enemies (and self) on client (with server confirmation)??
 // TODO: Add powerups???
@@ -89,9 +80,10 @@ export class GameManager {
 
     private app: Application;
     private socketManager: SocketManager;
+    private cameraManager: CameraManager;
+    private devManager: DevModeManager;
     private controller: Controller;
 
-    private camera = new Container();
     private gameContainer: Container;
 
     private player: PlayerData = {
@@ -150,21 +142,12 @@ export class GameManager {
         overlayActive: false
     };
     
-    private cameraSettings: CameraSettings = {
-        lerpFactor: 0.1,
-        currentX: 0,
-        currentY: 0,
-        shakeIntensity: 0,
-        shakeDuration: 0,
-        shakeElapsed: 0,
-        baseX: 0,
-        baseY: 0
-    };
 
     private constructor(app: Application) {
         try {
             this.controller = new Controller();
             this.socketManager = new SocketManager(config.GAME_SERVER_URL);
+
 
             this.app = app;
             this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
@@ -192,13 +175,21 @@ export class GameManager {
                 throw error;
             }
 
-            const devManager = DevModeManager.getInstance();
-            devManager.initialize(app);
+            this.devManager = DevModeManager.getInstance();
+            this.devManager.initialize(app);
+
+
+            this.cameraManager = CameraManager.getInstance();
+            this.cameraManager.initialize(
+                this.gameContainer, 
+                this.GAME_WIDTH,
+                this.GAME_HEIGHT,
+                this.GAME_BOUNDS
+            );
 
             this.ui.scoreDisplay = new ScoreDisplay();
 
-            this.camera.addChild(this.gameContainer);
-            this.app.stage.addChild(this.camera);
+            this.app.stage.addChild(this.cameraManager.getCamera());
             this.app.stage.addChild(this.ui.scoreDisplay);
 
             // Add E key handler
@@ -327,7 +318,6 @@ export class GameManager {
             throw error;
         }
     }
-
 
     private handleGameOver = (scores: PlayerScore[]) => {
         try {
@@ -850,7 +840,12 @@ export class GameManager {
                 }
 
                 const playerInput = this.handlePlayerInput();
-                this.updateCameraPositionLERP(); // If we dont update the camera here, it jitters
+
+                // Update camera position and UI elements
+                this.cameraManager.updateCameraPositionLERP(this.player);
+                this.ui.scoreDisplay.fixPosition();
+                DevModeManager.getInstance().fixPositions();
+
                 if (playerInput) {
                     this.handleShooting(playerInput);
                     this.player.sprite.setLastProcessedInputVector(playerInput.vector);
@@ -886,9 +881,10 @@ export class GameManager {
         // Convert mouse coordinates (GameManager responsibility)
 
         if (controllerState.mouse.justReleased && controllerState.mouse.xR !== undefined && controllerState.mouse.yR !== undefined) {
-            const { x, y } = this.convertCameraToWorldCoordinates(
+            const { x, y } = this.cameraManager.convertCameraToWorldCoordinates(
                 controllerState.mouse.xR, 
-                controllerState.mouse.yR
+                controllerState.mouse.yR,
+                this.app
             );
             controllerState.mouse.xR = x;
             controllerState.mouse.yR = y;
@@ -978,35 +974,6 @@ export class GameManager {
         this.ui.scoreDisplay.hide();
     }
     
-
-    private convertCameraToWorldCoordinates(x: number, y: number): { x: number, y: number } {
-        // Get the canvas element and its bounding rect
-        const canvas = this.app.canvas as HTMLCanvasElement;
-        const canvasRect = canvas.getBoundingClientRect();
-        
-        // 1. Convert mouse position to canvas-relative coordinates
-        const canvasX = x - canvasRect.left;
-        const canvasY = y - canvasRect.top;
-        
-        // 2. Calculate the scale ratio between the canvas display size and its internal size
-        const scaleRatioX = canvas.width / canvasRect.width;
-        const scaleRatioY = canvas.height / canvasRect.height;
-        
-        // 3. Scale the coordinates to the internal canvas coordinate system
-        const rendererX = canvasX * scaleRatioX;
-        const rendererY = canvasY * scaleRatioY;
-        
-        // 4. Convert to world coordinates by subtracting camera offset
-        const worldX = rendererX - this.camera.x;
-        const worldY = rendererY - this.camera.y;
-
-        return {
-            x: worldX,
-            y: worldY
-        }
-}
-
-
     private handleShooting(input: InputPayload): void {
         if (
             !this.player.sprite 
@@ -1027,59 +994,6 @@ export class GameManager {
         AudioManager.getInstance().play('shoot');
         this.player.projectiles.push(projectile);
         this.gameContainer.addChild(projectile);    
-    }
-
-    // Note: This is causing jitter.
-    private updateCameraPositionLERP(): void {
-        if (!this.player.sprite) return;
-        // Calculate target camera position (centered on player)
-        const targetX = -this.player.sprite.x + this.GAME_WIDTH / 2;
-        const targetY = -this.player.sprite.y + (this.GAME_HEIGHT / 2);
-
-
-        // Calculate responsive offsets based on screen size
-        const screenHeight = window.innerHeight;
-        
-        // Calculate scale ratio between game resolution and actual screen
-        const scaleY = screenHeight / this.GAME_HEIGHT;
-
-        // Clamp camera position to stay within bounds + buffer
-        const minX = -(this.GAME_BOUNDS.right + 5000) + this.GAME_WIDTH;
-        const maxX = this.GAME_BOUNDS.left + 5000;
-        const minY = -(150 / scaleY);
-
-        const maxY = this.GAME_BOUNDS.top + 250;
-        // Apply clamping to target position
-        const clampedTargetX = Math.max(minX, Math.min(maxX, targetX));
-        const clampedTargetY = Math.max(minY, Math.min(maxY, targetY));
-        
-        // Initialize camera position if not set
-        if (this.cameraSettings.currentX === 0 && this.cameraSettings.currentY === 0) {
-            this.cameraSettings.currentX = clampedTargetX;
-            this.cameraSettings.currentY = clampedTargetY;
-        }
-        
-        // Smoothly interpolate between current position and target position
-        this.cameraSettings.currentX += (clampedTargetX - this.cameraSettings.currentX) * this.cameraSettings.lerpFactor;
-        this.cameraSettings.currentY += (clampedTargetY - this.cameraSettings.currentY) * this.cameraSettings.lerpFactor;
-
-            
-        // Store the base (non-shaken) camera position
-        this.cameraSettings.baseX = this.cameraSettings.currentX;
-        this.cameraSettings.baseY = this.cameraSettings.currentY;
-
-        const xOffset = this.cameraSettings.currentX - this.camera.x;
-        const yOffset = this.cameraSettings.currentY - this.camera.y;
-        
-        // Apply the smoothed camera position
-        this.camera.x = this.cameraSettings.currentX;
-        this.camera.y = this.cameraSettings.currentY;
-
-        SceneManager.getInstance().updateParallaxBackground(xOffset, yOffset);
-
-        // Update position of UI elements relative to the camera
-        this.ui.scoreDisplay.fixPosition();
-        DevModeManager.getInstance().fixPositions();
     }
 
     private updateOwnProjectiles(): void {

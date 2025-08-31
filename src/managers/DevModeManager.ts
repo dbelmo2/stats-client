@@ -19,7 +19,7 @@ export class DevModeManager {
     private constructor() {
         this.settingsManager = SettingsManager.getInstance();
         this.isDevModeActive = this.settingsManager.getSettings().devMode;
-        
+    
         // Listen for dev mode changes from SettingsManager
         this.settingsManager.onSettingsChange((type: string, value: any) => {
             if (type === 'Developer Mode') {
