@@ -213,8 +213,6 @@ export class GameManager {
         }
     }
     
-
-    
     public static async initialize(app: Application, settingsManager: SettingsManager): Promise<GameManager> {
         if (!GameManager.instance) {
             GameManager.instance = new GameManager(app);
@@ -235,7 +233,6 @@ export class GameManager {
         return GameManager.instance;
     }
 
-
     private initializeAudio(): void {
         try {
             const audioManager = AudioManager.getInstance();
@@ -249,7 +246,6 @@ export class GameManager {
             );
         }
     }
-
 
     private setupEventListeners(): void {
 
@@ -466,7 +462,6 @@ export class GameManager {
         }
     }
     
-
     private integrateProjectileUpdates(projectiles: ProjectileServerState[]): void {
         const activeProjectileIds = new Set(projectiles.map(p => p.id));
         this.cleanupProjectiles(activeProjectileIds);

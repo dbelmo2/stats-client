@@ -1,8 +1,6 @@
 import { Application, Container } from "pixi.js";
 import type { PlayerData } from "../types/game.types";
 import { SceneManager } from "./SceneManager";
-import { DevModeManager } from "./DevModeManager";
-import type { ScoreDisplay } from "../components/ui/ScoreDisplay";
 
 export interface CameraSettings {
     lerpFactor: number;

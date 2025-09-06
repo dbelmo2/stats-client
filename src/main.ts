@@ -26,7 +26,20 @@ import './style.css';
 
 console.log('Starting game...');
 
+const isMobile = () => {
+    if(window.matchMedia("(any-hover:none)").matches) {
+        return true;
+    } else {
+        return false;
+    }
+};
 (async () => {
+
+    if (isMobile()) {
+        alert('Mobile devices are not supported at this time. Please play on a desktop or laptop computer.');
+        return;
+    }
+
     createLoadingScreen();
 
     try {
