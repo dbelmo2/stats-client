@@ -1,5 +1,4 @@
-import type { StringDecoder } from 'node:string_decoder';
-import { Container, Text, TextStyle, Graphics, Application } from 'pixi.js';
+import { Container, Text, TextStyle, Graphics } from 'pixi.js';
 
 type PlayerScore = {
     playerId: string;
