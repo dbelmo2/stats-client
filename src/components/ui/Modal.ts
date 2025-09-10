@@ -14,8 +14,11 @@ export class ModalManager {
     public showModal(options: {
         title: string,
         message: string,
-        buttonText: string,
-        buttonAction: () => void,
+        button?: {
+            text: string, 
+            action?: () => void,
+            closeOnClick: boolean
+        },
         isWarning?: boolean
     }): void {
         // Remove any existing modal
@@ -71,37 +74,46 @@ export class ModalManager {
         `;
         
         // Create button
-        const button = document.createElement('button');
-        button.textContent = options.buttonText;
-        button.style.cssText = `
-            margin: 10px 0 0;
-            padding: 10px 20px;
-            font-size: 24px;
-            border: none;
-            border-radius: 4px;
-            background: ${options.isWarning ? '#ff6b6b' : '#7462B3'};
-            color: white;
-            cursor: pointer;
-            transition: background 0.3s;
-        `;
-        
-        button.addEventListener('mouseover', () => {
-            button.style.background = options.isWarning ? '#ff4949' : '#7462B3';
-        });
-        
-        button.addEventListener('mouseout', () => {
-            button.style.background = options.isWarning ? '#ff6b6b' : '#7462B3';
-        });
-        
-        button.addEventListener('click', () => {
-            this.closeModal();
-            options.buttonAction();
-        });
-        
+        if (typeof options?.button?.action === 'function' && options.button.text) {
+
+            const button = document.createElement('button');
+            button.textContent = options.button.text;
+            button.style.cssText = `
+                margin: 10px 0 0;
+                padding: 10px 20px;
+                font-size: 24px;
+                border: none;
+                border-radius: 4px;
+                background: ${options.isWarning ? '#ff6b6b' : '#7462B3'};
+                color: white;
+                cursor: pointer;
+                transition: background 0.3s;
+            `;
+            
+            button.addEventListener('mouseover', () => {
+                button.style.background = options.isWarning ? '#ff4949' : '#7462B3';
+            });
+            
+            button.addEventListener('mouseout', () => {
+                button.style.background = options.isWarning ? '#ff6b6b' : '#7462B3';
+            });
+            
+            button.addEventListener('click', () => {
+                if (options.button && options.button.action) {
+                    options.button.action();
+                }
+                if (options.button?.closeOnClick) {
+                    this.closeModal();
+                }
+                
+                
+            });
+            modal.appendChild(button);
+        }
+
         // Assemble modal
         modal.appendChild(title);
         modal.appendChild(message);
-        modal.appendChild(button);
         modalContainer.appendChild(modal);
         
         // Add to DOM

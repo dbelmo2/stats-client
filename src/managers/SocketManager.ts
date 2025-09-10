@@ -1,10 +1,12 @@
 // src/network/SocketManager.ts
 import { io, Socket } from 'socket.io-client';
+import { v4 as uuidv4 } from 'uuid';
 export class SocketManager {
   private socket: Socket;
   private pingHistory: number[] = [];
   private currentPing: number = 0;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private playerId: string | null = uuidv4();
   
   constructor(serverUrl: string) {
     this.socket = io(serverUrl, {
@@ -12,10 +14,20 @@ export class SocketManager {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       timeout: 20000,
-      upgrade: false
+      upgrade: false,
+      auth: {
+        uuid: this.playerId
+      }
+    });
+
+
+    window.addEventListener('beforeunload', () => {
+      console.log("Calling cleanup before unload");
+      this.cleanup();
     });
 
     this.setupPingMonitoring();
+
 
     this.socket.on('connect', () => {
       console.log('[SocketManager] Connected:', this.socket.id);
@@ -25,6 +37,15 @@ export class SocketManager {
       this.socket.io.engine.on('upgrade', (transport) => {
         console.log(`[SocketManager] Transport upgraded from ${this.socket.io.engine.transport.name} to ${transport}`);
       });
+    });
+
+
+    this.socket.on('connect_error', (err) => {
+      console.error('[SocketManager] Connection error:', err.message);
+    });
+  
+    this.socket.on('disconnect', (reason) => {
+      console.warn(`[SocketManager] Disconnected: ${reason}`);
     });
 
     this.socket.on('queued', ({ region }) => {
@@ -59,9 +80,9 @@ export class SocketManager {
               this.updatePing(latency);
           });
       }, 2000);
-      
-      // Clean up on disconnect
-      this.socket.on('disconnect', () => {
+
+      // Clean up on AFK removal
+      this.socket.on('afkRemoved', () => {
           if (this.pingInterval) {
               clearInterval(this.pingInterval);
               this.pingInterval = null;
@@ -69,6 +90,16 @@ export class SocketManager {
       });
   }
 
+
+
+  public cleanup(): void {
+      if (this.pingInterval) {
+          clearInterval(this.pingInterval);
+          this.pingInterval = null;
+      } 
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+  }
 
 
   private updatePing(latency: number): void {
@@ -112,15 +143,15 @@ export class SocketManager {
     this.socket.once(event, callback);
   }
 
-  public getId() {
-    return this.socket.id;
+  public getPlayerId() {
+    return this.playerId;
   }
-  
+
+
   public async waitForConnect(): Promise<void> {
     if (this.socket.connected) return;
-  
     return new Promise(resolve => {
-      this.socket.on('connect', () => resolve());
+      this.socket.once('connect', () => resolve()); 
     });
   }
 }

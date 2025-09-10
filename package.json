@@ -27,6 +27,7 @@
     "howler": "^2.2.4",
     "pixi-filters": "^6.1.4",
     "pixi.js": "^8.9.2",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "uuid": "^13.0.0"
   }
 }

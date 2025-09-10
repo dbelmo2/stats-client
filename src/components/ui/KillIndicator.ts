@@ -21,9 +21,9 @@ export class KillIndicator extends Text {
 
             align: 'center'
         });
-        
-        super("+1", style); // Fix: Use correct constructor signature
-        
+
+        super({ text: "+1", style }); // Fix: Use correct constructor signature
+
         // Set position and anchor
         this.x = x;
         this.y = y - 30; // Start above the player

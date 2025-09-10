@@ -313,10 +313,13 @@ export class ErrorHandler {
             modal.showModal({
                 title: this.getErrorTitle(error.severity),
                 message: userMessage,
-                buttonText: error.severity === ErrorSeverity.CRITICAL ? 'Reload Page' : 'OK',
-                buttonAction: error.severity === ErrorSeverity.CRITICAL ? 
-                    () => window.location.reload() : 
-                    () => {},
+                button: {
+                    text: error.severity === ErrorSeverity.CRITICAL ? 'Reload Page' : 'OK',
+                    action: error.severity === ErrorSeverity.CRITICAL ? 
+                        () => window.location.reload() : 
+                        () => {},
+                    closeOnClick: true
+                },
                 isWarning: error.severity !== ErrorSeverity.LOW
             });
         }).catch(e => {

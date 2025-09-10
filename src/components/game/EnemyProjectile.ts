@@ -5,15 +5,23 @@ export class EnemyProjectile extends Container {
   private vx: number;
   private vy: number;
   public shouldBeDestroyed = false;
-  private lifespan: number;
+  private gameBounds: { width: number; height: number };
   private id: string;
   private ownerId: string;
   
-  constructor(id: string, ownerId: string, x: number, y: number, vx: number, vy: number, lifespan: number = 5000) {
+  constructor(
+    id: string,
+    ownerId: string,
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    gameBounds: { width: number; height: number },
+    ) {
     super();
     this.id = id;
     this.ownerId = ownerId;
-    this.lifespan = lifespan;
+    this.gameBounds = gameBounds;
     // Create tomato sprite
     this.body = Sprite.from('tomato');
     this.body.width = 20;
@@ -25,15 +33,26 @@ export class EnemyProjectile extends Container {
     this.y = y;
     this.vx = vx;
     this.vy = vy;
-    console.log(`EnemyProjectile created with id: ${this.id}, ownerId: ${this.ownerId}, position: (${this.x}, ${this.y}), velocity: (${this.vx}, ${this.vy})`);
-    this.age();
   }
   update() {
     this.vy += 0.05;
     this.x += this.vx;
     this.y += this.vy;
+
+    if (this.isOutsideBounds()) {
+      console.log('Projectile out of bounds, marking for destruction:', this.id);
+      this.shouldBeDestroyed = true;
+    }
   }
 
+
+
+  isOutsideBounds() {
+    return (
+      this.x < -50 || this.x > this.gameBounds.width + 50 ||
+      this.y < -50 || this.y > this.gameBounds.height + 50
+    );
+  }
 
   sync(x: number, y: number, vx: number, vy: number) {
     this.x = x;
@@ -57,11 +76,6 @@ export class EnemyProjectile extends Container {
     super.destroy();
   }
 
-  age() {
-    setTimeout(() => {
-        this.shouldBeDestroyed = true;
-    }, this.lifespan)
-  }
 
   getId() {
     return this.id;

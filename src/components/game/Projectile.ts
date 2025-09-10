@@ -2,16 +2,17 @@ import { Graphics, Container, Sprite } from 'pixi.js';
 
 export class Projectile extends Container {
   protected speed: number;
-  protected lifespan: number;
   protected vx: number = 0;
   protected vy: number = 0;
   protected body: Sprite;
   protected gravityEffect: number;
-  protected screenHeight: number;
+  protected gameBounds: { width: number; height: number };
   public shouldBeDestroyed = false;
   protected id: string;
   public wasAcknowledged: boolean = false;
   background: Graphics;
+  protected lifespanMS: number = 4000; // in frames
+
 
 
   protected calculateVelocity(spawnX: number, spawnY: number, targetX: number, targetY: number): void {
@@ -32,10 +33,9 @@ export class Projectile extends Container {
     spawnY: number, 
     targetX: number, 
     targetY: number,
-    screenHeight: number,
+    gameBounds: { width: number; height: number },
     id = Math.random().toString(36).substring(2, 15),
     speed = 30, 
-    lifespan = 1750, 
     gravityEffect = 0.05, 
   ) {
     super();
@@ -60,9 +60,8 @@ export class Projectile extends Container {
     this.x = spawnX;
     this.y = spawnY;
     this.speed = speed;
-    this.lifespan = lifespan;
     this.gravityEffect = gravityEffect;
-    this.screenHeight = screenHeight;
+    this.gameBounds = gameBounds;
     this.addChild(this.body);
 
     // Calculate direction vector
@@ -71,17 +70,29 @@ export class Projectile extends Container {
     //this.pivot.set(10, 10); // Set pivot to center of the tomato sprite
 
     // Begin the age process (we dont want projetiles sticking around forever)
-    this.age();
   }
 
   update() {
     this.vy += this.gravityEffect;
     this.x += this.vx;
     this.y += this.vy;
-    console.log(`Projectile ${this.id} position: (${this.x}, ${this.y}) with velocity (${this.vx}, ${this.vy})`);
-    if (this.y > this.screenHeight + 100) {
+    if (this.isOutsideBounds()) {
+      console.log('Own Projectile out of bounds, marking for destruction:', this.id);
       this.shouldBeDestroyed = true; // Is this causing the server to destroy it?
     }
+  }
+
+  isOutsideBounds(): boolean {
+    const leftMost = (0 - (this.gameBounds.width / 2) - 50)
+    const rightMost = (this.gameBounds.width + (this.gameBounds.width / 2) + 50)
+    const topMost = (0 - (this.gameBounds.height / 2) - 50);
+    const bottomMost = (this.gameBounds.height + (this.gameBounds.height / 2) + 50);
+    return (
+      this.x < leftMost ||
+      this.x > rightMost ||
+      this.y < topMost ||
+      this.y > bottomMost
+    );
   }
 
   destroy() {
@@ -98,11 +109,6 @@ export class Projectile extends Container {
     super.destroy();
   }
 
-  age() {
-    setTimeout(() => {
-        this.shouldBeDestroyed = true;
-    }, this.lifespan)
-  }
 
   getId(): string {
     return this.id;

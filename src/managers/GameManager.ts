@@ -37,6 +37,11 @@ import { CameraManager } from './CameraManager';
 
 
 
+// Look into drastric frame drop... occured when we tested laptop and desktop together in a game,
+// with dev tools open on both. From mac i can see dev tools took up to 3gb memory. could this be the cause?
+// both the desktop and laptop expereiced frame drops, with the laptop doing so first.
+
+
 interface EntityContainers {
   enemies: Map<string, EnemyPlayer>;
   enemyProjectiles: Map<string, EnemyProjectile>;
@@ -192,6 +197,7 @@ export class GameManager {
             this.app.stage.addChild(this.cameraManager.getCamera());
             this.app.stage.addChild(this.ui.scoreDisplay);
 
+
             // Add E key handler
             window.addEventListener('keydown', (e) => {
                 if (e.key === 'e' || e.key === 'E') {
@@ -229,6 +235,7 @@ export class GameManager {
             await GameManager.instance.setupNetworking(region);
             
             TvManager.getInstance().startTv();
+
         }
         return GameManager.instance;
     }
@@ -268,19 +275,20 @@ export class GameManager {
 
     private async setupNetworking(region: string): Promise<void> {
         try {
-            const id = this.socketManager.getId();
-            if (!id) {
-                const error = new Error('Socket ID is undefined');
+            const playerId = this.socketManager.getPlayerId();
+            if (!playerId) {
+                const error = new Error('PlayerId is undefined');
                 ErrorHandler.getInstance().handleError(error, ErrorType.SOCKET, { phase: 'id_retrieval' });
                 throw error;
             }
-            this.player.id = id;
+            this.player.id = playerId;
+
 
             this.socketManager.joinQueue(this.player.name, region);
+            this.socketManager.once('rejoinedMatch', this.handleSuccessfulRejoin);
             this.socketManager.on('gameOver', this.handleGameOver);
-            this.socketManager.on('disconnect', this.cleanupSession);
+            this.socketManager.on('disconnect', (reason) => this.handleConnectionLost(reason, region));
             this.socketManager.on('afkWarning', this.handleAfkWarning);
-            this.socketManager.on('afkRemoved', this.handleAfkRemoved);
             this.socketManager.on('showIsLive', () => {
                 try {
                     console.log('!!!!Live screen triggered!!!!');
@@ -357,26 +365,37 @@ export class GameManager {
     }
 
     private handleDisconnectedWarning = () => {
-        ErrorHandler.getInstance().handleError(
-            'Connection lost detected',
-            ErrorType.NETWORK,
-            { 
-                phase: 'disconnect_warning',
-                playerId: this.player.id,
-                timestamp: Date.now()
-            }
-        );
-        
         ModalManager.getInstance().showModal({
             title: "Connection Lost",
-            message: "Connection lost. Please check your internet connection or try again later.",
-            buttonText: "Reconnect",
-            buttonAction: () => {
-                // Attempt to reconnect the player - force reload to bypass cache
-                window.location.reload();
-            },
+            message: "Connection lost. Attempting to reconnect...",
             isWarning: true
         });
+    }
+
+    private async handleSuccessfulRejoin() {
+        try {
+            ModalManager.getInstance().closeModal();
+        } catch (error) {
+            ErrorHandler.getInstance().handleError(
+                error as Error, 
+                ErrorType.RENDERING,
+                { event: 'successfulRejoin' }
+            );
+        }   
+    }
+
+    private handleConnectionLost = (reason: string, region: string) => {
+        if (reason === "io server disconnect") {
+            this.handleAfkRemoved({ message: 'You were removed for being AFK.' });
+            this.cleanupSession();
+        } else {
+            console.log('Unexpected disconnection, attempting to reconnect...');
+            this.handleDisconnectedWarning();
+            this.socketManager.once('connect', () => {
+                console.log('Reconnected to server, rejoining queue...');
+                this.socketManager.joinQueue(this.player.name, region);
+            });
+        }
     }
 
     private handleAfkWarning = ({ message }: { message: string}) => {
@@ -385,10 +404,9 @@ export class GameManager {
             ModalManager.getInstance().showModal({
                 title: "AFK Warning",
                 message: "You have been inactive for too long. Please move or click to continue playing.",
-                buttonText: "OK",
-                buttonAction: () => {
-                    // Send a small movement to show the player is active
-
+                button: {
+                    text: "OK",
+                    closeOnClick: true
                 },
                 isWarning: true
             });
@@ -404,12 +422,16 @@ export class GameManager {
     private handleAfkRemoved = ({ message }: { message: string}) => {
         try {
             console.warn(`[SocketManager] AFK Removed: ${message}`);
+            this.cleanupSession();
             ModalManager.getInstance().showModal({
                 title: "Removed for Inactivity",
-                message: "You have been removed from the game due to inactivity. Please reload the page to rejoin.",
-                buttonText: "Reload Page",
-                buttonAction: () => {
-                    window.location.reload();
+                message: "You have been removed from the game due to inactivity. Reload the page to rejoin.",
+                button: {
+                    text: "Reload Page",
+                    action: () => {
+                        window.location.reload();
+                    },
+                    closeOnClick: false
                 },
                 isWarning: true
             });
@@ -427,7 +449,6 @@ export class GameManager {
     private integrateStateUpdate(): void {
         const { players, projectiles } = this.network.latestServerSnapshot;
         const selfData = players.find(player => player.id === this.player.id);
-
         this.integrateSelfUpdate(selfData);
         this.integrateProjectileUpdates(projectiles);
         this.integrateEnemyPlayers();
@@ -478,7 +499,15 @@ export class GameManager {
                 }
             } else if (!enemyProjectiles.has(projectile.id) && !destroyedProjectiles.has(projectile.id)) {
                 // Only create new projectile if it hasn't been destroyed locally
-                const graphic = new EnemyProjectile(projectile.id, projectile.ownerId, projectile.x, projectile.y, projectile.vx, projectile.vy);
+                const graphic = new EnemyProjectile(
+                    projectile.id, 
+                    projectile.ownerId, 
+                    projectile.x, 
+                    projectile.y, 
+                    projectile.vx, 
+                    projectile.vy,
+                    { width: this.app.canvas.width, height: this.app.canvas.height }
+                );
                 this.gameContainer.addChild(graphic);
                 enemyProjectiles.set(projectile.id, graphic);
             }
@@ -544,7 +573,12 @@ export class GameManager {
 
     private cleanupSession = (): void => {
         try {
-            console.warn('Socket closed. Cleaning up session...');
+
+
+            console.log('Cleaning up the game session...');
+
+            this.socketManager.cleanup();
+            
             ErrorHandler.getInstance().logWarning(
                 'Socket connection closed, initiating cleanup',
                 ErrorType.SOCKET,
@@ -604,7 +638,6 @@ export class GameManager {
             this.gameState.pendingCollisions.clear();
             this.gameState.destroyedProjectiles.clear();
 
-            this.handleDisconnectedWarning();
         } catch (error) {
             ErrorHandler.getInstance().handleError(
                 error as Error,
@@ -658,13 +691,13 @@ export class GameManager {
 
     private integrateSelfUpdate(selfData: PlayerServerState | undefined): void {
         if (!selfData && this.player.sprite) {
-            // Clean up self graphics if no self data exists
+            // Clean up the players sprite if no self data exists
             this.handlePlayerDeath();
             return;
         }
         if (!selfData) return;
         if (selfData && !this.player.sprite) {
-            // create new self if it doesn't exist
+            // Create new player sprite if it doesn't exist
             this.spawnPlayer(selfData);
         }
         if (!this.player.sprite) return;
@@ -690,6 +723,21 @@ export class GameManager {
             console.warn('Self already exists, cannot spawn again');
             return;
         }
+
+        // Force immediate reconciliation without resimulation.
+        // This is an attempt to fix the issue where the player appears to respawn
+        // in the wrong location after dying. (likely they spawn correctly but resimulate old input)
+        this.gameState.localTick = data.tick;
+        this.network.stateBuffer = [];
+        this.network.latestServerSnapshotProcessed = {
+            players: [],
+            projectiles: [],
+            scores: [],
+            serverTick: 0
+        };
+
+
+        console.log('Spawning player at ', data.position.x, data.position.y);
 
         this.player.sprite = new Player(
             data.position.x,
@@ -977,12 +1025,13 @@ export class GameManager {
             || !input.vector.mouse
         ) return;
 
+        console.log('using screen size', this.app.canvas.width, this.app.canvas.height);
         const projectile = new Projectile(
             this.player.sprite.x,
             this.player.sprite.y - 50,
             input.vector.mouse.x,
             input.vector.mouse.y,
-            this.app.screen.height,
+            { width: this.app.canvas.width, height: this.app.canvas.height },
             input?.vector?.mouse?.id,
         );
 

@@ -1,4 +1,5 @@
-import { Container, Text, TextStyle, Graphics } from 'pixi.js';
+import type { StringDecoder } from 'node:string_decoder';
+import { Container, Text, TextStyle, Graphics, Application } from 'pixi.js';
 
 type PlayerScore = {
     playerId: string;
@@ -10,19 +11,29 @@ type PlayerScore = {
 export class GameOverDisplay extends Container {
 
     private timerId: NodeJS.Timeout | null = null;
-    
+
     constructor(scores: PlayerScore[], selfId: string) {
         super();
 
+        const renderedWidth = window.innerWidth
+        const rendererHeight = window.innerHeight;
+
         // Create transparent black background with rounded corners
         const background = new Graphics();
-        const backgroundWidth = window.innerWidth / 4;
-        const backgroundHeight = (window.innerHeight / 2) + 100;
-        const borderRadius = 20; // Adjust this value to change the roundness
+        const backgroundWidth = Math.min(500, renderedWidth * 0.8); // Responsive width
+        const backgroundHeight = Math.min(600, rendererHeight * 0.8); // Responsive height
+        const borderRadius = 20;
         
-        background.roundRect(0, 0, backgroundWidth, backgroundHeight, borderRadius);
+        // Position at center (0,0 is center since we'll set anchor later)
+        background.roundRect(
+            -backgroundWidth / 2,
+            -backgroundHeight / 4,
+            backgroundWidth,
+            backgroundHeight,
+            borderRadius
+        );
         background.fill({ color: 0x000000, alpha: 0.7 }); // Black with 70% opacity
-        background.position.set(-window.innerWidth / 8, -window.innerHeight / 8); // Center the background
+        this.position.set(renderedWidth / 2, rendererHeight / 2);
         this.addChild(background);
 
         const winnerStyle = new TextStyle({

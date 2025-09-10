@@ -25,8 +25,6 @@ export class ScoreDisplay extends Container {
         this.header.y = 10;
         this.scoreContainer.addChild(this.header);
         
-        // Ensure the ScoreDisplay is positioned in the top-left corner of the camera view
-        // and not affected by camera movement
         this.x = 50 + (this.largestWidth - window.innerWidth) / 2;
         this.y = 125; // Fixed position
         this.visible = false; // Initially hidden
@@ -74,6 +72,7 @@ export class ScoreDisplay extends Container {
         // Position in top left corner with slight margin
         const windowWidth = window.innerWidth;
         const largestWidth = this.largestWidth;
+
         const offset = -(windowWidth - largestWidth) / 2;
         this.x = offset < 0 ? 50 : 50 + offset;
         this.y = 125;
