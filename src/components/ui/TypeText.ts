@@ -101,7 +101,7 @@ export class TypeText {
         this.textObject.text = this.currentText;
         
         // Start cursor blinking
-        this.startCursorBlink(this.textObject.text);
+        this.startCursorBlink();
 
         // Create promise for type completion
         return new Promise<void>((resolve) => {
@@ -255,7 +255,7 @@ export class TypeText {
     /**
      * Start cursor blinking
      */
-    private startCursorBlink(textId: string): void {
+    private startCursorBlink(): void {
         this.blinkInterval = setInterval(() => {
             // Check if the text object still exists and hasn't been destroyed
             if (!this.textObject || this.textObject.destroyed || !this.textObject.text) {
