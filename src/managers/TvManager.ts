@@ -74,16 +74,12 @@ export class TvManager {
         
         // Clear any existing content
         this.clearScreen();
-        
-        console.log('TvManager initialized with TV mask');
-
+    
         // Add initial screens to queue in order
         this.queueDefaultScreen();
-        console.log('queue after default screen:', this.screenQueue);
         
         // Wait for API screens to be added
         await this.queueApiScreens();
-        console.log('queue after API screens:', this.screenQueue);
         
         // Start processing the queue
         this.processQueue();
@@ -100,9 +96,7 @@ export class TvManager {
         while (this.screenQueue.length > 0) {
             // Sort by priority (higher first)
             //this.screenQueue.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-            console.log(`queue before processing:`, this.screenQueue);
             const screen = this.screenQueue.shift()!;
-            console.log(`TvManager: Processing screen with ID: ${screen.id} and priority ${screen.priority}`);
             
             try {
                 await screen.showScreen();
@@ -199,7 +193,6 @@ export class TvManager {
      */
     public addToQueue(screen: TvScreen): void {
         this.screenQueue.push(screen);
-        console.log(`TvManager: Added screen "${screen.id}" to queue`);
     }
 
     /**
@@ -208,8 +201,6 @@ export class TvManager {
     public addHighPriorityScreen(screen: TvScreen): void {
         // Add to front of queue
         this.screenQueue.unshift(screen);
-        console.log(`TvManager: Added high priority screen "${screen.id}" to front of queue`);
-        
     }
 
     /**
@@ -227,19 +218,19 @@ export class TvManager {
         logo.anchor.set(0.5);
 
         // Scale logo to fit within the TV mask while maintaining aspect ratio
-        const maxWidth = this.tvMask.width * 0.8;
-        const maxHeight = this.tvMask.height * 0.8;
+        const maxWidth = this.tvMask.width * .95;
+        const maxHeight = this.tvMask.height * .95;
         const scaleX = maxWidth / logo.width;
         const scaleY = maxHeight / logo.height;
         const scale = Math.min(scaleX, scaleY);
         logo.scale.set(scale);
 
-        logo.x = this.tvMask.width / 2;
-        logo.y = this.tvMask.height / 2;
+        logo.x = (this.tvMask.width / 2) - 5;
+        logo.y = (this.tvMask.height / 2) - 5;
         this.addSprite(logo);
 
         // Show for 5 seconds
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 7500));
     }
 
 
@@ -485,7 +476,7 @@ export class TvManager {
     private async showApiIntro(): Promise<void> {
         this.clearScreen();
         const introTitle = new TypeText({
-            text: 'Welcome to the H3 Show late tracker!',
+            text: 'Welcome to L3L3, the H3 Podcast late tracker!',
             style: {
                 align: 'center',
                 fontFamily: '"Pixel", Arial, sans-serif',
@@ -502,7 +493,7 @@ export class TvManager {
         introTitle.setAnchor(0, 0);
         await introTitle.type();
         introTitle.killCursor();
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 4000));
         this.clearScreen();
     }
 
@@ -511,7 +502,7 @@ export class TvManager {
         const totalLateTimeFormatted = formatDuration(apiData.totalLateTime);
 
         const totalStatsTitle = new TypeText({
-            text: 'And finally... the H3 Show has been late a grand total of...',
+            text: 'And finally... the podcast has been late a grand total of...',
             style: {
                 align: 'left',
                 fontFamily: '"Pixel", Arial, sans-serif',

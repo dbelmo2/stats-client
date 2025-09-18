@@ -60,7 +60,6 @@ export class AmmoBush extends Container {
     }
 
     public handleAmmoBushInteraction(player: Player): void {
-        console.log(`Handling ammo box interaction for player`);
         if (this.labelIsShowing === false || !player.getIsBystander()) return;
         this.socketManager.emit('toggleBystander', true);
         this.hideLabel();
@@ -108,7 +107,6 @@ export class AmmoBush extends Container {
             if (this.floatingLabel.alpha >= 1) {
                 this.floatingLabel.alpha = 1;
                 this.isAnimating = false;
-                console.log(`Label fade in complete`);
             }
         } else {
             // Fade out
@@ -121,7 +119,6 @@ export class AmmoBush extends Container {
                 this.floatingLabel.destroy();
                 this.removeChild(this.floatingLabel);
                 this.floatingLabel = null;
-                console.log(`Label fade out complete and destroyed`);
             }
         }
     }

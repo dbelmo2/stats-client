@@ -61,7 +61,6 @@ export class SettingsManager {
             // Load settings from localStorage or use defaults
             this.settings = this.loadSettings();
             this.tempSettings = { ...this.settings };
-            console.log('SettingsManager: Initialized with settings:', this.settings);
         } catch (error) {
             ErrorHandler.getInstance().handleError(
                 error as Error,
@@ -226,7 +225,6 @@ export class SettingsManager {
             if (this.tempSettings) {
                 this.tempSettings.musicVolume = newVolume;
             }
-            console.log(`Updated music volume: ${newVolume}`);
             this.notifySettingsChange('Music Volume', newVolume);
         } catch (error) {
             ErrorHandler.getInstance().handleError(
@@ -892,7 +890,6 @@ export class SettingsManager {
                     // Call close callback if set
                     this.onModalCloseCallback?.();
                     
-                    console.log('Settings modal closed successfully');
                 } catch (removeError) {
                     ErrorHandler.getInstance().handleError(
                         removeError as Error,
@@ -1081,10 +1078,8 @@ export class SettingsManager {
 
     private applyCurrentSettings(): void {
         // Apply settings to the application
-        console.log('Applying settings: ', this.settings);
         for (const setting of Object.keys(this.settings)) {
             const value = this.settings[setting as keyof typeof this.settings];
-            console.log(`At setting ${setting}: ${value}`);
             this.notifySettingsChange(setting, value);
 
             switch (setting) {

@@ -92,7 +92,7 @@ export class EnemyPlayer extends Container {
       // Change color based on bystander status
       this.body.clear();  
 
-      this.body.rect(0, 0, 50, 50).fill(this.isSelf ? 0x800080 : this.isBystander ? 0x808080 : 0xff9900);
+      this.body.rect(0, 0, 50, 50).fill(this.isSelf ? 0x800080 : this.isBystander ? 0x808080 : '#db70e5');
 
 
       if (this.isBystander === false) {

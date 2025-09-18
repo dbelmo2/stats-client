@@ -40,7 +40,6 @@ export class EnemyProjectile extends Container {
     this.y += this.vy;
 
     if (this.isOutsideBounds()) {
-      console.log('Projectile out of bounds, marking for destruction:', this.id);
       this.shouldBeDestroyed = true;
     }
   }

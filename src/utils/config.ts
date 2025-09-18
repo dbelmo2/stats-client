@@ -5,7 +5,6 @@ interface Config {
     YOUTUBE_API_URL: string;
 }
 
-console.log(import.meta.env.GAME_SERVER_URL);
 
 export const config: Config = {
     GAME_SERVER_URL: import.meta.env.VITE_GAME_SERVER_URL || "http://localhost:3001",

@@ -77,7 +77,6 @@ export class Projectile extends Container {
     this.x += this.vx;
     this.y += this.vy;
     if (this.isOutsideBounds()) {
-      console.log('Own Projectile out of bounds, marking for destruction:', this.id);
       this.shouldBeDestroyed = true; // Is this causing the server to destroy it?
     }
   }

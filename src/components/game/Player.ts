@@ -99,7 +99,7 @@ export class Player extends Container {
   public setIsBystander(value: boolean): void {
       this.isBystander = value;
       this.body.clear();
-      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#B069DB');
+      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#64cdeb');
 
       if (this.isBystander === false) {
         this.makeHealthBarVisible();

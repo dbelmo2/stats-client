@@ -22,7 +22,6 @@ export class SocketManager {
 
 
     window.addEventListener('beforeunload', () => {
-      console.log("Calling cleanup before unload");
       this.cleanup();
     });
 

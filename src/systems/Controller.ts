@@ -432,7 +432,6 @@ export class Controller {
       this.customKeyUpHandler = undefined;
       this.customMouseUpHandler = undefined;
 
-      console.log('Controller destroyed successfully');
     } catch (error) {
       ErrorHandler.getInstance().handleError(
         error as Error,

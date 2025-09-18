@@ -72,7 +72,6 @@ export class DevModeManager {
         }
         
         this.createDevDisplays();
-        console.log('Dev mode displays created and enabled');
     }
     
     /**
@@ -80,7 +79,6 @@ export class DevModeManager {
      */
     private disableDevMode(): void {
         this.destroyDevDisplays();
-        console.log('Dev mode displays destroyed and disabled');
     }
     
     /**

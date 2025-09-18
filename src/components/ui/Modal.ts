@@ -74,8 +74,8 @@ export class ModalManager {
         `;
         
         // Create button
-        if (typeof options?.button?.action === 'function' && options.button.text) {
-
+        let buttonToAppend: HTMLButtonElement | undefined;
+        if (options.button) {
             const button = document.createElement('button');
             button.textContent = options.button.text;
             button.style.cssText = `
@@ -99,7 +99,7 @@ export class ModalManager {
             });
             
             button.addEventListener('click', () => {
-                if (options.button && options.button.action) {
+                if (options.button && typeof options.button.action === 'function') {
                     options.button.action();
                 }
                 if (options.button?.closeOnClick) {
@@ -108,12 +108,15 @@ export class ModalManager {
                 
                 
             });
-            modal.appendChild(button);
+            buttonToAppend = button;
         }
 
         // Assemble modal
         modal.appendChild(title);
         modal.appendChild(message);
+        if (buttonToAppend) {
+            modal.appendChild(buttonToAppend);
+        }
         modalContainer.appendChild(modal);
         
         // Add to DOM

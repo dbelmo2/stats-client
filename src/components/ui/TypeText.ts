@@ -54,7 +54,6 @@ export class TypeText {
             }
         });
                 
-        console.log('TypeWriter created with text:', this.fullText);
     }
     
     /**
@@ -90,11 +89,9 @@ export class TypeText {
         }
         
         if (delay) {
-            console.log(`TypeWriter: Delaying start by ${delay}ms`);
             await new Promise(resolve => setTimeout(resolve, delay));
         }
 
-        console.log('TypeWriter: Starting type effect');
         this.isTyping = true;
         this.typingComplete = false;
         this.index = 0;
@@ -117,7 +114,6 @@ export class TypeText {
      * Stop the cursor blinking and remove cursor
      */
     public killCursor(): void {
-        console.log('TypeWriter: Killing cursor');
         this.stopCursorBlink();
         
         // Remove cursor from text if present
@@ -152,7 +148,6 @@ export class TypeText {
      * Force complete the typing effect
      */
     public forceComplete(): void {
-        console.log('TypeWriter: Force completing');
         this.stopTyping();
         this.currentText = this.fullText + this.cursor;
         this.textObject.text = this.currentText;
@@ -183,7 +178,6 @@ export class TypeText {
      * Clean up everything - intervals and text object
      */
     public destroy(): void {
-        console.log('TypeWriter: Full cleanup');
         
         // Stop all intervals first
         this.stopCursorBlink();
@@ -265,7 +259,6 @@ export class TypeText {
         this.blinkInterval = setInterval(() => {
             // Check if the text object still exists and hasn't been destroyed
             if (!this.textObject || this.textObject.destroyed || !this.textObject.text) {
-                console.warn(`TypeWriter: Text object destroyed or missing for textId: ${textId}, stopping blink interval`);
                 if (this.blinkInterval) {
                     clearInterval(this.blinkInterval);
                     this.blinkInterval = null;

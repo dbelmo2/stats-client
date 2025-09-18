@@ -27,7 +27,6 @@ export const formatDuration = (seconds: number): DurationObject => {
     }
   }
 
-  console.log('result', result);
   return result;
 
 }

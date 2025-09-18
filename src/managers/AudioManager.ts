@@ -156,7 +156,6 @@ export class AudioManager {
             const settings = this.settingsManager.getSettings();
             
             if (settings.muteAll) {
-                console.log("All sounds are muted globally, cannot play sound.");
                 return undefined;
             }
 
@@ -167,7 +166,6 @@ export class AudioManager {
 
             if ((sound.category === 'sfx' || sound.category === 'ui' || sound.category === 'ambient') 
                 && settings.muteSfx) {
-                console.log("Sound effects, UI, and ambient categories are muted, cannot play sound.");
                 return undefined;
             }
 
