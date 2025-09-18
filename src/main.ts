@@ -1,7 +1,7 @@
 import { Application, Assets } from 'pixi.js';
 import { GameManager } from './managers/GameManager';
 
-import H3Logo from './images/h3-logo.png';
+import H3Logo from './images/h3-logo-gen.jpg';
 import liveBanner from './images/live-banner.png';
 import ian from './images/ian.png';
 import dan from './images/dan.png';
@@ -20,6 +20,7 @@ import grassOne from './images/grass-tile-fuller.png';
 
 
 import { SettingsManager } from './managers/SettingsManager';
+import { BugReportManager } from './managers/BugReportManager';
 import { createLoadingScreen, removeLoadingScreen, updateLoadingProgress } from './components/ui/Loading';
 
 import './style.css';
@@ -97,6 +98,10 @@ const isMobile = () => {
         // Create settings UI
         const settingsManager = SettingsManager.getInstance();
         settingsManager.createSettingsUI();
+
+        // Create bug report UI
+        const bugReportManager = BugReportManager.getInstance();
+        bugReportManager.createBugReportUI();
 
         // Initialize game manager
         GameManager.initialize(app, settingsManager);

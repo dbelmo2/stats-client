@@ -21,6 +21,7 @@ import { ModalManager } from '../components/ui/Modal';
 import { AudioManager } from './AudioManager';
 import { DevModeManager } from './DevModeManager';
 import { TvManager } from './TvManager';
+import { BugReportManager } from './BugReportManager';
 import { loginScreen } from '../components/ui/LoginScreen';
 import type { SettingsManager } from './SettingsManager';
 import type { InputPayload, NetworkState, PlayerScore, PlayerServerState, ProjectileServerState, ServerStateUpdate } from '../types/network.types';
@@ -224,6 +225,8 @@ export class GameManager {
             GameManager.instance = new GameManager(app);
             settingsManager.onModalOpen(() => GameManager.instance.ui.overlayActive = true);
             settingsManager.onModalClose(() => GameManager.instance.ui.overlayActive = false);
+            BugReportManager.getInstance().onModalOpen(() => GameManager.instance.ui.overlayActive = true);
+            BugReportManager.getInstance().onModalClose(() => GameManager.instance.ui.overlayActive = false);
             const { name, region } = await loginScreen();
             GameManager.instance.player.name = name;
 
@@ -291,7 +294,7 @@ export class GameManager {
             this.socketManager.on('afkWarning', this.handleAfkWarning);
             this.socketManager.on('showIsLive', () => {
                 try {
-                    console.log('!!!!Live screen triggered!!!!');
+                    console.log('!!!!THEY\'RE LIVE !!!!');
                     TvManager.getInstance().queueLiveScreen();
                 } catch (error) {
                     ErrorHandler.getInstance().handleError(
@@ -622,6 +625,9 @@ export class GameManager {
             }
 
             DevModeManager.getInstance().cleanup();
+            
+            // Clean up bug report manager
+            BugReportManager.getInstance().cleanup();
 
             // Clean up kill indicators
             for (const indicator of this.entities.killIndicators) {
@@ -737,7 +743,6 @@ export class GameManager {
         };
 
 
-        console.log('Spawning player at ', data.position.x, data.position.y);
 
         this.player.sprite = new Player(
             data.position.x,
@@ -822,7 +827,6 @@ export class GameManager {
         this.network.latestServerSnapshotProcessed = this.network.latestServerSnapshot;
         const selfData = this.network.latestServerSnapshotProcessed.players.find(player => player.id === this.player.id);
         if (!selfData  || !this.player.sprite) {
-            console.log('Self data not found in latest server snapshot');
             return;
         }
         const tick = selfData.tick;
@@ -844,7 +848,7 @@ export class GameManager {
 
         // Temp fix for bug where this is undefined :()
         if (!clientPosition){
-            console.warn(`bad!`);
+            console.warn(`No client position found for buffer index ${serverStateBufferIndex} at tick ${tick}, cannot reconcile`);
             return;
         } 
 
@@ -857,13 +861,11 @@ export class GameManager {
             let tickToResimulate = tick + 1;
             while (tickToResimulate < this.gameState.localTick) {
                 const bufferIndex = tickToResimulate % this.BUFFER_SIZE;
-                // TODO: look into bug where this.network.inputBuffer[bufferIndex].vector throws cannot access property 'vector' of undefined
-                // Happened after player died. 
-
                 const inputVector = this.network.inputBuffer[bufferIndex]?.vector;
                 if (!inputVector) {
                     console.warn(`No input vector found for buffer index ${bufferIndex} at tick ${tickToResimulate}`);
-                    break; // No input to resimulate
+                    tickToResimulate++;
+                    continue; // No input to resimulate for this tick
                 }
 
 
@@ -1025,7 +1027,6 @@ export class GameManager {
             || !input.vector.mouse
         ) return;
 
-        console.log('using screen size', this.app.canvas.width, this.app.canvas.height);
         const projectile = new Projectile(
             this.player.sprite.x,
             this.player.sprite.y - 50,
