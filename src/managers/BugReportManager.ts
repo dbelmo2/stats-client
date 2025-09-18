@@ -705,7 +705,9 @@ export class BugReportManager {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ description })
+                body: JSON.stringify({
+                    bugReport: description
+                })
             });
             
             if (!response.ok) {
