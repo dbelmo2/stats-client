@@ -38,9 +38,7 @@ const isMobile = () => {
 (async () => {
     if (isMobile()) {
         // Render the React mobile app and exit early
-        import('./components/MobileApp/Entry').then(({ renderMobileApp }) => {
-            renderMobileApp();
-        });
+        alert('Mobile device support not implemented yet! Please use a desktop or laptop computer :)');
         return; // Exit early to avoid initializing the game
     }
 
