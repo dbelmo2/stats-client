@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, CircularProgress, Typography, Container, useTheme } from '@mui/material';
+import { Box, CircularProgress, Typography, Container } from '@mui/material';
 import { keyframes } from '@emotion/react';
 
 interface LoadingProps {
