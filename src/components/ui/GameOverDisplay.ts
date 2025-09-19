@@ -16,7 +16,7 @@ export class GameOverDisplay extends Container {
 
         const renderedWidth = window.innerWidth
         const rendererHeight = window.innerHeight;
-
+        this.position.set(renderedWidth / 2, rendererHeight / 2);
         // Create transparent black background with rounded corners
         const background = new Graphics();
         const backgroundWidth = Math.min(500, renderedWidth * 0.8); // Responsive width

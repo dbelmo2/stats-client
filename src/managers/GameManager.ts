@@ -328,15 +328,14 @@ export class GameManager {
 
     private handleGameOver = (scores: PlayerScore[]) => {
         try {
+
+            console.log('Game Over received from server');
             this.controller.resetMouse();
             this.gameState.phase = 'ended';
             this.gameState.pendingCollisions.clear();
 
             this.ui.gameOverDisplay = new GameOverDisplay(scores, this.player.id);
-            this.ui.gameOverDisplay.x = this.app.screen.width / 2;
-            this.ui.gameOverDisplay.y = this.app.screen.height / 3;
             this.app.stage.addChild(this.ui.gameOverDisplay);
-
             this.socketManager.once('matchReset', () => {
                 try {
                     this.player.projectiles = [];
