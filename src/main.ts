@@ -6,7 +6,7 @@ import liveBanner from './images/live-banner.png';
 import ian from './images/ian.png';
 import dan from './images/dan.png';
 import j1 from './images/j1-corrected.png';
-import j2 from './images/j2-small.png';
+import j2 from './images/j2.png';
 import j3 from './images/j3.png';
 import j4 from './images/j4.png';
 import bush from './images/bush.png';
