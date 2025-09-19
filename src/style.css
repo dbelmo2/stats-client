@@ -24,8 +24,6 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
 }
@@ -93,4 +91,18 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+
+/* Add this to prevent interference with dashboard: */
+.h3-dashboard-wrapper * {
+  box-sizing: border-box;
+}
+
+/* Or better yet, scope your global styles more specifically: */
+#app:not(.h3-dashboard-wrapper) {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+  background-color: #242424;
 }

@@ -40,8 +40,9 @@ export class SocketManager {
 
 
     this.socket.on('connect_error', (err) => {
-      console.error('[SocketManager] Connection error:', err.message);
+      console.error('[SocketManager] Connection_error event:', err.message);
     });
+  
   
     this.socket.on('disconnect', (reason) => {
       console.warn(`[SocketManager] Disconnected: ${reason}`);

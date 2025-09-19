@@ -34,13 +34,17 @@ const isMobile = () => {
         return false;
     }
 };
-(async () => {
 
+(async () => {
     if (isMobile()) {
-        alert('Mobile devices are not supported at this time. Please play on a desktop or laptop computer.');
-        return;
+        // Render the React mobile app and exit early
+        import('./components/MobileApp/Entry').then(({ renderMobileApp }) => {
+            renderMobileApp();
+        });
+        return; // Exit early to avoid initializing the game
     }
 
+    // Only create game loading screen if not mobile
     createLoadingScreen();
 
     try {
