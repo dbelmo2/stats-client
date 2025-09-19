@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: '/stats-client/',
+  base: '/',
   plugins: [react({
     // Additional React plugin options if needed
     jsxRuntime: 'automatic',
