@@ -70,7 +70,7 @@ interface UIElements {
 export class GameManager {
     private readonly GAME_WIDTH = 1920; 
     private readonly GAME_HEIGHT = 1080;
-    private readonly SERVER_TICK_RATE = 60;
+    private readonly SERVER_TICK_RATE = 30;
     private readonly MIN_MS_BETWEEN_TICKS = 1000 / this.SERVER_TICK_RATE; 
     private readonly MIN_S_BETWEEN_TICKS = this.MIN_MS_BETWEEN_TICKS / 1000; 
     private readonly BUFFER_SIZE = 1024;
