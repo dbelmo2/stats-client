@@ -43,6 +43,10 @@ import { CameraManager } from './CameraManager';
 // both the desktop and laptop expereiced frame drops, with the laptop doing so first.
 
 
+// Another issue noticed is that sometimes the ping keeps climbing...
+// In one test, it started at around 300ms and climbed all the way up to 25,000 after which the
+// connection was lost and the ping was then reset.
+
 interface EntityContainers {
   enemies: Map<string, EnemyPlayer>;
   enemyProjectiles: Map<string, EnemyProjectile>;

@@ -86,6 +86,7 @@ export class SocketManager {
       this.pingIntervalId = setInterval(() => {
           if (this.isWaitingForPong) return;
           const start = Date.now();
+          console.log('Sending ping at', start);
           // Use volatile to prevent buffering if disconnected
           this.socket.volatile.emit('m-ping', { pingStart: start });
           this.isWaitingForPong = true;
