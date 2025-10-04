@@ -5,8 +5,12 @@ export class SocketManager {
   private socket: Socket;
   private pingHistory: number[] = [];
   private currentPing: number = 0;
-  private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private pingIntervalId: ReturnType<typeof setInterval> | null = null;
   private playerId: string | null = uuidv4();
+  private readonly PING_INTERVAL_MS = 5000;
+  private isWaitingForPong: boolean = false;
+
+
   
   constructor(serverUrl: string) {
     this.socket = io(serverUrl, {
@@ -69,23 +73,35 @@ export class SocketManager {
     })
   }
 
+
+
+
+
+
   private setupPingMonitoring(): void {
       // Start measuring ping every 2 seconds
-      this.pingInterval = setInterval(() => {
+      if (this.socket.connected!) return;
+      if (this.pingIntervalId) clearInterval(this.pingIntervalId);
+
+      this.pingIntervalId = setInterval(() => {
+          if (this.isWaitingForPong) return;
           const start = Date.now();
-          
           // Use volatile to prevent buffering if disconnected
-          this.socket.volatile.emit('ping', () => {
-              const latency = Date.now() - start;
-              this.updatePing(latency);
-          });
-      }, 2000);
+          this.socket.volatile.emit('m-ping', { pingStart: start });
+          this.isWaitingForPong = true;
+      }, this.PING_INTERVAL_MS);
+
+      this.socket.on('m-pong', ({ pingStart }) => {
+          this.isWaitingForPong = false;
+          const latency = Date.now() - pingStart;
+          this.updatePing(latency);
+      });
 
       // Clean up on AFK removal
       this.socket.on('afkRemoved', () => {
-          if (this.pingInterval) {
-              clearInterval(this.pingInterval);
-              this.pingInterval = null;
+          if (this.pingIntervalId) {
+              clearInterval(this.pingIntervalId);
+              this.pingIntervalId = null;
           }
       });
   }
@@ -93,9 +109,9 @@ export class SocketManager {
 
 
   public cleanup(): void {
-      if (this.pingInterval) {
-          clearInterval(this.pingInterval);
-          this.pingInterval = null;
+      if (this.pingIntervalId) {
+          clearInterval(this.pingIntervalId);
+          this.pingIntervalId = null;
       } 
       this.socket.removeAllListeners();
       this.socket.disconnect();
@@ -108,15 +124,12 @@ export class SocketManager {
       if (this.pingHistory.length > 5) {
           this.pingHistory.shift();
       }
-      
+      console.log(`Ping history length: ${this.pingHistory.length}, Latest ping: ${latency}ms`);
       // Calculate average ping
       this.currentPing = Math.round(
           this.pingHistory.reduce((sum, val) => sum + val, 0) / this.pingHistory.length
       );
-      
-      // Emit ping update event
-      this.socket.emit('client_ping_update', this.currentPing);
-  }
+    }
 
   // Add getter for current ping
   public getPing(): number {
