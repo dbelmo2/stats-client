@@ -16,6 +16,8 @@ export interface CameraSettings {
 
 export class CameraManager {
     private static instance: CameraManager;
+    private static app: Application;
+
     private cameraContainer = new Container();
     private GAME_WIDTH!: number;
     private GAME_HEIGHT!: number;
@@ -33,18 +35,24 @@ export class CameraManager {
 
     private constructor() {}
 
-    public static getInstance(): CameraManager {
+    public static getInstance(app?: Application): CameraManager {
     if (!CameraManager.instance) {
+
+        if (!app) {
+            throw new Error("CameraManager not initialized. Application instance required.");
+        }
+        
         CameraManager.instance = new CameraManager();
+        CameraManager.app = app;
     }
     return CameraManager.instance;
     }
 
     public initialize(gameContainer: Container, GAME_WIDTH: number, GAME_HEIGHT: number, GAME_BOUNDS: any): void {
-    this.cameraContainer.addChild(gameContainer);
-    this.GAME_WIDTH = GAME_WIDTH;
-    this.GAME_HEIGHT = GAME_HEIGHT;
-    this.GAME_BOUNDS = GAME_BOUNDS;
+        this.cameraContainer.addChild(gameContainer);
+        this.GAME_WIDTH = GAME_WIDTH;
+        this.GAME_HEIGHT = GAME_HEIGHT;
+        this.GAME_BOUNDS = GAME_BOUNDS;
     }
 
     public getCamera(): Container {
@@ -100,9 +108,9 @@ export class CameraManager {
     }
 
 
-    public convertCameraToWorldCoordinates(x: number, y: number, app: Application): { x: number, y: number } {
+    public convertCameraToWorldCoordinates(x: number, y: number): { x: number, y: number } {
         // Get the canvas element and its bounding rect
-        const canvas = app.canvas as HTMLCanvasElement;
+        const canvas = CameraManager.app.canvas as HTMLCanvasElement;
         const canvasRect = canvas.getBoundingClientRect();
         
         // 1. Convert mouse position to canvas-relative coordinates
