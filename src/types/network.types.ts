@@ -1,14 +1,18 @@
 import type { Vector2 } from "../systems/Vector";
 
 export interface PlayerServerState {
-  id: string;
-  vector: Vector2;
-  position: Vector2;
-  hp: number;
-  isBystander: boolean;
-  name: string;
-  tick: number;
-  vx: number;
+  id?: string;
+  sessionIdb: string;
+  vector?: {
+    x: number;
+    y: number;
+  }
+  position?: Vector2;
+  hp?: number;
+  isBystander?: boolean;
+  name?: string;
+  tick?: number;
+  vx?: number;
   vy: number;
 }
 
@@ -55,6 +59,7 @@ export interface StatePayload {
 export interface NetworkState {
   latestServerSnapshot: ServerStateUpdate;
   latestServerSnapshotProcessed: ServerStateUpdate;
+  enemyLastKnownStates: Map<string, { position: Vector2; hp: number; isBystander: boolean; name: string }>;
   inputBuffer: InputPayload[];
   stateBuffer: StatePayload[];
 }
