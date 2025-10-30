@@ -1,13 +1,14 @@
-// src/network/SocketManager.ts
+// src/network/NetworkManager.ts
 import { io, Socket } from 'socket.io-client';
 import { v4 as uuidv4 } from 'uuid';
-export class SocketManager {
+export class NetworkManager {
   private socket: Socket;
   private pingHistory: number[] = [];
   private currentPing: number = 0;
   private pingIntervalId: ReturnType<typeof setInterval> | null = null;
   private playerId: string | null = uuidv4();
-  private readonly PING_INTERVAL_MS = 5000;
+
+  private readonly PING_INTERVAL_MS = 1000;
   private isWaitingForPong: boolean = false;
 
 
@@ -20,7 +21,7 @@ export class SocketManager {
       timeout: 20000,
       upgrade: false,
       auth: {
-        uuid: this.playerId
+        uuid: this.playerId // TODO: Why are we sending this client side? is it to help with reconnections? Can we have it generated server side?
       }
     });
 
@@ -33,43 +34,43 @@ export class SocketManager {
 
 
     this.socket.on('connect', () => {
-      console.log('[SocketManager] Connected:', this.socket.id);
-      console.log('[SocketManager] Transport:', this.socket.io.engine.transport.name);
+      console.log('[NetworkManager] Connected:', this.socket.id);
+      console.log('[NetworkManager] Transport:', this.socket.io.engine.transport.name);
       
       // Log when transport changes (e.g., from polling to websocket)
       this.socket.io.engine.on('upgrade', (transport) => {
-        console.log(`[SocketManager] Transport upgraded from ${this.socket.io.engine.transport.name} to ${transport}`);
+        console.log(`[NetworkManager] Transport upgraded from ${this.socket.io.engine.transport.name} to ${transport}`);
       });
     });
 
 
     this.socket.on('connect_error', (err) => {
-      console.error('[SocketManager] Connection_error event:', err.message);
+      console.error('[NetworkManager] Connection_error event:', err.message);
     });
   
   
     this.socket.on('disconnect', (reason) => {
-      console.warn(`[SocketManager] Disconnected: ${reason}`);
+      console.warn(`[NetworkManager] Disconnected: ${reason}`);
     });
 
     this.socket.on('queued', ({ region }) => {
-      console.log(`[SocketManager] Queued in region: ${region}`);
+      console.log(`[NetworkManager] Queued in region: ${region}`);
     });
 
     this.socket.on('matchFound', ({ matchId, region }) => {
-      console.log(`[SocketManager] Match found: ${matchId} in ${region}`);
+      console.log(`[NetworkManager] Match found: ${matchId} in ${region}`);
     });
 
     this.socket.on('movedToGlobalQueue', () => {
-      console.log(`[SocketManager] Moved to global queue`);
+      console.log(`[NetworkManager] Moved to global queue`);
     });
     
     this.socket.on('afkWarning', ({ message }) => {
-      console.warn(`[SocketManager] AFK Warning: ${message}`);
+      console.warn(`[NetworkManager] AFK Warning: ${message}`);
     });
 
     this.socket.on('afkRemoved', ({ message }) => {
-      console.warn(`[SocketManager] AFK Removed: ${message}`);
+      console.warn(`[NetworkManager] AFK Removed: ${message}`);
     })
   }
 
@@ -79,20 +80,21 @@ export class SocketManager {
 
 
   private setupPingMonitoring(): void {
-      // Start measuring ping every 2 seconds
-      if (this.socket.connected!) return;
+      // Start measuring ping every 1 second
       if (this.pingIntervalId) clearInterval(this.pingIntervalId);
 
       this.pingIntervalId = setInterval(() => {
-          if (this.isWaitingForPong) return;
+        console.log('Ping interval triggered, waiting for pong:', this.isWaitingForPong);
+          if (this.isWaitingForPong === true) return;
           const start = Date.now();
           console.log('Sending ping at', start);
           // Use volatile to prevent buffering if disconnected
-          this.socket.volatile.emit('m-ping', { pingStart: start });
+          this.socket.emit('m-ping', { pingStart: start });
           this.isWaitingForPong = true;
       }, this.PING_INTERVAL_MS);
 
       this.socket.on('m-pong', ({ pingStart }) => {
+        console.log('Received m-pong for ping started at', pingStart);
           this.isWaitingForPong = false;
           const latency = Date.now() - pingStart;
           this.updatePing(latency);
