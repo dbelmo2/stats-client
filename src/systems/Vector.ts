@@ -12,6 +12,7 @@ export class Vector2 {
     this.y = y;
   }
 
+
   static createFromControllerState(controllerState: ControllerState) {
     const vector = new Vector2();
 
@@ -39,6 +40,7 @@ export class Vector2 {
   // ---------- mutating instance methods ----------
   add(v: Vector2): this      { this.x += v.x; this.y += v.y; return this; }
   subtract(v: Vector2): this { this.x -= v.x; this.y -= v.y; return this; }
+  static subtractWithCoordinates(x1: number, y1: number, x2: number, y2: number): { x: number, y: number } {  x1 -= x2; y1 -= y2; return { x: x1, y: y1 }; }
   scale(s: number): this     { this.x *= s;   this.y *= s;   return this; }
 
   lenSq(): number { return this.x * this.x + this.y * this.y; }
@@ -50,6 +52,11 @@ export class Vector2 {
     return this;
   }
 
+  updateXY(x: number, y: number): this {
+    this.x = x;
+    this.y = y;
+    return this;
+  }
   // ---------- non‑mutating helpers ----------
   static add(a: Vector2, b: Vector2): Vector2       { return a.clone().add(b); }
   static subtract(a: Vector2, b: Vector2): Vector2  { return a.clone().subtract(b); }
