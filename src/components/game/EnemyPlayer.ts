@@ -17,7 +17,7 @@ export class EnemyPlayer extends Container {
   private tomatoSprite: Sprite | null = null;
 
 
-  constructor(id: string, spawnX: number, spawnY: number, isBystander: boolean, name: string, isSelf = false) {
+  constructor(id: string, spawnX: number, spawnY: number, isBystander: boolean = true, name: string = 'unknown player', isSelf = false) {
     
     super();
     this.isSelf = isSelf;
@@ -87,7 +87,9 @@ export class EnemyPlayer extends Container {
       this.updateHealthBar();
   }
 
-  public setIsBystander(value: boolean): void {
+  public setIsBystander(value?: boolean): void {
+      if (value === undefined || value === null) return;
+      if (this.isBystander === value) return; // No change
       this.isBystander = value;
       // Change color based on bystander status
       this.body.clear();  
@@ -117,7 +119,8 @@ export class EnemyPlayer extends Container {
     this.y = y;
   }
 
-  setHealth(updatedServerHealth: number): void {
+  setHealth(updatedServerHealth?: number): void {
+      if (updatedServerHealth === undefined) return;
       this.serverHealth = updatedServerHealth;
       // Only lower predicted health if server health is lower
       // NOTE: this will likely break if health regen is introduced
