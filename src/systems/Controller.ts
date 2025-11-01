@@ -1,4 +1,3 @@
-import { CameraManager } from '../managers/CameraManager';
 import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
 
 const keyMap: Record<string, keyof Controller['keys']> = {
@@ -202,21 +201,8 @@ export class Controller {
   }
 
 
-  public getState(world: boolean = false): ControllerState {
+  public getState(): ControllerState {
     try {
-
-      if (world) {
-          if (this.mouse.justReleased && this.mouse.xR !== undefined && this.mouse.yR !== undefined) {
-              const cameraManager = CameraManager.getInstance();
-              const { x, y } = cameraManager.convertCameraToWorldCoordinates(
-                  this.mouse.xR,
-                  this.mouse.yR,
-              );
-              this.mouse.xR = x;
-              this.mouse.yR = y;
-          }
-      }
-
       return {
         keys: Object.fromEntries(
           Object.entries(this.keys).map(([key, value]) => [key, value.pressed])
