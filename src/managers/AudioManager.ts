@@ -62,29 +62,18 @@ export class AudioManager {
     /**
      * Initialize by registering default sounds and preloading them.
      */
-    public initialize(): void {
+    public async initialize(): Promise<void> {
         this.registerDefaultSounds();
-                
-        // Preload all sounds
-        this.preloadAll().then(() => {
-            // Start background music
-            this.play('theme');
-        }).catch((error) => {
-            ErrorHandler.getInstance().handleError(
-                error,
-                ErrorType.AUDIO,
-                { phase: 'preload' }
-            );
-        });
-        
+        await this.preloadAll();
+        this.play('theme');
     }
 
     private registerDefaultSounds(): void {
         this.registerSound('shoot', {
-            src: [shootingAudio],
-            volume: 0.30
+        src: [shootingAudio],
+        volume: 0.30
         }, 'sfx');
-        
+    
         this.registerSound('impact', {
             src: [impactAudio],
             volume: 0.35
@@ -106,6 +95,7 @@ export class AudioManager {
             loop: true,
             volume: 0.50
         }, 'music');
+
     }
 
     public registerSound(soundId: string, config: SoundConfig, category: AudioCategory = 'sfx'): void {
@@ -404,8 +394,7 @@ export class AudioManager {
 
     public async preloadAll(): Promise<void> {
         const loadPromises: Promise<void>[] = [];
-
-        this.sounds.forEach((sound, id) => {
+            this.sounds.forEach((sound, id) => {
             if (!sound.howl.state() || sound.howl.state() === 'unloaded') {
                 const loadPromise = new Promise<void>((resolve) => {
                     sound.howl.once('load', () => {
@@ -425,7 +414,6 @@ export class AudioManager {
         });
 
         await Promise.all(loadPromises);
-        console.log('All sounds loaded.');
     }
 
     private handleSettingsChange(type: string, value: any): void {

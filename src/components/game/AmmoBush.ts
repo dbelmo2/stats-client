@@ -1,11 +1,9 @@
 import { Container, Sprite, Text } from 'pixi.js';
 import type { Player } from '../../components/game/Player';
 import { testForAABB } from '../../systems/Collision';
-import type { SocketManager } from '../../managers/SocketManager';
 export class AmmoBush extends Container {
     private body: Sprite;
     private labelIsShowing: boolean = false;
-    private socketManager: SocketManager; // Replace with actual socket manager type
     private floatingLabel: Text | null = null;
     private ammoBox: Sprite; // Assuming 'ammoBush' is the correct asset alias
 
@@ -14,10 +12,9 @@ export class AmmoBush extends Container {
     private fadeSpeed: number = 0.03; // Speed of fade animation (0.01 = slow, 0.1 = fast)
 
 
-    constructor(x: number, y: number, socketManager: any) {
+    constructor(x: number, y: number) {
         super();
 
-        this.socketManager = socketManager;
 
         // Create box
         this.body = Sprite.from('ammoBush');
@@ -59,9 +56,9 @@ export class AmmoBush extends Container {
         }
     }
 
-    public handleAmmoBushInteraction(player: Player): void {
+    public handleAmmoBushInteraction(player: Player, onInteractionCallback: () => void): void {
         if (this.labelIsShowing === false || !player.getIsBystander()) return;
-        this.socketManager.emit('toggleBystander', true);
+        onInteractionCallback();
         this.hideLabel();
     }
 

@@ -40,7 +40,7 @@ export class Player extends Container {
   private isOnSurface: boolean = false;
   private canDoubleJump = true;
   private isWalking = false;
-  
+  private positionVector: Vector2 = new Vector2(0, 0);
 
 
 
@@ -97,6 +97,8 @@ export class Player extends Container {
   }
 
   public setIsBystander(value: boolean): void {
+      if (this.isBystander === value) return; // No change
+      
       this.isBystander = value;
       this.body.clear();
       this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#64cdeb');
@@ -164,7 +166,7 @@ export class Player extends Container {
   }
 
   public getPositionVector(): Vector2 {
-      return new Vector2(this.x, this.y);
+      return this.positionVector.updateXY(this.x, this.y);
   }
 
   public getLastProcessedInputVector(): Vector2 {
@@ -329,6 +331,8 @@ export class Player extends Container {
 
   setHealth(updatedServerHealth: number): void {
       if (this.isBystander) return; // Do not update health for bystanders
+      if (this.serverHealth === updatedServerHealth) return;
+      
       this.serverHealth = updatedServerHealth;
       // Only lower predicted health if server health is lower
       // NOTE: this will likely break if health regen is introduced

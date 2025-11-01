@@ -7,7 +7,6 @@ export class ScoreDisplay extends Container {
     
     constructor() {
         super();
-        
         // Create a container for the scores with fixed position relative to camera
         this.scoreContainer = new Container();
         this.addChild(this.scoreContainer);

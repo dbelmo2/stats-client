@@ -1,20 +1,19 @@
 import type { Vector2 } from "../systems/Vector";
 
 export interface PlayerServerState {
-  id?: string;
-  sessionIdb: string;
-  vector?: {
-    x: number;
-    y: number;
-  }
-  position?: Vector2;
-  hp?: number;
-  isBystander?: boolean;
-  name?: string;
-  tick?: number;
-  vx?: number;
+  id: string;
+  sessionId: string;
+  vector: Vector2;
+  position: Vector2;
+  hp: number;
+  isBystander: boolean;
+  name: string;
+  tick: number;
+  vx: number;
   vy: number;
 }
+
+
 
 export interface ServerStateUpdate {
     players: PlayerServerState[];

@@ -16,7 +16,7 @@ export interface CameraSettings {
 
 export class CameraManager {
     private static instance: CameraManager;
-    private static app: Application;
+    private app: Application | undefined;
 
     private cameraContainer = new Container();
     private GAME_WIDTH!: number;
@@ -35,20 +35,15 @@ export class CameraManager {
 
     private constructor() {}
 
-    public static getInstance(app?: Application): CameraManager {
+    public static getInstance(): CameraManager {
     if (!CameraManager.instance) {
-
-        if (!app) {
-            throw new Error("CameraManager not initialized. Application instance required.");
-        }
-        
         CameraManager.instance = new CameraManager();
-        CameraManager.app = app;
     }
-    return CameraManager.instance;
+        return CameraManager.instance;
     }
 
-    public initialize(gameContainer: Container, GAME_WIDTH: number, GAME_HEIGHT: number, GAME_BOUNDS: any): void {
+    public initialize(app: Application, gameContainer: Container, GAME_WIDTH: number, GAME_HEIGHT: number, GAME_BOUNDS: any): void {
+        this.app = app
         this.cameraContainer.addChild(gameContainer);
         this.GAME_WIDTH = GAME_WIDTH;
         this.GAME_HEIGHT = GAME_HEIGHT;
@@ -56,7 +51,7 @@ export class CameraManager {
     }
 
     public getCamera(): Container {
-    return this.cameraContainer;
+        return this.cameraContainer;
     }
 
     public updateCameraPositionLERP(player: PlayerData): void {
@@ -110,7 +105,12 @@ export class CameraManager {
 
     public convertCameraToWorldCoordinates(x: number, y: number): { x: number, y: number } {
         // Get the canvas element and its bounding rect
-        const canvas = CameraManager.app.canvas as HTMLCanvasElement;
+
+        if (!this.app) {
+            throw new Error("CameraManager: Application not initialized.");
+        }
+
+        const canvas = this.app.canvas as HTMLCanvasElement;
         const canvasRect = canvas.getBoundingClientRect();
         
         // 1. Convert mouse position to canvas-relative coordinates

@@ -3,6 +3,7 @@ import { CRTFilter } from 'pixi-filters';
 import { TypeText } from '../components/ui/TypeText';
 import { YoutubeApiManager, type StatsResponse } from './YoutubeApiManager';
 import { formatDuration, formatToString } from '../utils/time';
+import { NetworkManager } from './NetworkManager';
 
 export interface TvScreen {
     id?: string; // unique identifier
@@ -64,6 +65,8 @@ export class TvManager {
         this.clearScreen();
         
         j1Sprite.addChild(this.tvMask);
+
+        NetworkManager.getInstance().on('showIsLive', this.queueLiveScreen.bind(this));
     }
 
     public async startTv(): Promise<void> {

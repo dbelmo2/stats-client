@@ -106,23 +106,17 @@ const isMobile = () => {
         bugReportManager.createBugReportUI();
 
         // Initialize game manager
-        GameManager.initialize(app, settingsManager);
-
+        const gameManager = new GameManager(app);
+        gameManager.initialize();
+        
         // Complete loading
         updateLoadingProgress(10, 10, 'Ready!');
         
         // Small delay to show completion
         await new Promise(resolve => setTimeout(resolve, 500));
         
-
-
-        
-
         // Remove loading screen
         await removeLoadingScreen();
-
-
-
     } catch (error) {
         console.error('Error during game initialization:', error);
         

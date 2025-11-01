@@ -2,7 +2,6 @@ import { Application, Container, Graphics, Sprite } from 'pixi.js';
 import { Platform } from '../components/game/Platform';
 import { AmmoBush } from '../components/game/AmmoBush';
 import { TvManager } from './TvManager';
-import type { SocketManager } from './SocketManager';
 import type { WorldObjects } from '../types/game.types';
 import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
 
@@ -95,7 +94,6 @@ export class SceneManager {
         app: Application, 
         config: SceneConfig, 
         gameContainer: Container, 
-        socketManager: SocketManager
     ): WorldObjects {
         try {
             console.log('SceneManager: Initializing...');
@@ -110,9 +108,6 @@ export class SceneManager {
             if (!gameContainer) {
                 throw new Error('Game container is required');
             }
-            if (!socketManager) {
-                throw new Error('Socket manager is required');
-            }
             
             this.app = app;
             this.config = config;
@@ -126,7 +121,7 @@ export class SceneManager {
                 backgroundAssets: {}
             };
             
-            this.setupScene(socketManager);
+            this.setupScene();
             console.log('SceneManager: Initialization complete');
             
             return this.world;
@@ -134,7 +129,7 @@ export class SceneManager {
             ErrorHandler.getInstance().handleCriticalError(
                 error as Error,
                 ErrorType.INITIALIZATION,
-                { phase: 'initialize' }
+                { phase: 'initialize', component: 'SceneManager' }
             );
             throw error; // Re-throw as this is critical for game functionality
         }
@@ -163,13 +158,13 @@ export class SceneManager {
     /**
      * Main scene setup orchestration
      */
-    private setupScene(socketManager: SocketManager): void {
+    private setupScene(): void {
         this.ensureInitialized();        
         console.log('SceneManager: Setting up scene...');
         this.createBackground();
         this.setupParallaxBackground();
         this.createPlatforms();
-        this.createAmmoBush(socketManager);
+        this.createAmmoBush();
         this.initializeTvManager();
     }
     
@@ -402,11 +397,11 @@ export class SceneManager {
     /**
      * Create ammo bush
      */
-    private createAmmoBush(socketManager: SocketManager): void {
+    private createAmmoBush(): void {
         try {
             this.ensureInitialized();
             
-            this.world!.ammoBush = new AmmoBush(SCENE_CONSTANTS.AMMO_BUSH.X_POSITION, this.config!.GAME_HEIGHT, socketManager);
+            this.world!.ammoBush = new AmmoBush(SCENE_CONSTANTS.AMMO_BUSH.X_POSITION, this.config!.GAME_HEIGHT);
             this.gameContainer!.addChild(this.world!.ammoBush);
         } catch (error) {
             ErrorHandler.getInstance().handleError(

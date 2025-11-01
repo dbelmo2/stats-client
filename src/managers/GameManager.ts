@@ -2,7 +2,7 @@ import { Application, Container } from 'pixi.js';
 import { config } from '../utils/config';
 import { Player } from '../components/game/Player';
 import { Controller } from '../systems/Controller';
-import { SocketManager } from './SocketManager';
+import { NetworkManager } from './NetworkManager';
 import { EnemyPlayer } from '../components/game/EnemyPlayer';
 import { Projectile } from '../components/game/Projectile';
 import { EnemyProjectile } from '../components/game/EnemyProjectile';
@@ -16,14 +16,13 @@ import { KillIndicator } from '../components/ui/KillIndicator';
 import { PingDisplay } from '../components/ui/PingDisplay';
 import { FPSDisplay } from '../components/ui/FPSDisplay';
 import { Vector2 } from '../systems/Vector';
-import { ModalManager } from '../components/ui/Modal';
 
 import { AudioManager } from './AudioManager';
 import { DevModeManager } from './DevModeManager';
 import { TvManager } from './TvManager';
 import { BugReportManager } from './BugReportManager';
 import { loginScreen } from '../components/ui/LoginScreen';
-import type { SettingsManager } from './SettingsManager';
+import { SettingsManager } from './SettingsManager';
 import type { InputPayload, NetworkState, PlayerScore, PlayerServerState, ProjectileServerState, ServerStateUpdate } from '../types/network.types';
 import type { GameState, PlayerData, WorldObjects } from '../types/game.types';
 import { SceneManager } from './SceneManager';
@@ -47,6 +46,7 @@ import { CameraManager } from './CameraManager';
 // In one test, it started at around 300ms and climbed all the way up to 25,000 after which the
 // connection was lost and the ping was then reset.
 
+// TODO: refactor code to not use new Vector in every tick. 
 interface EntityContainers {
   enemies: Map<string, EnemyPlayer>;
   enemyProjectiles: Map<string, EnemyProjectile>;
@@ -60,7 +60,6 @@ interface UIElements {
   pingUpdateCounter: number;
   overlayActive: boolean;
 }
-
 
 
 // TODO: Implement death prediction for enemies (and self) on client (with server confirmation)??
@@ -86,12 +85,16 @@ export class GameManager {
         bottom: this.GAME_HEIGHT
     };
 
-    private static instance: GameManager;
-
     private app: Application;
-    private socketManager: SocketManager;
-    private cameraManager: CameraManager;
-    private devManager: DevModeManager;
+
+    private cameraManager: CameraManager = CameraManager.getInstance();
+    private devManager: DevModeManager = DevModeManager.getInstance();
+    private settingsManager: SettingsManager = SettingsManager.getInstance();
+    private networkManager: NetworkManager = NetworkManager.getInstance();
+    private bugReportManager: BugReportManager = BugReportManager.getInstance();
+    private sceneManager: SceneManager = SceneManager.getInstance();
+    private audioManager: AudioManager = AudioManager.getInstance();
+
     private controller: Controller;
 
     private gameContainer: Container;
@@ -128,7 +131,8 @@ export class GameManager {
             serverTick: 0
         },
         inputBuffer: [],
-        stateBuffer: []
+        stateBuffer: [],
+        enemyLastKnownStates: new Map<string, { position: Vector2; hp: number, isBystander: boolean, name: string }>(),
     };
 
     private entities: EntityContainers = {
@@ -152,122 +156,95 @@ export class GameManager {
         overlayActive: false
     };
     
+    constructor(app: Application) {
+        this.app = app;
+        this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
+        this.controller = new Controller();
+        this.gameContainer = new Container();
+        this.ui.scoreDisplay = new ScoreDisplay();
+    }
 
-    private constructor(app: Application) {
+    
+    
+    public async initialize(): Promise<void> {
+        const { name, region } = await loginScreen();
+        this.player.name = name;
+
+
+        this.world = this.sceneManager.initialize(
+            this.app, 
+            {
+                GAME_WIDTH: this.GAME_WIDTH,
+                GAME_HEIGHT: this.GAME_HEIGHT,
+                GAME_BOUNDS: this.GAME_BOUNDS
+            },
+            this.gameContainer,
+        );
+
+        this.cameraManager.initialize(
+            this.app,
+            this.gameContainer, 
+            this.GAME_WIDTH,
+            this.GAME_HEIGHT,
+            this.GAME_BOUNDS
+        );
+
+        this.devManager.initialize(this.app);
+        this.audioManager.initialize();     
+
+        this.settingsManager.onModalOpen(() => this.ui.overlayActive = true);
+        this.settingsManager.onModalClose(() => this.ui.overlayActive = false);
+        this.bugReportManager.onModalOpen(() => this.ui.overlayActive = true);
+        this.bugReportManager.onModalClose(() => this.ui.overlayActive = false);
+
+        this.setupControlListeners();
+        this.setupGameLoop();
+
+        await this.initializeNetworking(region);
+
+        this.app.stage.addChild(this.cameraManager.getCamera());
+        this.app.stage.addChild(this.ui.scoreDisplay);
+
+        TvManager.getInstance().startTv();
+    }
+
+    private async initializeNetworking(region: string): Promise<void> {
         try {
-            this.controller = new Controller();
-            this.socketManager = new SocketManager(config.GAME_SERVER_URL);
+            const networkManager = NetworkManager.getInstance();
+            this.player.id = await networkManager.initialize({ 
+                region, playerName: this.player.name, serverUrl: config.GAME_SERVER_URL 
+            });
 
-
-            this.app = app;
-            this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
-            this.gameContainer = new Container();
-        
-            try {
-                this.world = SceneManager.getInstance().initialize(
-                    app, 
-                    {
-                        GAME_WIDTH: this.GAME_WIDTH,
-                        GAME_HEIGHT: this.GAME_HEIGHT,
-                        GAME_BOUNDS: this.GAME_BOUNDS
-                    },
-                    this.gameContainer,
-                    this.socketManager
-                );
-                
-                console.log('Scene successfully initialized');
-            } catch (error) {
-                ErrorHandler.getInstance().handleCriticalError(
-                    error as Error,
-                    ErrorType.INITIALIZATION,
-                    { component: 'SceneManager' }
-                );
-                throw error;
-            }
-
-            this.devManager = DevModeManager.getInstance();
-            this.devManager.initialize(app);
-
-
-            this.cameraManager = CameraManager.getInstance();
-            this.cameraManager.initialize(
-                this.gameContainer, 
-                this.GAME_WIDTH,
-                this.GAME_HEIGHT,
-                this.GAME_BOUNDS
-            );
-
-            this.ui.scoreDisplay = new ScoreDisplay();
-
-            this.app.stage.addChild(this.cameraManager.getCamera());
-            this.app.stage.addChild(this.ui.scoreDisplay);
-
-
-            // Add E key handler
-            window.addEventListener('keydown', (e) => {
-                if (e.key === 'e' || e.key === 'E') {
-                    this.controller.resetMouse()
-                    if (this.player.sprite) {
-                        this.world.ammoBush.handleAmmoBushInteraction(this.player.sprite);
-                    }
-                }
+            networkManager.on('gameOver', this.handleGameOver);
+            networkManager.on('disconnect', this.handleConnectionLost);
+            networkManager.on('stateUpdate', (state: ServerStateUpdate) => {
+                this.network.latestServerSnapshot = state;
             });
 
         } catch (error) {
-            ErrorHandler.getInstance().handleCriticalError(
+            ErrorHandler.getInstance().handleError(
                 error as Error,
-                ErrorType.INITIALIZATION,
-                { component: 'GameManager' },
-                true // Should reload on critical initialization failure
+                ErrorType.NETWORK,
+                { phase: 'setup' }
             );
             throw error;
         }
     }
-    
-    public static async initialize(app: Application, settingsManager: SettingsManager): Promise<GameManager> {
-        if (!GameManager.instance) {
-            GameManager.instance = new GameManager(app);
-            settingsManager.onModalOpen(() => GameManager.instance.ui.overlayActive = true);
-            settingsManager.onModalClose(() => GameManager.instance.ui.overlayActive = false);
-            BugReportManager.getInstance().onModalOpen(() => GameManager.instance.ui.overlayActive = true);
-            BugReportManager.getInstance().onModalClose(() => GameManager.instance.ui.overlayActive = false);
-            const { name, region } = await loginScreen();
-            GameManager.instance.player.name = name;
 
-            GameManager.instance.setupEventListeners();
-            GameManager.instance.setupGameLoop();
-            GameManager.instance.initializeAudio();
-
-            await GameManager.instance.socketManager.waitForConnect();
-            await GameManager.instance.setupNetworking(region);
-            
-            TvManager.getInstance().startTv();
-
-        }
-        return GameManager.instance;
-    }
-
-    private initializeAudio(): void {
-        try {
-            const audioManager = AudioManager.getInstance();
-            audioManager.initialize();
-            
-        } catch (error) {
-            ErrorHandler.getInstance().handleError(
-                error as Error,
-                ErrorType.AUDIO,
-                { phase: 'initialization' }
-            );
-        }
-    }
-
-    private setupEventListeners(): void {
-
+    private setupControlListeners(): void {
         // Add tab key event listener for spectator mode toggle
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Tab') {
                 e.preventDefault(); // Prevent default tab behavior (focus switching)
                 this.showScoreBoard();
+            } else if (e.key === 'e' || e.key === 'E') {
+                this.controller.resetMouse()
+                if (this.player.sprite) {
+                    this.world.ammoBush.handleAmmoBushInteraction(
+                        this.player.sprite,
+                        () => this.networkManager.emit('toggleBystander', true)
+                    );
+                }
             }
         });
 
@@ -277,90 +254,16 @@ export class GameManager {
                 this.hideScoreBoard();
             }
         });
-
-    }
-
-    private async setupNetworking(region: string): Promise<void> {
-        try {
-            const playerId = this.socketManager.getPlayerId();
-            if (!playerId) {
-                const error = new Error('PlayerId is undefined');
-                ErrorHandler.getInstance().handleError(error, ErrorType.SOCKET, { phase: 'id_retrieval' });
-                throw error;
-            }
-            this.player.id = playerId;
-
-
-            this.socketManager.joinQueue(this.player.name, region);
-            this.socketManager.once('rejoinedMatch', this.handleSuccessfulRejoin);
-            this.socketManager.on('gameOver', this.handleGameOver);
-            this.socketManager.on('disconnect', (reason) => this.handleConnectionLost(reason, region));
-            this.socketManager.on('afkWarning', this.handleAfkWarning);
-            this.socketManager.on('showIsLive', () => {
-                try {
-                    console.log('!!!!THEY\'RE LIVE !!!!');
-                    TvManager.getInstance().queueLiveScreen();
-                } catch (error) {
-                    ErrorHandler.getInstance().handleError(
-                        error as Error,
-                        ErrorType.SOCKET,
-                        { event: 'showIsLive' }
-                    );
-                }
-            });
-            this.socketManager.on('stateUpdate', (data: ServerStateUpdate) => {
-                try {
-                    this.network.latestServerSnapshot = data;
-                } catch (error) {
-                    ErrorHandler.getInstance().handleError(
-                        error as Error,
-                        ErrorType.SOCKET,
-                        { event: 'stateUpdate', hasData: !!data }
-                    );
-                }
-            });
-
-        } catch (error) {
-            ErrorHandler.getInstance().handleError(
-                error as Error,
-                ErrorType.NETWORK,
-                { phase: 'setup', region }
-            );
-            throw error;
-        }
     }
 
     private handleGameOver = (scores: PlayerScore[]) => {
         try {
-
-            console.log('Game Over received from server');
             this.controller.resetMouse();
             this.gameState.phase = 'ended';
             this.gameState.pendingCollisions.clear();
-
             this.ui.gameOverDisplay = new GameOverDisplay(scores, this.player.id);
             this.app.stage.addChild(this.ui.gameOverDisplay);
-            this.socketManager.once('matchReset', () => {
-                try {
-                    this.player.projectiles = [];
-                    this.entities.enemyProjectiles.clear();
-                    this.gameState.pendingCollisions.clear();
-                    this.gameState.destroyedProjectiles.clear();
-
-                    if (this.ui.gameOverDisplay) {
-                        this.app.stage.removeChild(this.ui.gameOverDisplay);
-                        this.ui.gameOverDisplay.destroy();
-                        this.ui.gameOverDisplay = null;
-                    }
-                    this.gameState.phase = 'active';
-                } catch (error) {
-                    ErrorHandler.getInstance().handleError(
-                        error as Error,
-                        ErrorType.GAME_STATE,
-                        { event: 'matchReset', phase: 'cleanup' }
-                    );
-                }
-            });
+            this.networkManager.once('matchReset', this.handleMatchReset);
         } catch (error) {
             ErrorHandler.getInstance().handleError(
                 error as Error,
@@ -370,87 +273,34 @@ export class GameManager {
         }
     }
 
-    private handleDisconnectedWarning = () => {
-        ModalManager.getInstance().showModal({
-            title: "Connection Lost",
-            message: "Connection lost. Attempting to reconnect...",
-            isWarning: true
-        });
-    }
-
-    private async handleSuccessfulRejoin() {
+    private handleMatchReset = () => {
         try {
-            ModalManager.getInstance().closeModal();
+            this.player.projectiles = [];
+            this.entities.enemyProjectiles.clear();
+            this.gameState.pendingCollisions.clear();
+            this.gameState.destroyedProjectiles.clear();
+            if (this.ui.gameOverDisplay) {
+                this.app.stage.removeChild(this.ui.gameOverDisplay);
+                this.ui.gameOverDisplay.destroy();
+                this.ui.gameOverDisplay = null;
+            }
+            this.gameState.phase = 'active';
         } catch (error) {
             ErrorHandler.getInstance().handleError(
-                error as Error, 
-                ErrorType.RENDERING,
-                { event: 'successfulRejoin' }
+                error as Error,
+                ErrorType.GAME_STATE,
+                { event: 'matchReset' }
             );
-        }   
+        }
     }
 
-    private handleConnectionLost = (reason: string, region: string) => {
+
+    private handleConnectionLost = (reason: string, _region: string) => {
         if (reason === "io server disconnect") {
-            this.handleAfkRemoved({ message: 'You were removed for being AFK.' });
             this.cleanupSession();
-        } else {
-            console.log('Unexpected disconnection, attempting to reconnect...');
-            this.handleDisconnectedWarning();
-            this.socketManager.once('connect', () => {
-                console.log('Reconnected to server, rejoining queue...');
-                this.socketManager.joinQueue(this.player.name, region);
-            });
         }
     }
 
-    private handleAfkWarning = ({ message }: { message: string}) => {
-        try {
-            console.warn(`[SocketManager] AFK Warning: ${message}`);
-            ModalManager.getInstance().showModal({
-                title: "AFK Warning",
-                message: "You have been inactive for too long. Please move or click to continue playing.",
-                button: {
-                    text: "OK",
-                    closeOnClick: true
-                },
-                isWarning: true
-            });
-        } catch (error) {
-            ErrorHandler.getInstance().handleError(
-                error as Error,
-                ErrorType.SOCKET,
-                { event: 'afkWarning', message }
-            );
-        }
-    }
-    
-    private handleAfkRemoved = ({ message }: { message: string}) => {
-        try {
-            console.warn(`[SocketManager] AFK Removed: ${message}`);
-            this.cleanupSession();
-            ModalManager.getInstance().showModal({
-                title: "Removed for Inactivity",
-                message: "You have been removed from the game due to inactivity. Reload the page to rejoin.",
-                button: {
-                    text: "Reload Page",
-                    action: () => {
-                        window.location.reload();
-                    },
-                    closeOnClick: false
-                },
-                isWarning: true
-            });
-        } catch (error) {
-            ErrorHandler.getInstance().handleError(
-                error as Error,
-                ErrorType.SOCKET,
-                { event: 'afkRemoved', message }
-            );
-            // Fallback: if modal fails, still try to reload
-            setTimeout(() => window.location.reload(), 3000);
-        }
-    }
 
     private integrateStateUpdate(): void {
         const { players, projectiles } = this.network.latestServerSnapshot;
@@ -484,6 +334,8 @@ export class GameManager {
             if (enemyGraphic) {
                 const indicator = new KillIndicator(enemyGraphic.x, enemyGraphic.y - 50);
                 this.gameContainer.addChild(indicator);
+                // TODO: this seems to grow indefinetly even when destroy is called on kill indicators...
+                // consider using a pool of kill indicators that we can recycle instead of creating new ones each time
                 this.entities.killIndicators.push(indicator);
             }
         }
@@ -579,12 +431,7 @@ export class GameManager {
 
     private cleanupSession = (): void => {
         try {
-
-
-            console.log('Cleaning up the game session...');
-
-            this.socketManager.cleanup();
-            
+            this.networkManager.cleanup();
             ErrorHandler.getInstance().logWarning(
                 'Socket connection closed, initiating cleanup',
                 ErrorType.SOCKET,
@@ -653,44 +500,51 @@ export class GameManager {
                 ErrorType.GAME_STATE,
                 { phase: 'cleanup', playerId: this.player.id }
             );
-            // Still show disconnect warning even if cleanup fails
-            this.handleDisconnectedWarning();
         }
     }
 
     private integrateEnemyPlayers(): void {
         const enemyPlayers = this.network.latestServerSnapshot.players.filter(player => player.id !== this.player.id);
         for (const enemyPlayer of enemyPlayers) {
-            if (!this.entities.enemies.has(enemyPlayer.id)) {
+            // TODO: Ensure all uses of enemeyPlayer.sessionId are changed from enemyPlayer.id
+            if (
+                this.entities.enemies.has(enemyPlayer.sessionId) === false
+                && enemyPlayer.position
+            ) {
+                // Spawning a new enemy player
                 // This doesn't trigger when match ends and player respawns immediately
-                const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.position.x, enemyPlayer.position.y, enemyPlayer.isBystander, enemyPlayer.name);
+                const graphic = new EnemyPlayer(enemyPlayer.sessionId, enemyPlayer.position.x, enemyPlayer.position.y, enemyPlayer?.isBystander, enemyPlayer.name);
                 this.gameContainer.addChild(graphic);
-                this.entities.enemies.set(enemyPlayer.id, graphic);
+                this.entities.enemies.set(enemyPlayer.sessionId, graphic);
             } else {
-                const graphic = this.entities.enemies.get(enemyPlayer.id);
+                const graphic = this.entities.enemies.get(enemyPlayer.sessionId);
                 if (!graphic) continue;
                 graphic.setIsBystander(enemyPlayer.isBystander);
                     
                 // Only update health if we don't have a pending collision
-                const pendingCollision = this.gameState.pendingCollisions.get(enemyPlayer.id);
-                if (!pendingCollision) {
+                const pendingCollision = this.gameState.pendingCollisions.get(enemyPlayer.sessionId);
+                if (!pendingCollision && enemyPlayer.hp !== undefined) {
                     graphic.setHealth(enemyPlayer.hp);
+                
+                    // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
+                    // than our prediction, collision was confirmed
+                    if (enemyPlayer.hp <= graphic.getPredictedHealth()) {
+                        this.gameState.pendingCollisions.delete(enemyPlayer.sessionId);
+                        graphic.setHealth(enemyPlayer.hp);
+                    }
                 }
 
-                // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
-                // than our prediction, collision was confirmed
-                if (enemyPlayer.hp <= graphic.getPredictedHealth()) {
-                    this.gameState.pendingCollisions.delete(enemyPlayer.id);
-                    graphic.setHealth(enemyPlayer.hp);
+
+                if (enemyPlayer.position) {
+                    graphic?.syncPosition(enemyPlayer.position.x, enemyPlayer.position.y);
                 }
-                graphic?.syncPosition(enemyPlayer.position.x, enemyPlayer.position.y);
             }
         }
 
 
         // Remove stale enemy players
         for (const [id, graphic] of this.entities.enemies.entries()) {
-            if (!enemyPlayers.some(player => player.id === id)) {
+            if (!enemyPlayers.some(player => player.sessionId === id)) {
                 this.app.stage.removeChild(graphic);
                 graphic.destroy();
                 this.entities.enemies.delete(id);
@@ -711,7 +565,8 @@ export class GameManager {
         }
         if (!this.player.sprite) return;
 
-        this.player.sprite.setIsBystander(selfData.isBystander);
+        const bystanderStatus = selfData.isBystander ?? this.network.enemyLastKnownStates.get(this.player.id)?.isBystander ?? true;
+        this.player.sprite.setIsBystander(bystanderStatus);
         if (this.player.sprite.getIsBystander() === false && selfData.isBystander ===  false) {
             // Only update health if we don't have a pending collision
             this.updatePlayerHealth(selfData);
@@ -728,6 +583,12 @@ export class GameManager {
     }
 
     private spawnPlayer(data: PlayerServerState): void {
+
+        if (data.tick === undefined || data.position === undefined) {
+            console.warn('Invalid player data, cannot spawn');
+            return;
+        }
+
         if (this.player.sprite) {
             console.warn('Self already exists, cannot spawn again');
             return;
@@ -754,24 +615,26 @@ export class GameManager {
             data.name,
         );
         
+
+        const bystanderStatus = data.isBystander ?? this.network.enemyLastKnownStates.get(this.player.id)?.isBystander ?? true;
         this.player.sprite.setPlatforms(this.world.platforms);
-        this.player.sprite.setIsBystander(data.isBystander);
+        this.player.sprite.setIsBystander(bystanderStatus);
         this.player.sprite.setLastProcessedInputVector(new Vector2(0, 0));
         this.gameContainer.addChild(this.player.sprite);
     }
 
     private updatePlayerHealth(selfData: PlayerServerState): void {
         if (!this.player.sprite) return;
-        const pendingCollision = this.gameState.pendingCollisions.get(this.player.id);
-        if (!pendingCollision) {
-            this.player.sprite.setHealth(selfData.hp);
-        }
         
-        // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
-        // than our prediction, collision was confirmed
-        if (selfData.hp <= this.player.sprite.getPredictedHealth()) {
-            this.gameState.pendingCollisions.delete(this.player.id);
+        const pendingCollision = this.gameState.pendingCollisions.get(this.player.id);
+        if (!pendingCollision && selfData.hp !== undefined) {
             this.player.sprite.setHealth(selfData.hp);
+            // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
+            // than our prediction, collision was confirmed
+            if (selfData.hp <= this.player.sprite.getPredictedHealth()) {
+                this.gameState.pendingCollisions.delete(this.player.id);
+                this.player.sprite.setHealth(selfData.hp);
+            }
         }
     }
 
@@ -830,8 +693,18 @@ export class GameManager {
         this.network.latestServerSnapshotProcessed = this.network.latestServerSnapshot;
         const selfData = this.network.latestServerSnapshotProcessed.players.find(player => player.id === this.player.id);
         if (!selfData  || !this.player.sprite) {
+            console.warn('Invalid self data from server, cannot reconcile');
             return;
         }
+
+        if (selfData.position === undefined || selfData.tick === undefined || selfData.vx === undefined || selfData.vy === undefined) {
+            console.warn('Invalid self data from server, cannot reconcile');
+            return;
+        }
+
+
+        // TODO: if selfdata is undefined, do we need to do resimulation? 
+
         const tick = selfData.tick;
         selfData.position = new Vector2(selfData.position.x, selfData.position.y);
 
@@ -843,6 +716,7 @@ export class GameManager {
             //console.warn(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
             // Server has marched ahead of the client...
             // As a temporary fix, we will simply sync the clint position with the server position
+            console.warn(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
             this.player.sprite.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
             this.network.stateBuffer[serverStateBufferIndex] = selfData;
             this.gameState.localTick = tick;
@@ -855,9 +729,16 @@ export class GameManager {
             return;
         } 
 
+
+        console.log('comparing server and client positions for reconciliation at tick', tick);
+        console.log(`Server position: ${selfData.position.x}, ${selfData.position.y}, Client position: ${clientPosition.x}, ${clientPosition.y}`);
+
         const positionError = Vector2.subtract(selfData.position, clientPosition);
-        
+
         if (positionError.len() > 0.0001) {
+            console.warn(`Position error detected: ${positionError}`);
+            console.warn(`Reconciling to server position at tick ${tick}`);
+            console.log(`Server position: ${selfData.position.x}, ${selfData.position.y}, Client position: ${clientPosition.x}, ${clientPosition.y}`);
             //console.warn(`Server position at tick client tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at local tick ${ this.network.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
             this.player.sprite.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
             this.network.stateBuffer[serverStateBufferIndex].position = selfData.position;
@@ -870,7 +751,6 @@ export class GameManager {
                     tickToResimulate++;
                     continue; // No input to resimulate for this tick
                 }
-
 
                 this.player.sprite.update(this.network.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS, true);
                 this.network.stateBuffer[bufferIndex].position = this.player.sprite.getPositionVector();
@@ -887,17 +767,14 @@ export class GameManager {
                     this.handleReconciliation();
                 }
 
-                const playerInput = this.handlePlayerInput();
+                this.handlePlayerInput();
 
                 // Update camera position and UI elements
                 this.cameraManager.updateCameraPositionLERP(this.player);
                 this.ui.scoreDisplay.fixPosition();
                 DevModeManager.getInstance().fixPositions();
 
-                if (playerInput) {
-                    this.handleShooting(playerInput);
-                    this.player.sprite.setLastProcessedInputVector(playerInput.vector);
-                }     
+   
             }
 
             this.integrateStateUpdate();
@@ -925,20 +802,11 @@ export class GameManager {
     private handlePlayerInput(): InputPayload | undefined {
         if (!this.player.sprite) return; // No player to control
 
-        const controllerState = this.controller.getState();
+        const controllerState = this.controller.getState(true);
         // Convert mouse coordinates (GameManager responsibility)
 
-        if (controllerState.mouse.justReleased && controllerState.mouse.xR !== undefined && controllerState.mouse.yR !== undefined) {
-            const { x, y } = this.cameraManager.convertCameraToWorldCoordinates(
-                controllerState.mouse.xR, 
-                controllerState.mouse.yR,
-                this.app
-            );
-            controllerState.mouse.xR = x;
-            controllerState.mouse.yR = y;
-        }
-
         const inputVector = Vector2.createFromControllerState(controllerState);
+
 
         if (this.player.disableInput || this.ui.overlayActive) {
             inputVector.x = 0; // Prevent input when overlay is active
@@ -961,6 +829,8 @@ export class GameManager {
         this.controller.resetJump();
 
         this.network.inputBuffer[bufferIndex] = inputPayload;
+
+
         this.player.sprite.update(inputVector, this.MIN_S_BETWEEN_TICKS, false);
         const stateVector = this.player.sprite.getPositionVector();
 
@@ -969,6 +839,8 @@ export class GameManager {
             position: stateVector
         };
 
+        this.handleShooting(inputPayload);
+        this.player.sprite.setLastProcessedInputVector(inputPayload.vector);
 
         if (this.shouldBroadcastPlayerInput(inputVector)) this.broadcastPlayerInput(inputPayload);
         return inputPayload;
@@ -1004,14 +876,15 @@ export class GameManager {
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
-        this.socketManager.emit('playerInput', inputPayload);
+        console.log('Broadcasting player input:', inputPayload);
+        this.networkManager.emit('playerInput', inputPayload);
     }
 
 
     private updateDevDisplays(deltaMS: number): void {
         const devManager = DevModeManager.getInstance();
         devManager.updateFPS();
-        devManager.updatePing(deltaMS, this.socketManager.getPing());
+        devManager.updatePing(deltaMS, this.networkManager.getPing());
     }
 
     private showScoreBoard(): void {
@@ -1052,7 +925,7 @@ export class GameManager {
             if (this.gameState.phase === 'active') {
                 for (const [enemyId, enemyGraphic] of this.entities.enemies.entries()) {
                     if (enemyGraphic.getIsBystander() === false && testForAABB(projectile, enemyGraphic)) {
-                        this.socketManager.emit('projectileHit', enemyId);
+                        this.networkManager.emit('projectileHit', enemyId);
                         // Record collision prediction
                         // This is required so we can reject stateUpdates that likely haven't computed
                         // the collision yet due to network latency
