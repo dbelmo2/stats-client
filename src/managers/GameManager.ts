@@ -767,12 +767,15 @@ export class GameManager {
                     this.handleReconciliation();
                 }
 
-                this.handlePlayerInput();
+                const playerInput = this.handlePlayerInput();
+
 
                 // Update camera position and UI elements
                 this.cameraManager.updateCameraPositionLERP(this.player);
                 this.ui.scoreDisplay.fixPosition();
                 DevModeManager.getInstance().fixPositions();
+
+  
 
    
             }
@@ -802,7 +805,16 @@ export class GameManager {
     private handlePlayerInput(): InputPayload | undefined {
         if (!this.player.sprite) return; // No player to control
 
-        const controllerState = this.controller.getState(true);
+        const controllerState = this.controller.getState();
+        if (controllerState.mouse.justReleased && controllerState.mouse.xR !== undefined && controllerState.mouse.yR !== undefined) {
+            const { x, y } = this.cameraManager.convertCameraToWorldCoordinates(
+                controllerState.mouse.xR, 
+                controllerState.mouse.yR,
+            );
+            controllerState.mouse.xR = x;
+            controllerState.mouse.yR = y;
+        }
+
         // Convert mouse coordinates (GameManager responsibility)
 
         const inputVector = Vector2.createFromControllerState(controllerState);
@@ -840,9 +852,14 @@ export class GameManager {
         };
 
         this.handleShooting(inputPayload);
-        this.player.sprite.setLastProcessedInputVector(inputPayload.vector);
 
         if (this.shouldBroadcastPlayerInput(inputVector)) this.broadcastPlayerInput(inputPayload);
+
+        // Updating this before the line above (where we broadcast) causes reconciliation issues
+        // where the client is always ahead of the server by 1-2 inputs.
+        this.player.sprite.setLastProcessedInputVector(inputVector); 
+
+
         return inputPayload;
     }
 

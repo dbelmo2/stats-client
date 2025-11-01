@@ -40,7 +40,6 @@ export class Vector2 {
   // ---------- mutating instance methods ----------
   add(v: Vector2): this      { this.x += v.x; this.y += v.y; return this; }
   subtract(v: Vector2): this { this.x -= v.x; this.y -= v.y; return this; }
-  static subtractWithCoordinates(x1: number, y1: number, x2: number, y2: number): { x: number, y: number } {  x1 -= x2; y1 -= y2; return { x: x1, y: y1 }; }
   scale(s: number): this     { this.x *= s;   this.y *= s;   return this; }
 
   lenSq(): number { return this.x * this.x + this.y * this.y; }
