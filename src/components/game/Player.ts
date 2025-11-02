@@ -48,7 +48,7 @@ export class Player extends Container {
     super();
     this.gameBounds = gameBounds;
     this.velocity = { x: 0, y: 0 };
-    this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
+    this.body = new Graphics().rect(0, 0, 50, 50).fill(0x808080);
     this.body.zIndex = 1000;
 
     this.addChild(this.body);
@@ -102,8 +102,11 @@ export class Player extends Container {
       console.log('Changing isBystander from', this.isBystander, 'to', value);
       this.isBystander = value;
       this.body.clear();
+      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#7ED9F8');
+
       if (this.isBystander === false) {
         this.makeHealthBarVisible();
+        this.updateHealthBar();
         this.makeTomatoSpriteVisible();
       }
 
@@ -142,11 +145,11 @@ export class Player extends Container {
 
   private updateHealthBar(): void {
       if (this.isBystander) return;
-    
+
       this.healthBar.clear();
       const healthPercentage = this.predictedHealth / this.maxHealth;
       const barWidth = this.HEALTH_BAR_WIDTH * healthPercentage;
-      
+      console.log(`Updating health bar: predictedHealth=${this.predictedHealth}, healthPercentage=${healthPercentage}, barWidth=${barWidth}`);
       // Health bar colors based on remaining health
       let color = 0x00ff00; // Green
       if (healthPercentage < 0.6) color = 0xffff00; // Yellow
@@ -195,14 +198,8 @@ export class Player extends Container {
   private indexPostJump = 0
 
 
-  update(inputVector: InputVector, dt: number, isResimulating: boolean = false): void {
-      if (isResimulating) {
-        this.body.clear();
-        this.body.rect(0, 0, 50, 50).fill(0xff0000);
-      } else {
-        this.body.clear();
-        this.body.rect(0, 0, 50, 50).fill(0x228B22);
-      }
+  update(inputVector: InputVector, dt: number): void {
+
       // 1. First we update our velocity vector based on input and physics.
       // Horizontal Movement
       if (inputVector.x !== 0) {
@@ -362,7 +359,7 @@ export class Player extends Container {
 
     this.damageFlashTimeout = setTimeout(() => {
         this.body.clear();
-        this.body.rect(0, 0, 50, 50).fill(0x228B22);
+        this.body.rect(0, 0, 50, 50).fill('#7ED9F8');
     }, 100);
   }
 
