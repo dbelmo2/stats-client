@@ -1,10 +1,11 @@
-import type { Vector2 } from "../systems/Vector";
+import type { InputVector, PositionVector } from "../components/game/systems/Vector";
+
+
 
 export interface PlayerServerState {
   id: string;
   sessionId: string;
-  vector: Vector2;
-  position: Vector2;
+  position: PositionVector;
   hp: number;
   isBystander: boolean;
   name: string;
@@ -47,18 +48,18 @@ export interface PlayerScore {
 
 export interface InputPayload {
     tick: number;
-    vector: Vector2;
+    vector: InputVector;
 }
 
 export interface StatePayload {
     tick: number;
-    position: Vector2;
+    position: PositionVector;
 }
 
 export interface NetworkState {
   latestServerSnapshot: ServerStateUpdate;
   latestServerSnapshotProcessed: ServerStateUpdate;
-  enemyLastKnownStates: Map<string, { position: Vector2; hp: number; isBystander: boolean; name: string }>;
+  enemyLastKnownStates: Map<string, { position: PositionVector; hp: number; isBystander: boolean; name: string }>;
   inputBuffer: InputPayload[];
   stateBuffer: StatePayload[];
 }
