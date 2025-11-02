@@ -1,6 +1,6 @@
 import { Graphics, Container, Text, TextStyle, Sprite } from 'pixi.js';
 import { Platform } from './Platform';
-import { Vector2 } from '../../systems/Vector';
+import { type PositionVector, type InputVector } from './systems/Vector';
 import { AudioManager } from '../../managers/AudioManager';
 
 export interface PendingInput {
@@ -19,7 +19,7 @@ export class Player extends Container {
   private readonly HEALTH_BAR_HEIGHT = 5;
 
 
-  private velocity: Vector2;
+  private velocity: PositionVector;
   private healthBar: Graphics;
   private maxHealth: number = 100;
   private serverHealth: number = 100;
@@ -33,14 +33,13 @@ export class Player extends Container {
   private gameBounds: { left: number; right: number; top: number; bottom: number } | null = null;
   private nameText: Text;
   private inputInterval: NodeJS.Timeout | null = null;
-  private lastProcessedInputVector: Vector2 = new Vector2(0, 0);
+  private lastProcessedInputVector: InputVector = { x: 0, y: 0 };
   private tomatoSprite: Sprite | null = null;
 
   private isBystander: boolean = true;
   private isOnSurface: boolean = false;
   private canDoubleJump = true;
   private isWalking = false;
-  private positionVector: Vector2 = new Vector2(0, 0);
 
 
 
@@ -48,7 +47,7 @@ export class Player extends Container {
   constructor(x: number, y: number, gameBounds: any, username: string = 'Player',) {
     super();
     this.gameBounds = gameBounds;
-    this.velocity = new Vector2(0, 0);
+    this.velocity = { x: 0, y: 0 };
     this.body = new Graphics().rect(0, 0, 50, 50).fill(0x228B22);
     this.body.zIndex = 1000;
 
@@ -97,12 +96,12 @@ export class Player extends Container {
   }
 
   public setIsBystander(value: boolean): void {
+
+      console.log('in setIsBystander, value:', value);
       if (this.isBystander === value) return; // No change
-      
+      console.log('Changing isBystander from', this.isBystander, 'to', value);
       this.isBystander = value;
       this.body.clear();
-      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#64cdeb');
-
       if (this.isBystander === false) {
         this.makeHealthBarVisible();
         this.makeTomatoSpriteVisible();
@@ -165,15 +164,15 @@ export class Player extends Container {
       this.updateHealthBar();
   }
 
-  public getPositionVector(): Vector2 {
-      return this.positionVector.updateXY(this.x, this.y);
+  public getPositionVector(): PositionVector {
+      return { x: this.x, y: this.y };
   }
 
-  public getLastProcessedInputVector(): Vector2 {
+  public getLastProcessedInputVector(): InputVector {
       return this.lastProcessedInputVector;
   }
 
-  public setLastProcessedInputVector(inputVector: Vector2): void {
+  public setLastProcessedInputVector(inputVector: InputVector): void {
       this.lastProcessedInputVector = inputVector;
   } 
   
@@ -196,7 +195,7 @@ export class Player extends Container {
   private indexPostJump = 0
 
 
-  update(inputVector: Vector2, dt: number, isResimulating: boolean = false): void {
+  update(inputVector: InputVector, dt: number, isResimulating: boolean = false): void {
       if (isResimulating) {
         this.body.clear();
         this.body.rect(0, 0, 50, 50).fill(0xff0000);
@@ -274,7 +273,7 @@ export class Player extends Container {
       this.velocity.y = Math.min(this.velocity.y, this.MAX_FALL_SPEED); 
   }
 
-  jump(inputVector: Vector2): void {
+  jump(inputVector: InputVector): void {
     if (this.isOnSurface) {
         // First jump from ground/platform
         this.velocity.y = inputVector.y * this.JUMP_STRENGTH;
