@@ -354,6 +354,7 @@ export class GameManager {
         }
     }
 
+    // TODO: Reuse kill indicators from a pool instead of creating new ones each time
     private showKillIndicator(playerId: string): void {
         if (playerId === this.player.id && this.player.sprite) {
             // Player kill
@@ -373,6 +374,8 @@ export class GameManager {
         }
     }
     
+    // TODO: Can we avoid calling new Set() here?
+    // If called often (integrateStateUpdates) it could cause a memory issue.
     private integrateProjectileUpdates(projectiles: ProjectileServerState[]): void {
         const activeProjectileIds = new Set(projectiles.map(p => p.id));
         this.cleanupProjectiles(activeProjectileIds);

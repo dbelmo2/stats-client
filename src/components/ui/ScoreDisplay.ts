@@ -29,6 +29,8 @@ export class ScoreDisplay extends Container {
         this.visible = false; // Initially hidden
     }
     // Update scoreboard with new scores
+    // TODO: This is being called frequently... optimize to only update changed scores
+    // ... ensure new TextStyle is either called less frequently or reused
     updateScores(scores: Array<{ playerId: string, kills: number, deaths: number, name: string }>, selfId: string): void {
         // Clear existing scores
         for (const [_, text] of this.scores) {
