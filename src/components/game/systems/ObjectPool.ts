@@ -1,4 +1,3 @@
-
 interface PoolItem<T> {
     data: T;
     free: boolean;
@@ -12,6 +11,7 @@ interface PoolStats {
 
 class ObjectPool<T> {
     #poolArray: PoolItem<T>[] = []; // Private array to hold the pooled objects
+    #objectToIndex: Map<T, number> = new Map(); // Fast lookup for release operations
     #constructorFunction: () => T;
     #resetFunction: (obj: T) => T;
     #maxSize: number;
@@ -28,10 +28,12 @@ class ObjectPool<T> {
 
         // Initialize the pool with a set number of objects
         for (let i = 0; i < initialSize; i++) {
+            const obj = this.#constructorFunction();
             this.#poolArray.push({
-                data: this.#constructorFunction(),
+                data: obj,
                 free: true
             });
+            this.#objectToIndex.set(obj, i);
         }
     }
 
@@ -54,22 +56,25 @@ class ObjectPool<T> {
         }
 
         const newObject = this.#constructorFunction();
+        const newIndex = this.#poolArray.length;
         this.#poolArray.push({
             data: newObject,
             free: false
         });
+        this.#objectToIndex.set(newObject, newIndex);
         // Apply reset function to new object for consistency
         return this.#resetFunction(newObject);
     }
 
     // Method to return an object to the pool
     releaseElement(element: T): void {
-        for (let i = 0; i < this.#poolArray.length; i++) {
-            if (this.#poolArray[i].data === element) {
-                this.#poolArray[i].free = true;
-                return;
-            }
+        const index = this.#objectToIndex.get(element);
+        
+        if (index !== undefined && index < this.#poolArray.length) {
+            this.#poolArray[index].free = true;
+            return;
         }
+        
         console.warn("Attempted to release an object not belonging to this pool.");
     }
 
