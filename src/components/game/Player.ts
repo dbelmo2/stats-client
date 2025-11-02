@@ -97,9 +97,7 @@ export class Player extends Container {
 
   public setIsBystander(value: boolean): void {
 
-      console.log('in setIsBystander, value:', value);
       if (this.isBystander === value) return; // No change
-      console.log('Changing isBystander from', this.isBystander, 'to', value);
       this.isBystander = value;
       this.body.clear();
       this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#7ED9F8');

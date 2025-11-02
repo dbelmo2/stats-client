@@ -8,7 +8,7 @@ export interface PlayerData {
     id: string;
     name: string;
     sprite: Player | undefined;
-    projectiles: Projectile[];
+    activeProjectiles: Set<Projectile>;
     disableInput: boolean;
 }
 

@@ -1,21 +1,22 @@
 import { Application, Container } from 'pixi.js';
 import { config } from '../utils/config';
 import { Player } from '../components/game/Player';
-import { Controller } from '../systems/Controller';
+import { Controller } from '../components/game/systems/Controller';
 import { NetworkManager } from './NetworkManager';
 import { EnemyPlayer } from '../components/game/EnemyPlayer';
 import { Projectile } from '../components/game/Projectile';
 import { EnemyProjectile } from '../components/game/EnemyProjectile';
 import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
 
-import { testForAABB } from '../systems/Collision';
+import { testForAABB } from '../components/game/systems/Collision';
 import { ScoreDisplay } from '../components/ui/ScoreDisplay';
 import { GameOverDisplay } from '../components/ui/GameOverDisplay';
 import { AmmoBush } from '../components/game/AmmoBush';
 import { KillIndicator } from '../components/ui/KillIndicator';
 import { PingDisplay } from '../components/ui/PingDisplay';
 import { FPSDisplay } from '../components/ui/FPSDisplay';
-import { Vector2 } from '../systems/Vector';
+import { Vector2, type InputVector, type PositionVector } from '../components/game/systems/Vector';
+import ObjectPool from '../components/game/systems/ObjectPool';
 
 import { AudioManager } from './AudioManager';
 import { DevModeManager } from './DevModeManager';
@@ -51,6 +52,8 @@ interface EntityContainers {
   enemies: Map<string, EnemyPlayer>;
   enemyProjectiles: Map<string, EnemyProjectile>;
   killIndicators: KillIndicator[];
+  projectilePool: ObjectPool<Projectile>;
+  enemyProjectilePool: ObjectPool<EnemyProjectile>;
 }
 interface UIElements {
   gameOverDisplay: GameOverDisplay | null;
@@ -104,7 +107,7 @@ export class GameManager {
         name: '',
         sprite: undefined,
         disableInput: false,
-        projectiles: [],
+        activeProjectiles: new Set<Projectile>(),
     }
 
     private gameState: GameState = {
@@ -132,13 +135,25 @@ export class GameManager {
         },
         inputBuffer: [],
         stateBuffer: [],
-        enemyLastKnownStates: new Map<string, { position: Vector2; hp: number, isBystander: boolean, name: string }>(),
+        enemyLastKnownStates: new Map<string, { position: PositionVector; hp: number, isBystander: boolean, name: string }>(),
     };
 
     private entities: EntityContainers = {
         enemies: new Map<string, EnemyPlayer>(),
         enemyProjectiles: new Map<string, EnemyProjectile>(),
-        killIndicators: []
+        killIndicators: [],
+        projectilePool: new ObjectPool<Projectile>(
+            () => new Projectile(0, 0, 0, 0, { width: 800, height: 600 }), 
+            (obj: Projectile) => obj.reset(), 
+            50, 
+            500
+        ),
+        enemyProjectilePool: new ObjectPool<EnemyProjectile>(
+            () => new EnemyProjectile('temp', 'temp', 0, 0, 0, 0, { width: 800, height: 600 }), 
+            (obj: EnemyProjectile) => obj.reset(), 
+            50, 
+            500
+        )
     };
 
     private world: WorldObjects = {
@@ -167,10 +182,6 @@ export class GameManager {
     
     
     public async initialize(): Promise<void> {
-        const { name, region } = await loginScreen();
-        this.player.name = name;
-
-
         this.world = this.sceneManager.initialize(
             this.app, 
             {
@@ -197,8 +208,14 @@ export class GameManager {
         this.bugReportManager.onModalOpen(() => this.ui.overlayActive = true);
         this.bugReportManager.onModalClose(() => this.ui.overlayActive = false);
 
+
+        const { name, region } = await loginScreen();
+        this.player.name = name;
+
         this.setupControlListeners();
         this.setupGameLoop();
+
+
 
         await this.initializeNetworking(region);
 
@@ -275,7 +292,22 @@ export class GameManager {
 
     private handleMatchReset = () => {
         try {
-            this.player.projectiles = [];
+            // Clean up active projectiles and return to pool
+            for (const projectile of this.player.activeProjectiles) {
+                if (projectile.parent) {
+                    projectile.parent.removeChild(projectile);
+                }
+                this.entities.projectilePool.releaseElement(projectile);
+            }
+            this.player.activeProjectiles.clear();
+            
+            // Clean up enemy projectiles and return to pool  
+            for (const [_, projectile] of this.entities.enemyProjectiles) {
+                if (projectile.parent) {
+                    projectile.parent.removeChild(projectile);
+                }
+                this.entities.enemyProjectilePool.releaseElement(projectile);
+            }
             this.entities.enemyProjectiles.clear();
             this.gameState.pendingCollisions.clear();
             this.gameState.destroyedProjectiles.clear();
@@ -351,13 +383,18 @@ export class GameManager {
         for (const projectile of projectiles) {
             if (projectile.ownerId === this.player.id) {
                 // Mark own projectiles as acknowledged when they appear in server state
-                const ownProjectile = this.player.projectiles.find(p => p.getId() === projectile.id);
-                if (ownProjectile) {
-                    ownProjectile.wasAcknowledged = true;
+                for (const ownProjectile of this.player.activeProjectiles) {
+                    if (ownProjectile.getId() === projectile.id) {
+                        ownProjectile.wasAcknowledged = true;
+                        break;
+                    }
                 }
             } else if (!enemyProjectiles.has(projectile.id) && !destroyedProjectiles.has(projectile.id)) {
                 // Only create new projectile if it hasn't been destroyed locally
-                const graphic = new EnemyProjectile(
+                const graphic = this.entities.enemyProjectilePool.getElement();
+                
+                // Initialize the recycled projectile with server data
+                graphic.initialize(
                     projectile.id, 
                     projectile.ownerId, 
                     projectile.x, 
@@ -366,6 +403,7 @@ export class GameManager {
                     projectile.vy,
                     { width: this.app.canvas.width, height: this.app.canvas.height }
                 );
+                
                 this.gameContainer.addChild(graphic);
                 enemyProjectiles.set(projectile.id, graphic);
             }
@@ -374,25 +412,45 @@ export class GameManager {
 
     private cleanupProjectiles(activeIds: Set<string>): void {
         // Clean up enemy projectiles
-        for (const [id, graphic] of this.entities.enemyProjectiles.entries()) {
+        const enemyProjectilesToRemove: string[] = [];
+        
+        for (const [id] of this.entities.enemyProjectiles.entries()) {
             if (!activeIds.has(id)) {
-                this.app.stage.removeChild(graphic);
-                graphic.destroy();
+                enemyProjectilesToRemove.push(id);
+            }
+        }
+        
+        // Remove enemy projectiles and return to pool
+        for (const id of enemyProjectilesToRemove) {
+            const graphic = this.entities.enemyProjectiles.get(id);
+            if (graphic) {
+                if (graphic.parent) {
+                    graphic.parent.removeChild(graphic);
+                }
+                this.entities.enemyProjectilePool.releaseElement(graphic);
                 this.entities.enemyProjectiles.delete(id);
             }
         }
 
         // Clean up own projectiles only if they were in server state and now aren't
-        for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
-            const projectile = this.player.projectiles[i];
+        const projectilesToRemove: Projectile[] = [];
+        
+        for (const projectile of this.player.activeProjectiles) {
             const projectileId = projectile.getId();
             
             // Only clean up projectiles that were previously acknowledged by server
             if (projectile.wasAcknowledged && !activeIds.has(projectileId)) {
-                this.app.stage.removeChild(projectile);
-                projectile.destroy();
-                this.player.projectiles.splice(i, 1);
+                projectilesToRemove.push(projectile);
             }
+        }
+        
+        // Remove projectiles and return to pool
+        for (const projectile of projectilesToRemove) {
+            this.player.activeProjectiles.delete(projectile);
+            if (projectile.parent) {
+                projectile.parent.removeChild(projectile);
+            }
+            this.entities.projectilePool.releaseElement(projectile);
         }
     }
 
@@ -440,20 +498,30 @@ export class GameManager {
 
             this.app.ticker.stop();
 
-            for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
-                const projectile = this.player.projectiles[i];
-                this.app.stage.removeChild(projectile);
-                projectile.destroy();
+            // Clean up active projectiles and return to pool
+            for (const projectile of this.player.activeProjectiles) {
+                if (projectile.parent) {
+                    projectile.parent.removeChild(projectile);
+                }
+                this.entities.projectilePool.releaseElement(projectile);
             }
-            this.player.projectiles = [];
+            this.player.activeProjectiles.clear();
 
             const { enemyProjectiles, enemies } = this.entities;
 
+            // Clean up enemy projectiles and return to pool
             for (const [_, projectile] of enemyProjectiles) {
-                this.app.stage.removeChild(projectile);
-                projectile.destroy();
+                if (projectile.parent) {
+                    projectile.parent.removeChild(projectile);
+                }
+                this.entities.enemyProjectilePool.releaseElement(projectile);
             }
             enemyProjectiles.clear();
+
+            // Since this is full session cleanup, destroy the pools completely
+            // This ensures no lingering references and proper memory cleanup
+            this.entities.projectilePool.destroy();
+            this.entities.enemyProjectilePool.destroy();
 
             // Clean up enemy players
             for (const [_, enemy] of enemies) {
@@ -619,7 +687,7 @@ export class GameManager {
         const bystanderStatus = data.isBystander ?? this.network.enemyLastKnownStates.get(this.player.id)?.isBystander ?? true;
         this.player.sprite.setPlatforms(this.world.platforms);
         this.player.sprite.setIsBystander(bystanderStatus);
-        this.player.sprite.setLastProcessedInputVector(new Vector2(0, 0));
+        this.player.sprite.setLastProcessedInputVector({ x: 0, y: 0 });
         this.gameContainer.addChild(this.player.sprite);
     }
 
@@ -706,7 +774,6 @@ export class GameManager {
         // TODO: if selfdata is undefined, do we need to do resimulation? 
 
         const tick = selfData.tick;
-        selfData.position = new Vector2(selfData.position.x, selfData.position.y);
 
 
         let serverStateBufferIndex = tick % this.BUFFER_SIZE;
@@ -730,15 +797,9 @@ export class GameManager {
         } 
 
 
-        console.log('comparing server and client positions for reconciliation at tick', tick);
-        console.log(`Server position: ${selfData.position.x}, ${selfData.position.y}, Client position: ${clientPosition.x}, ${clientPosition.y}`);
+        const positionError = Vector2.subtractPositions(selfData.position, clientPosition);
 
-        const positionError = Vector2.subtract(selfData.position, clientPosition);
-
-        if (positionError.len() > 0.0001) {
-            console.warn(`Position error detected: ${positionError}`);
-            console.warn(`Reconciling to server position at tick ${tick}`);
-            console.log(`Server position: ${selfData.position.x}, ${selfData.position.y}, Client position: ${clientPosition.x}, ${clientPosition.y}`);
+        if (Vector2.len(positionError.x, positionError.y) > 0.0001) {
             //console.warn(`Server position at tick client tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at local tick ${ this.network.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
             this.player.sprite.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
             this.network.stateBuffer[serverStateBufferIndex].position = selfData.position;
@@ -752,7 +813,7 @@ export class GameManager {
                     continue; // No input to resimulate for this tick
                 }
 
-                this.player.sprite.update(this.network.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS, true);
+                this.player.sprite.update(this.network.inputBuffer[bufferIndex].vector, this.MIN_S_BETWEEN_TICKS);
                 this.network.stateBuffer[bufferIndex].position = this.player.sprite.getPositionVector();
                 tickToResimulate++;
             }
@@ -767,7 +828,7 @@ export class GameManager {
                     this.handleReconciliation();
                 }
 
-                const playerInput = this.handlePlayerInput();
+                this.handlePlayerInput();
 
 
                 // Update camera position and UI elements
@@ -843,7 +904,7 @@ export class GameManager {
         this.network.inputBuffer[bufferIndex] = inputPayload;
 
 
-        this.player.sprite.update(inputVector, this.MIN_S_BETWEEN_TICKS, false);
+        this.player.sprite.update(inputVector, this.MIN_S_BETWEEN_TICKS);
         const stateVector = this.player.sprite.getPositionVector();
 
         this.network.stateBuffer[bufferIndex] = {
@@ -863,7 +924,7 @@ export class GameManager {
         return inputPayload;
     }
 
-    private shouldBroadcastPlayerInput(inputVector: Vector2): boolean {
+    private shouldBroadcastPlayerInput(inputVector: InputVector): boolean {
         if (!this.player.sprite) return false;
         const lastProcessedInputVector = this.player.sprite.getLastProcessedInputVector();
         const justStoppedMoving = lastProcessedInputVector.x !== 0 || lastProcessedInputVector.y !== 0 // This is true when jump is pressed, but the player is not moving
@@ -893,7 +954,6 @@ export class GameManager {
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
-        console.log('Broadcasting player input:', inputPayload);
         this.networkManager.emit('playerInput', inputPayload);
     }
 
@@ -920,24 +980,32 @@ export class GameManager {
             || !input.vector.mouse
         ) return;
 
-        const projectile = new Projectile(
+        // Get projectile from pool instead of creating new one
+        const projectile = this.entities.projectilePool.getElement();
+
+        console.log(this.entities.projectilePool.getPoolStats());
+
+        // Initialize the recycled projectile with new parameters
+        projectile.initialize(
             this.player.sprite.x,
             this.player.sprite.y - 50,
             input.vector.mouse.x,
             input.vector.mouse.y,
             { width: this.app.canvas.width, height: this.app.canvas.height },
-            input?.vector?.mouse?.id,
+            input?.vector?.mouse?.id
         );
 
         AudioManager.getInstance().play('shoot');
-        this.player.projectiles.push(projectile);
+        this.player.activeProjectiles.add(projectile);
         this.gameContainer.addChild(projectile);    
     }
 
     private updateOwnProjectiles(): void {
-        for (let i = this.player.projectiles.length - 1; i >= 0; i--) {
-            const projectile = this.player.projectiles[i];
+        const projectilesToRemove: Projectile[] = [];
+        
+        for (const projectile of this.player.activeProjectiles) {
             projectile.update();
+            
             // Check for collisions with enemy players
             if (this.gameState.phase === 'active') {
                 for (const [enemyId, enemyGraphic] of this.entities.enemies.entries()) {
@@ -963,13 +1031,20 @@ export class GameManager {
                 }
             }
 
-
+            // Collect projectiles to be removed
             if (projectile.shouldBeDestroyed) {
-                this.player.projectiles.splice(i, 1);
-                projectile.destroy();
+                projectilesToRemove.push(projectile);
             }
+        }
 
-            
+        // Clean up destroyed projectiles using pool
+        for (const projectile of projectilesToRemove) {
+            this.player.activeProjectiles.delete(projectile);
+            if (projectile.parent) {
+                projectile.parent.removeChild(projectile);
+            }
+            // Release back to pool instead of destroying
+            this.entities.projectilePool.releaseElement(projectile);
         }
     }
 
@@ -1028,8 +1103,11 @@ export class GameManager {
 
             // Clean up destroyed projectiles
             if (projectile.shouldBeDestroyed) {
-                this.app.stage.removeChild(projectile);
-                projectile.destroy();
+                if (projectile.parent) {
+                    projectile.parent.removeChild(projectile);
+                }
+                // Release back to pool instead of destroying
+                this.entities.enemyProjectilePool.releaseElement(projectile);
                 this.entities.enemyProjectiles.delete(projectileId);
             }
         }

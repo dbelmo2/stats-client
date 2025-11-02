@@ -1,14 +1,13 @@
-interface PoolItem<T> {
+export interface PoolItem<T> {
     data: T;
     free: boolean;
 }
 
-interface PoolStats {
+export interface PoolStats {
     total: number;
     free: number;
     inUse: number;
 }
-
 class ObjectPool<T> {
     #poolArray: PoolItem<T>[] = []; // Private array to hold the pooled objects
     #objectToIndex: Map<T, number> = new Map(); // Fast lookup for release operations
@@ -94,4 +93,13 @@ class ObjectPool<T> {
             this.#poolArray[i].free = true;
         }
     }
+
+    // Complete cleanup method for session end
+    destroy(): void {
+        // Clear all references and empty the pool
+        this.#poolArray.length = 0;
+        this.#objectToIndex.clear();
+    }
 }
+
+export default ObjectPool;

@@ -113,5 +113,63 @@ export class Projectile extends Container {
     return this.id;
   }
 
+  // Reset method for ObjectPool usage
+  reset(): Projectile {
+    // IMPORTANT: Remove from display tree BEFORE resetting position
+    // This prevents visual artifacts at (0,0)
+    if (this.parent) {
+      this.parent.removeChild(this);
+    }
+    
+    // Reset position and movement to off-screen safe values
+    this.x = -9999;
+    this.y = -9999;
+    this.vx = 0;
+    this.vy = 0;
+    
+    // Reset state flags
+    this.shouldBeDestroyed = false;
+    this.wasAcknowledged = false;
+    
+    // Generate new ID for reused projectile
+    this.id = Math.random().toString(36).substring(2, 15);
+    
+    // Reset visual state - make invisible until reinitialized
+    this.visible = false;
+    this.alpha = 0;
+    
+    return this;
+  }
+
+  // Initialize method for setting up a recycled projectile with new parameters
+  initialize(
+    spawnX: number, 
+    spawnY: number, 
+    targetX: number, 
+    targetY: number,
+    gameBounds: { width: number; height: number },
+    id?: string,
+    speed: number = 30, 
+    gravityEffect: number = 0.05
+  ): void {
+    // Set position and properties
+    this.x = spawnX;
+    this.y = spawnY;
+    this.speed = speed;
+    this.gravityEffect = gravityEffect;
+    this.gameBounds = gameBounds;
+    
+    if (id) {
+      this.id = id;
+    }
+    
+    // Make visible and ready for display
+    this.visible = true;
+    this.alpha = 1;
+    
+    // Calculate direction vector
+    this.calculateVelocity(spawnX, spawnY, targetX, targetY);
+  }
+
 
 }

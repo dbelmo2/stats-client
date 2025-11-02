@@ -82,4 +82,55 @@ export class EnemyProjectile extends Container {
   getOwnerId() {
     return this.ownerId;
   }
+
+  // Reset method for ObjectPool usage
+  reset(): EnemyProjectile {
+    // IMPORTANT: Remove from display tree BEFORE resetting position
+    // This prevents visual artifacts at (0,0)
+    if (this.parent) {
+      this.parent.removeChild(this);
+    }
+    
+    // Reset position and movement to off-screen safe values
+    this.x = -9999;
+    this.y = -9999;
+    this.vx = 0;
+    this.vy = 0;
+    
+    // Reset state flags
+    this.shouldBeDestroyed = false;
+    
+    // Generate new ID for reused projectile
+    this.id = Math.random().toString(36).substring(2, 15);
+    this.ownerId = '';
+    
+    // Reset visual state - make invisible until reinitialized
+    this.visible = false;
+    this.alpha = 0;
+    
+    return this;
+  }
+
+  // Initialize method for setting up a recycled projectile with new parameters
+  initialize(
+    id: string,
+    ownerId: string,
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    gameBounds: { width: number; height: number }
+  ): void {
+    this.id = id;
+    this.ownerId = ownerId;
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.gameBounds = gameBounds;
+    
+    // Make visible and ready for display
+    this.visible = true;
+    this.alpha = 1;
+  }
 }
