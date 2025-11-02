@@ -1,6 +1,6 @@
 import { Container, Sprite, Text } from 'pixi.js';
 import type { Player } from '../../components/game/Player';
-import { testForAABB } from '../../systems/Collision';
+import { testForAABB } from './systems/Collision';
 export class AmmoBush extends Container {
     private body: Sprite;
     private labelIsShowing: boolean = false;
