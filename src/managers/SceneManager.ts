@@ -415,7 +415,7 @@ export class SceneManager {
     /**
      * Initialize TV Manager
      */
-    private initializeTvManager(): void {
+    public initializeTvManager(): void {
         try {
             this.ensureInitialized();
             

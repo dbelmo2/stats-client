@@ -3,6 +3,7 @@ import type { Player } from "../components/game/Player";
 import type { Projectile } from "../components/game/Projectile";
 import type { AmmoBush } from "../components/game/AmmoBush";
 import type { Sprite } from "pixi.js";
+import type { PositionVector } from "../components/game/systems/Vector";
 
 export interface PlayerData {
     id: string;
@@ -10,6 +11,17 @@ export interface PlayerData {
     sprite: Player | undefined;
     activeProjectiles: Set<Projectile>;
     disableInput: boolean;
+}
+
+export interface PlayerState {
+    id: string;
+    position: PositionVector;
+    hp: number;
+    isBystander: boolean;
+    name: string;
+    tick: number;
+    velocity: PositionVector;
+    [key: string]: any;
 }
 
 export interface GameState {

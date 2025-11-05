@@ -1,6 +1,5 @@
 // src/managers/NetworkManager.ts
 import { io, Socket } from 'socket.io-client';
-import { v4 as uuidv4 } from 'uuid';
 import { ModalManager } from '../components/ui/Modal';
 import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
 
@@ -11,13 +10,21 @@ export interface InitializationOptions {
   playerName: string;
 }
 
+export interface MatchData {
+  matchId: string;
+  region: string;
+  playerId: string;
+}
+
 export class NetworkManager {
     private static instance: NetworkManager;
     private socket: Socket | null = null;
     private pingHistory: number[] = [];
     private currentPing: number = 0;
     private pingIntervalId: ReturnType<typeof setInterval> | null = null;
-    private playerId: string = uuidv4();
+    private playerId: string | undefined;
+
+    private currentMatchData: MatchData | null = null;
 
     private readonly PING_INTERVAL_MS = 1000;
     private isWaitingForPong: boolean = false;
@@ -40,10 +47,11 @@ export class NetworkManager {
       }
     }
 
-    public async initialize({ serverUrl, region, playerName }: InitializationOptions): Promise<string> {
-        if (this.socket) {
+    public async initialize({ serverUrl, region, playerName }: InitializationOptions): Promise<MatchData> {
+        console.log(`[NetworkManager] Initializing with serverUrl: ${serverUrl}, region: ${region}, playerName: ${playerName}`);
+        if (this.currentMatchData) {
           console.warn('NetworkManager already initialized');
-          return this.playerId;
+          return this.currentMatchData as MatchData;
         }
         
         this.socket = io(serverUrl, {
@@ -52,19 +60,16 @@ export class NetworkManager {
           reconnectionDelay: 1000,
           timeout: 20000,
           upgrade: false,
-          auth: {
-            uuid: this.playerId // TODO: Why are we sending this client side? is it to help with reconnections? Can we have it generated server side?
-          }
         });
 
         await this.waitForConnect();
-
+        console.log('[NetworkManager] Connected to server');
         window.addEventListener('beforeunload', () => {
           this.cleanup();
         });
 
         this.setupPingMonitoring();
-
+        console.log('[NetworkManager] Ping monitoring set up');
         this.socket.on('connect_error', (err) => {
           console.error('[NetworkManager] Connection_error event:', err.message);
         });
@@ -97,9 +102,29 @@ export class NetworkManager {
         this.socket.on('afkWarning', this.handleAfkWarning);
 
         this.joinQueue(playerName, region);
+
+        const matchData = await this.waitForMatchFound();
+        this.currentMatchData = matchData;
+        this.playerId = matchData.playerId;
+
         this.socket.on('disconnect', (reason) => this.handleConnectionLost(reason, playerName, region));
 
-        return this.playerId;
+        return matchData;
+    }
+
+
+    private waitForMatchFound(): Promise<MatchData> {
+      return new Promise((resolve) => {
+        if (!this.socket) {
+          console.error('NetworkManager not initialized');
+          return;
+        }
+
+        this.socket.once('matchFound', (matchData: MatchData) => {
+          console.log('Match found:', matchData);
+          resolve(matchData);
+        });
+      });
     }
 
     private handleConnectionLost = (reason: string, playerName: string, playerRegion: string) => {
@@ -245,11 +270,13 @@ export class NetworkManager {
     }
 
     joinQueue(name: string, region: string) {
+      console.log(`[NetworkManager] Joining queue in region: ${region} as ${name}`);
       if (!this.socket) {
         console.error('NetworkManager not initialized');
         return;
       }
       this.socket.emit('joinQueue', { region, name });
+      console.log('[NetworkManager] joinQueue event emitted');
     }
 
     on(event: string, callback: (...args: any[]) => void) {
@@ -306,9 +333,11 @@ export class NetworkManager {
       if (!this.socket) {
         throw new Error('NetworkManager not initialized');
       }
-      if (this.socket.connected) return;
+      if (this.socket.connected && this.playerId) return;
       return new Promise(resolve => {
-        this.socket!.once('connect', () => resolve()); 
+        this.socket!.once('connect', () => {
+          resolve();
+        });
       });
     }
 

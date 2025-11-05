@@ -15,7 +15,7 @@ import { AmmoBush } from '../components/game/AmmoBush';
 import { KillIndicator } from '../components/ui/KillIndicator';
 import { PingDisplay } from '../components/ui/PingDisplay';
 import { FPSDisplay } from '../components/ui/FPSDisplay';
-import { Vector2, type InputVector, type PositionVector } from '../components/game/systems/Vector';
+import { Vector2, type InputVector } from '../components/game/systems/Vector';
 import ObjectPool from '../components/game/systems/ObjectPool';
 
 import { AudioManager } from './AudioManager';
@@ -135,7 +135,6 @@ export class GameManager {
         },
         inputBuffer: [],
         stateBuffer: [],
-        enemyLastKnownStates: new Map<string, { position: PositionVector; hp: number, isBystander: boolean, name: string }>(),
     };
 
     private entities: EntityContainers = {
@@ -218,7 +217,7 @@ export class GameManager {
 
 
         await this.initializeNetworking(region);
-
+        this.sceneManager.initializeTvManager();
         this.app.stage.addChild(this.cameraManager.getCamera());
         this.app.stage.addChild(this.ui.scoreDisplay);
 
@@ -228,9 +227,11 @@ export class GameManager {
     private async initializeNetworking(region: string): Promise<void> {
         try {
             const networkManager = NetworkManager.getInstance();
-            this.player.id = await networkManager.initialize({ 
+            const matchData = await networkManager.initialize({ 
                 region, playerName: this.player.name, serverUrl: config.GAME_SERVER_URL 
             });
+
+            this.player.id = matchData.playerId;
 
             networkManager.on('gameOver', this.handleGameOver);
             networkManager.on('disconnect', this.handleConnectionLost);
@@ -332,6 +333,10 @@ export class GameManager {
             this.cleanupSession();
         }
     }
+
+
+
+
 
 
     private integrateStateUpdate(): void {
@@ -575,39 +580,43 @@ export class GameManager {
     }
 
     private integrateEnemyPlayers(): void {
-        const enemyPlayers = this.network.latestServerSnapshot.players.filter(player => player.id !== this.player.id);
+        const enemyPlayers = Array.from(this.network.latestServerSnapshot.players.values());
         for (const enemyPlayer of enemyPlayers) {
+            if (enemyPlayer.id === this.player.id) continue; // Skip self
+
             // TODO: Ensure all uses of enemeyPlayer.sessionId are changed from enemyPlayer.id
             if (
-                this.entities.enemies.has(enemyPlayer.sessionId) === false
-                && enemyPlayer.position
+                this.entities.enemies.has(enemyPlayer.id) === false
+                && enemyPlayer.x !== undefined
+                && enemyPlayer.y !== undefined
             ) {
                 // Spawning a new enemy player
                 // This doesn't trigger when match ends and player respawns immediately
-                const graphic = new EnemyPlayer(enemyPlayer.sessionId, enemyPlayer.position.x, enemyPlayer.position.y, enemyPlayer?.isBystander, enemyPlayer.name);
+                const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.x, enemyPlayer.y, enemyPlayer?.by, enemyPlayer.name);
                 this.gameContainer.addChild(graphic);
-                this.entities.enemies.set(enemyPlayer.sessionId, graphic);
+                this.entities.enemies.set(enemyPlayer.id, graphic);
             } else {
-                const graphic = this.entities.enemies.get(enemyPlayer.sessionId);
+                const graphic = this.entities.enemies.get(enemyPlayer.id);
                 if (!graphic) continue;
-                graphic.setIsBystander(enemyPlayer.isBystander);
-                    
+
+                graphic.setIsBystander(enemyPlayer.by);
+
                 // Only update health if we don't have a pending collision
-                const pendingCollision = this.gameState.pendingCollisions.get(enemyPlayer.sessionId);
+                const pendingCollision = this.gameState.pendingCollisions.get(enemyPlayer.id);
                 if (!pendingCollision && enemyPlayer.hp !== undefined) {
                     graphic.setHealth(enemyPlayer.hp);
                 
                     // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
                     // than our prediction, collision was confirmed
-                    if (enemyPlayer.hp <= graphic.getPredictedHealth()) {
-                        this.gameState.pendingCollisions.delete(enemyPlayer.sessionId);
+                    if (enemyPlayer.hp && enemyPlayer.hp <= graphic.getPredictedHealth()) {
+                        this.gameState.pendingCollisions.delete(enemyPlayer.id);
                         graphic.setHealth(enemyPlayer.hp);
                     }
                 }
 
 
-                if (enemyPlayer.position) {
-                    graphic?.syncPosition(enemyPlayer.position.x, enemyPlayer.position.y);
+                if (enemyPlayer.x !== undefined && enemyPlayer.y !== undefined) {
+                    graphic?.syncPosition(enemyPlayer.x, enemyPlayer.y);
                 }
             }
         }
@@ -615,7 +624,7 @@ export class GameManager {
 
         // Remove stale enemy players
         for (const [id, graphic] of this.entities.enemies.entries()) {
-            if (!enemyPlayers.some(player => player.sessionId === id)) {
+            if (!enemyPlayers.some(player => player.id === id)) {
                 this.app.stage.removeChild(graphic);
                 graphic.destroy();
                 this.entities.enemies.delete(id);
@@ -636,9 +645,9 @@ export class GameManager {
         }
         if (!this.player.sprite) return;
 
-        const bystanderStatus = selfData.isBystander ?? this.network.enemyLastKnownStates.get(this.player.id)?.isBystander ?? true;
+        const bystanderStatus = selfData.by;
         this.player.sprite.setIsBystander(bystanderStatus);
-        if (this.player.sprite.getIsBystander() === false && selfData.isBystander ===  false) {
+        if (this.player.sprite.getIsBystander() === false && selfData.by ===  false) {
             // Only update health if we don't have a pending collision
             this.updatePlayerHealth(selfData);
         }
@@ -655,7 +664,7 @@ export class GameManager {
 
     private spawnPlayer(data: PlayerServerState): void {
 
-        if (data.tick === undefined || data.position === undefined) {
+        if (data.tick === undefined || data.x === undefined || data.y === undefined) {
             console.warn('Invalid player data, cannot spawn');
             return;
         }
@@ -678,16 +687,15 @@ export class GameManager {
         };
 
 
-
         this.player.sprite = new Player(
-            data.position.x,
-            data.position.y,
+            data.x,
+            data.y,
             this.GAME_BOUNDS,
             data.name,
         );
         
 
-        const bystanderStatus = data.isBystander ?? this.network.enemyLastKnownStates.get(this.player.id)?.isBystander ?? true;
+        const bystanderStatus = data.by;
         this.player.sprite.setPlatforms(this.world.platforms);
         this.player.sprite.setIsBystander(bystanderStatus);
         this.player.sprite.setLastProcessedInputVector({ x: 0, y: 0 });
@@ -696,16 +704,16 @@ export class GameManager {
 
     private updatePlayerHealth(selfData: PlayerServerState): void {
         if (!this.player.sprite) return;
-        
         const pendingCollision = this.gameState.pendingCollisions.get(this.player.id);
-        if (!pendingCollision && selfData.hp !== undefined) {
+        if (!pendingCollision) {
             this.player.sprite.setHealth(selfData.hp);
-            // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
-            // than our prediction, collision was confirmed
-            if (selfData.hp <= this.player.sprite.getPredictedHealth()) {
-                this.gameState.pendingCollisions.delete(this.player.id);
-                this.player.sprite.setHealth(selfData.hp);
-            }
+        }
+        
+        // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
+        // than our prediction, collision was confirmed
+        if (selfData.hp <= this.player.sprite.getPredictedHealth()) {
+            this.gameState.pendingCollisions.delete(this.player.id);
+            this.player.sprite.setHealth(selfData.hp);
         }
     }
 
@@ -764,31 +772,25 @@ export class GameManager {
         this.network.latestServerSnapshotProcessed = this.network.latestServerSnapshot;
         const selfData = this.network.latestServerSnapshotProcessed.players.find(player => player.id === this.player.id);
         if (!selfData  || !this.player.sprite) {
-            console.warn('Invalid self data from server, cannot reconcile');
             return;
         }
 
-        if (selfData.position === undefined || selfData.tick === undefined || selfData.vx === undefined || selfData.vy === undefined) {
-            console.warn('Invalid self data from server, cannot reconcile');
-            return;
-        }
-
-
-        // TODO: if selfdata is undefined, do we need to do resimulation? 
-
-        const tick = selfData.tick;
+        const tick = selfData.tick; 
 
 
         let serverStateBufferIndex = tick % this.BUFFER_SIZE;
         let clientPosition = this.network.stateBuffer[serverStateBufferIndex]?.position;
 
+
+
+
         if (tick >= this.gameState.localTick) {
             //console.warn(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
             // Server has marched ahead of the client...
             // As a temporary fix, we will simply sync the clint position with the server position
-            console.warn(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
-            this.player.sprite.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
-            this.network.stateBuffer[serverStateBufferIndex] = selfData;
+            console.error(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
+            this.player.sprite.syncPosition(selfData.x, selfData.y, selfData.vx, selfData.vy);
+            this.network.stateBuffer[serverStateBufferIndex] = { tick: tick, position: { x: selfData.x, y: selfData.y } };
             this.gameState.localTick = tick;
             return;
         }
@@ -800,12 +802,12 @@ export class GameManager {
         } 
 
 
-        const positionError = Vector2.subtractPositions(selfData.position, clientPosition);
+        const positionError = Vector2.subtractPositions({ x: selfData.x, y: selfData.y }, clientPosition);
 
         if (Vector2.len(positionError.x, positionError.y) > 0.0001) {
-            //console.warn(`Server position at tick client tick ${selfData.tick}: ${selfData.position.x}, ${selfData.position.y}, Client position at local tick ${ this.network.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
-            this.player.sprite.syncPosition(selfData.position.x, selfData.position.y, selfData.vx, selfData.vy);
-            this.network.stateBuffer[serverStateBufferIndex].position = selfData.position;
+            console.warn(`Server position at tick client tick ${selfData.tick}: ${selfData.x}, ${selfData.y}, Client position at local tick ${ this.network.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
+            this.player.sprite.syncPosition(selfData.x, selfData.y, selfData.vx, selfData.vy);
+            this.network.stateBuffer[serverStateBufferIndex].position = { x: selfData.x, y: selfData.y };
             let tickToResimulate = tick + 1;
             while (tickToResimulate < this.gameState.localTick) {
                 const bufferIndex = tickToResimulate % this.BUFFER_SIZE;
@@ -823,25 +825,25 @@ export class GameManager {
         }
     }
 
-
     private handleTick(): void {
         try {
+            
             if (this.player.sprite) {
                 if (this.network.latestServerSnapshot.serverTick > this.network.latestServerSnapshotProcessed.serverTick) {
                     this.handleReconciliation();
                 }
 
-                this.handlePlayerInput();
-
+                const playerInput = this.handlePlayerInput();
 
                 // Update camera position and UI elements
                 this.cameraManager.updateCameraPositionLERP(this.player);
                 this.ui.scoreDisplay.fixPosition();
                 DevModeManager.getInstance().fixPositions();
 
-  
-
-   
+                if (playerInput) {
+                    this.handleShooting(playerInput);
+                    this.player.sprite.setLastProcessedInputVector(playerInput.vector);
+                }     
             }
 
             this.integrateStateUpdate();
@@ -916,8 +918,10 @@ export class GameManager {
         };
 
         this.handleShooting(inputPayload);
+        
 
         if (this.shouldBroadcastPlayerInput(inputVector)) this.broadcastPlayerInput(inputPayload);
+        
 
         // Updating this before the line above (where we broadcast) causes reconciliation issues
         // where the client is always ahead of the server by 1-2 inputs.
@@ -949,7 +953,6 @@ export class GameManager {
 
     // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)
     private render(deltaMs: number): void {
-        //this.updateCameraPosition();
 
         this.checkForKills(this.network.latestServerSnapshot.scores);
         this.ui.scoreDisplay.updateScores(this.network.latestServerSnapshot.scores, this.player.id);
