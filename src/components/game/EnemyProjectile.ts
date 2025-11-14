@@ -85,11 +85,8 @@ export class EnemyProjectile extends Container {
 
   // Reset method for ObjectPool usage
   reset(): EnemyProjectile {
-    // IMPORTANT: Remove from display tree BEFORE resetting position
-    // This prevents visual artifacts at (0,0)
-    if (this.parent) {
-      this.parent.removeChild(this);
-    }
+    // DO NOT remove from display tree - ObjectPool handles stage management
+    // when keepOnStage is true, objects should remain on stage but be invisible
     
     // Reset position and movement to off-screen safe values
     this.x = -9999;

@@ -189,7 +189,7 @@ export class GameManager {
         );
         
         this.entities.projectilePool = new ObjectPool<Projectile>(
-            () => new Projectile(0, 0, 0, 0, { width: this.GAME_WIDTH, height: this.GAME_HEIGHT }, '', 30, 0.05),
+            () => new Projectile(-2000, -2000, 0, 0, { width: this.GAME_WIDTH, height: this.GAME_HEIGHT }, '', 30, 0.05),
             (obj: Projectile) => obj.reset(),
             50,
             500,
@@ -200,7 +200,7 @@ export class GameManager {
         );
         
         this.entities.enemyProjectilePool = new ObjectPool<EnemyProjectile>(
-            () => new EnemyProjectile('', 'temp', 0, 0, 0, 0, { width: this.GAME_WIDTH, height: this.GAME_HEIGHT }),
+            () => new EnemyProjectile('', 'temp', -2000, -2000, 0, 0, { width: this.GAME_WIDTH, height: this.GAME_HEIGHT }),
             (obj: EnemyProjectile) => obj.reset(),
             50,
             500,
@@ -431,7 +431,7 @@ export class GameManager {
             } else if (!enemyProjectiles.has(projectile.id) && !destroyedProjectiles.has(projectile.id)) {
                 // Only create new projectile if it hasn't been destroyed locally
                 const graphic = this.entities.enemyProjectilePool.getElement();
-                
+                console.log(`enemyProjectilePoolStats: ${JSON.stringify(this.entities.enemyProjectilePool.getPoolStats())}`);
                 // Initialize the recycled projectile with server data
                 graphic.initialize(
                     projectile.id, 
@@ -858,17 +858,13 @@ export class GameManager {
                     this.handleReconciliation();
                 }
 
-                const playerInput = this.handlePlayerInput();
+                this.handlePlayerInput();
 
                 // Update camera position and UI elements
                 this.cameraManager.updateCameraPositionLERP(this.player);
                 this.ui.scoreDisplay.fixPosition();
                 DevModeManager.getInstance().fixPositions();
 
-                if (playerInput) {
-                    this.handleShooting(playerInput);
-                    this.player.sprite.setLastProcessedInputVector(playerInput.vector);
-                }     
             }
 
             this.integrateStateUpdate();
@@ -1015,11 +1011,8 @@ export class GameManager {
             || this.gameState.phase !== 'active'
             || !input.vector.mouse
         ) return;
-
         // Get projectile from pool instead of creating new one
         const projectile = this.entities.projectilePool.getElement();
-
-        console.log(this.entities.projectilePool.getPoolStats());
 
         // Initialize the recycled projectile with new parameters
         projectile.initialize(
@@ -1140,9 +1133,6 @@ export class GameManager {
 
             // Clean up destroyed projectiles
             if (projectile.shouldBeDestroyed) {
-                if (projectile.parent) {
-                    projectile.parent.removeChild(projectile);
-                }
                 // Release back to pool instead of destroying
                 this.entities.enemyProjectilePool.releaseElement(projectile);
                 this.entities.enemyProjectiles.delete(projectileId);

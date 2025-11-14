@@ -84,11 +84,6 @@ export class KillIndicator extends Text {
     
     // Reset method for ObjectPool usage
     public reset(): KillIndicator {
-        // IMPORTANT: Remove from display tree BEFORE resetting position
-        if (this.parent) {
-            this.parent.removeChild(this);
-        }
-        
         // Cancel any running animation
         this.stopAnimation();
         
