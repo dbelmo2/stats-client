@@ -36,7 +36,7 @@ export class Projectile extends Container {
     gameBounds: { width: number; height: number },
     id = Math.random().toString(36).substring(2, 15),
     speed = 30, 
-    gravityEffect = 0.05, 
+    gravityEffect = 0.05,
   ) {
     super();
 
@@ -68,8 +68,6 @@ export class Projectile extends Container {
     this.calculateVelocity(spawnX, spawnY, targetX, targetY);
   
     //this.pivot.set(10, 10); // Set pivot to center of the tomato sprite
-
-    // Begin the age process (we dont want projetiles sticking around forever)
   }
 
   update() {

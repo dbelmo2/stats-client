@@ -57,7 +57,7 @@ import { CameraManager } from './CameraManager';
 interface EntityContainers {
   enemies: Map<string, EnemyPlayer>;
   enemyProjectiles: Map<string, EnemyProjectile>;
-  killIndicators: KillIndicator[];
+  killIndicatorPool: ObjectPool<KillIndicator>;
   projectilePool: ObjectPool<Projectile>;
   enemyProjectilePool: ObjectPool<EnemyProjectile>;
 }
@@ -150,19 +150,9 @@ export class GameManager {
     private entities: EntityContainers = {
         enemies: new Map<string, EnemyPlayer>(),
         enemyProjectiles: new Map<string, EnemyProjectile>(),
-        killIndicators: [],
-        projectilePool: new ObjectPool<Projectile>(
-            () => new Projectile(0, 0, 0, 0, { width: 800, height: 600 }), 
-            (obj: Projectile) => obj.reset(), 
-            50, 
-            500
-        ),
-        enemyProjectilePool: new ObjectPool<EnemyProjectile>(
-            () => new EnemyProjectile('temp', 'temp', 0, 0, 0, 0, { width: 800, height: 600 }), 
-            (obj: EnemyProjectile) => obj.reset(), 
-            50, 
-            500
-        )
+        killIndicatorPool: undefined as any, // Will be initialized in constructor
+        projectilePool: undefined as any, // Will be initialized in constructor
+        enemyProjectilePool: undefined as any // Will be initialized in constructor
     };
 
     private world: WorldObjects = {
@@ -186,9 +176,39 @@ export class GameManager {
         this.controller = new Controller();
         this.gameContainer = new Container();
         this.ui.scoreDisplay = new ScoreDisplay();
-    }
+        
+        // Initialize ObjectPools after gameContainer is created
+        this.entities.killIndicatorPool = new ObjectPool<KillIndicator>(
+            () => new KillIndicator(0, 0),
+            (obj: KillIndicator) => obj.reset(),
+            15,
+            150,
+            true, // keepOnStage
+            (indicator: KillIndicator) => this.gameContainer.addChild(indicator),
+            (indicator: KillIndicator) => this.gameContainer.removeChild(indicator)
+        );
+        
+        this.entities.projectilePool = new ObjectPool<Projectile>(
+            () => new Projectile(0, 0, 0, 0, { width: this.GAME_WIDTH, height: this.GAME_HEIGHT }, '', 30, 0.05),
+            (obj: Projectile) => obj.reset(),
+            50,
+            500,
+            true, // keepOnStage
+            (projectile: Projectile) => this.gameContainer.addChild(projectile),
+            (projectile: Projectile) => this.gameContainer.removeChild(projectile)
 
-    
+        );
+        
+        this.entities.enemyProjectilePool = new ObjectPool<EnemyProjectile>(
+            () => new EnemyProjectile('', 'temp', 0, 0, 0, 0, { width: this.GAME_WIDTH, height: this.GAME_HEIGHT }),
+            (obj: EnemyProjectile) => obj.reset(),
+            50,
+            500,
+            true, // keepOnStage
+            (projectile: EnemyProjectile) => this.gameContainer.addChild(projectile),
+            (projectile: EnemyProjectile) => this.gameContainer.removeChild(projectile)
+        );
+    }
     
     public async initialize(): Promise<void> {
         this.world = this.sceneManager.initialize(
@@ -306,18 +326,12 @@ export class GameManager {
         try {
             // Clean up active projectiles and return to pool
             for (const projectile of this.player.activeProjectiles) {
-                if (projectile.parent) {
-                    projectile.parent.removeChild(projectile);
-                }
                 this.entities.projectilePool.releaseElement(projectile);
             }
             this.player.activeProjectiles.clear();
             
             // Clean up enemy projectiles and return to pool  
             for (const [_, projectile] of this.entities.enemyProjectiles) {
-                if (projectile.parent) {
-                    projectile.parent.removeChild(projectile);
-                }
                 this.entities.enemyProjectilePool.releaseElement(projectile);
             }
             this.entities.enemyProjectiles.clear();
@@ -380,22 +394,18 @@ export class GameManager {
         }
     }
 
-    // TODO: Reuse kill indicators from a pool instead of creating new ones each time
     private showKillIndicator(playerId: string): void {
         if (playerId === this.player.id && this.player.sprite) {
             // Player kill
-            const indicator = new KillIndicator(this.player.sprite.x, this.player.sprite.y - 50);
-            this.gameContainer.addChild(indicator);
-            this.entities.killIndicators.push(indicator);
+            const indicator = this.entities.killIndicatorPool.getElement();
+            indicator.initialize(this.player.sprite.x, this.player.sprite.y);
+
         } else {
             // Enemy kill
             const enemyGraphic = this.entities.enemies.get(playerId);
             if (enemyGraphic && enemyGraphic.isPlayerAlive() === true) {
-                const indicator = new KillIndicator(enemyGraphic.x, enemyGraphic.y - 50);
-                this.gameContainer.addChild(indicator);
-                // TODO: this seems to grow indefinetly even when destroy is called on kill indicators...
-                // consider using a pool of kill indicators that we can recycle instead of creating new ones each time
-                this.entities.killIndicators.push(indicator); // This too (why do we even need this array?)
+                const indicator = this.entities.killIndicatorPool.getElement();
+                indicator.initialize(enemyGraphic.x, enemyGraphic.y);
             }
         }
     }
@@ -433,7 +443,6 @@ export class GameManager {
                     { width: this.app.canvas.width, height: this.app.canvas.height }
                 );
                 
-                this.gameContainer.addChild(graphic);
                 enemyProjectiles.set(projectile.id, graphic);
             }
         }    
@@ -453,9 +462,6 @@ export class GameManager {
         for (const id of enemyProjectilesToRemove) {
             const graphic = this.entities.enemyProjectiles.get(id);
             if (graphic) {
-                if (graphic.parent) {
-                    graphic.parent.removeChild(graphic);
-                }
                 this.entities.enemyProjectilePool.releaseElement(graphic);
                 this.entities.enemyProjectiles.delete(id);
             }
@@ -476,9 +482,6 @@ export class GameManager {
         // Remove projectiles and return to pool
         for (const projectile of projectilesToRemove) {
             this.player.activeProjectiles.delete(projectile);
-            if (projectile.parent) {
-                projectile.parent.removeChild(projectile);
-            }
             this.entities.projectilePool.releaseElement(projectile);
         }
     }
@@ -526,31 +529,20 @@ export class GameManager {
             );
 
             this.app.ticker.stop();
-
-            // Clean up active projectiles and return to pool
-            for (const projectile of this.player.activeProjectiles) {
-                if (projectile.parent) {
-                    projectile.parent.removeChild(projectile);
-                }
-                this.entities.projectilePool.releaseElement(projectile);
-            }
-            this.player.activeProjectiles.clear();
-
             const { enemyProjectiles, enemies } = this.entities;
 
-            // Clean up enemy projectiles and return to pool
-            for (const [_, projectile] of enemyProjectiles) {
-                if (projectile.parent) {
-                    projectile.parent.removeChild(projectile);
-                }
-                this.entities.enemyProjectilePool.releaseElement(projectile);
-            }
+            this.player.activeProjectiles.clear();
             enemyProjectiles.clear();
 
             // Since this is full session cleanup, destroy the pools completely
             // This ensures no lingering references and proper memory cleanup
+            // This will also handle removing these elements from the stage. 
             this.entities.projectilePool.destroy();
             this.entities.enemyProjectilePool.destroy();
+            this.entities.killIndicatorPool.destroy();
+            this.gameState.scores.clear();
+            this.gameState.pendingCollisions.clear();
+            this.gameState.destroyedProjectiles.clear();
 
             // Clean up enemy players
             for (const [_, enemy] of enemies) {
@@ -572,24 +564,8 @@ export class GameManager {
             }
 
             DevModeManager.getInstance().cleanup();
-            
-            // Clean up bug report manager
             BugReportManager.getInstance().cleanup();
-
-            // Clean up kill indicators
-            for (const indicator of this.entities.killIndicators) {
-                this.gameContainer.removeChild(indicator);
-                indicator.destroy();
-            }
-            this.entities.killIndicators = [];
-            this.gameState.scores.clear();
-
-            // Clean up the scene
             SceneManager.getInstance().cleanup();
-
-            // Clear all remaining state
-            this.gameState.pendingCollisions.clear();
-            this.gameState.destroyedProjectiles.clear();
 
         } catch (error) {
             ErrorHandler.getInstance().handleError(
@@ -1057,7 +1033,6 @@ export class GameManager {
 
         AudioManager.getInstance().play('shoot');
         this.player.activeProjectiles.add(projectile);
-        this.gameContainer.addChild(projectile);    
     }
 
     private updateOwnProjectiles(): void {
@@ -1104,9 +1079,6 @@ export class GameManager {
         // Clean up destroyed projectiles using pool
         for (const projectile of projectilesToRemove) {
             this.player.activeProjectiles.delete(projectile);
-            if (projectile.parent) {
-                projectile.parent.removeChild(projectile);
-            }
             // Release back to pool instead of destroying
             this.entities.projectilePool.releaseElement(projectile);
         }
@@ -1116,6 +1088,7 @@ export class GameManager {
         for (const [projectileId, projectile] of this.entities.enemyProjectiles.entries()) {
             projectile.update();
             
+
             if (this.gameState.phase === 'active') {
                 // Check collision with self first
                 if (this.player.sprite && this.player.sprite.getIsBystander() === false && testForAABB(projectile, this.player.sprite)) {

@@ -26,7 +26,7 @@ export class KillIndicator extends Text {
 
         // Set position and anchor
         this.x = x;
-        this.y = y - 30; // Start above the player
+        this.y = y - 80; // Start above the player
         this.anchor.set(0.5, 0.5);
         
         // Set up animation using requestAnimationFrame instead of Ticker
@@ -34,6 +34,12 @@ export class KillIndicator extends Text {
     }
     
     private startAnimation(): void {
+        // Cancel any existing animation first
+        if (this.animationID !== null) {
+            cancelAnimationFrame(this.animationID);
+            this.animationID = null;
+        }
+        
         let lastTime = performance.now();
         
         const animate = (currentTime: number) => {
@@ -51,9 +57,11 @@ export class KillIndicator extends Text {
                 this.alpha = 1 - ((this.elapsed - (this.lifespan / 2)) / (this.lifespan / 2));
             }
             
-            // Remove when lifetime is over
+            // Remove when lifetime is over - but don't destroy, just stop animation
             if (this.elapsed >= this.lifespan) {
-                this.destroy();
+                this.stopAnimation();
+                // Signal that this indicator can be returned to pool
+                // The parent system should handle this via a callback or polling
                 return;
             }
             
@@ -63,12 +71,57 @@ export class KillIndicator extends Text {
         this.animationID = requestAnimationFrame(animate);
     }
     
-    destroy(): void {
-        // Cancel animation frame if active
+    private stopAnimation(): void {
         if (this.animationID !== null) {
             cancelAnimationFrame(this.animationID);
             this.animationID = null;
         }
+    }
+    
+    public isAnimationComplete(): boolean {
+        return this.elapsed >= this.lifespan;
+    }
+    
+    // Reset method for ObjectPool usage
+    public reset(): KillIndicator {
+        // IMPORTANT: Remove from display tree BEFORE resetting position
+        if (this.parent) {
+            this.parent.removeChild(this);
+        }
+        
+        // Cancel any running animation
+        this.stopAnimation();
+        
+        // Reset position to off-screen safe values
+        this.x = -9999;
+        this.y = -9999;
+        
+        // Reset animation state
+        this.elapsed = 0;
+        this.alpha = 0;
+        this.visible = false;
+
+        return this;
+    }
+
+    // Initialize method for setting up a recycled kill indicator with new parameters
+    public initialize(x: number, y: number): void {
+        // Set position
+        this.x = x;
+        this.y = y - 80; // Start above the target position
+        
+        // Reset visual state
+        this.alpha = 1;
+        this.visible = true;
+        this.elapsed = 0;
+        
+        // Start the animation
+        this.startAnimation();
+    }
+
+    destroy(): void {
+        // Cancel animation frame if active
+        this.stopAnimation();
         
         super.destroy({children: true, texture: true });
     }
