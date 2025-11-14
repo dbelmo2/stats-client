@@ -31,14 +31,16 @@ export interface ServerStateUpdate {
     players: PlayerServerState[];
     projectiles: ProjectileServerState[];
     scores: PlayerScore[];
-    serverTick: number;
+    sTick: number; // server tick
+    sTime: number; // server timestamp
 };
 
 export interface ServerState {
     players: PlayerState[];
     projectiles: ProjectileServerState[];
     scores: PlayerScore[];
-    serverTick: number;
+    sTick: number;
+    sTime: number;
 };
 
 export interface PlayerScore {
@@ -63,4 +65,5 @@ export interface NetworkState {
   latestServerSnapshotProcessed: ServerStateUpdate;
   inputBuffer: InputPayload[];
   stateBuffer: StatePayload[];
+  enemyPositionBuffers: Map<string, PositionVector[]>;
 }

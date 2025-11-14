@@ -2,6 +2,7 @@
 import { io, Socket } from 'socket.io-client';
 import { ModalManager } from '../components/ui/Modal';
 import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
+import lerp from '../utils/utils';
 
 
 export interface InitializationOptions {
@@ -21,8 +22,11 @@ export class NetworkManager {
     private socket: Socket | null = null;
     private pingHistory: number[] = [];
     private currentPing: number = 0;
+    private smoothedPing: number = 0;
+    private smoothedJitter: number = 0;
     private pingIntervalId: ReturnType<typeof setInterval> | null = null;
     private playerId: string | undefined;
+    private serverTimeOffset: number = 0;
 
     private currentMatchData: MatchData | null = null;
 
@@ -218,7 +222,7 @@ export class NetworkManager {
     
         this.pingIntervalId = setInterval(() => {
             if (this.isWaitingForPong === true) return;
-            const start = Date.now();
+            const start = performance.now();
             // Use volatile to prevent buffering if disconnected
             if (this.socket) {
                 this.socket.emit('m-ping', { pingStart: start });
@@ -226,10 +230,11 @@ export class NetworkManager {
             this.isWaitingForPong = true;
         }, this.PING_INTERVAL_MS);
 
-        this.socket.on('m-pong', ({ pingStart }) => {
+        this.socket.on('m-pong', ({ pingStart, serverTime }) => {
             this.isWaitingForPong = false;
-            const latency = Date.now() - pingStart;
-            this.updatePing(latency);
+            const latency = performance.now() - pingStart;
+            this.updatePing(latency, serverTime);
+
         });
 
         // Clean up on AFK removal
@@ -252,7 +257,7 @@ export class NetworkManager {
         }
     }
 
-    private updatePing(latency: number): void {
+    private updatePing(latency: number, serverTime: number): void {
         // Add to history (keep last 5 values)
         this.pingHistory.push(latency);
         if (this.pingHistory.length > 5) {
@@ -262,11 +267,64 @@ export class NetworkManager {
         this.currentPing = Math.round(
             this.pingHistory.reduce((sum, val) => sum + val, 0) / this.pingHistory.length
         );
+
+        // Initialize smoothedPing with first latency value to avoid slow convergence
+        if (this.smoothedPing === 0) {
+            this.smoothedPing = latency;
+        }
+
+        // Calculate instantaneous RTT delta for jitter measurement
+        const rttDelta = Math.abs(latency - this.smoothedPing);
+        
+        // Smooth RTT and jitter values using exponential smoothing (lerp with alpha = 0.1)
+        this.smoothedPing = lerp(this.smoothedPing, latency, 0.1);
+        this.smoothedJitter = lerp(this.smoothedJitter, rttDelta, 0.1);
+        
+
+        console.log(`[NetworkManager] Ping: ${this.currentPing} ms, Smoothed Ping: ${Math.round(this.smoothedPing)} ms, Smoothed Jitter: ${Math.round(this.smoothedJitter)} ms`);
+
+
+        const newServerTimeOffset = serverTime - (performance.now() + this.getOneWayDelay());
+        console.log('newServerTimeOffset:', newServerTimeOffset);
+        console.log('calculated by :', serverTime, '-', (performance.now() + this.getOneWayDelay()));
+        this.serverTimeOffset = newServerTimeOffset;
+    }
+
+    public getOneWayDelay(): number {
+        return this.smoothedPing / 2;
     }
 
     // Add getter for current ping
     public getPing(): number {
         return this.currentPing;
+    }
+
+    // Add getters for smoothed network metrics
+    public getSmoothedPing(): number {
+        return Math.round(this.smoothedPing);
+    }
+
+    public getServerTimeOffset(): number {
+        return this.serverTimeOffset;
+    }
+
+    public getSmoothedJitter(): number {
+        return this.smoothedJitter;
+    }
+
+    // Get comprehensive network stats
+    public getNetworkStats(): {
+        currentPing: number;
+        smoothedPing: number;
+        smoothedJitter: number;
+        samples: number;
+    } {
+        return {
+            currentPing: this.currentPing,
+            smoothedPing: Math.round(this.smoothedPing),
+            smoothedJitter: Math.round(this.smoothedJitter),
+            samples: this.pingHistory.length
+        };
     }
 
     joinQueue(name: string, region: string) {

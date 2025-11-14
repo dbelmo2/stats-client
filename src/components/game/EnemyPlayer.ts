@@ -1,6 +1,15 @@
 import { Graphics, Container, TextStyle, Text, Sprite } from 'pixi.js';
+import type { PositionVector } from './systems/Vector';
+import { NetworkManager } from '../../managers/NetworkManager';
+import lerp from '../../utils/utils';
+
+export interface EnemyPosition extends PositionVector {
+    timestamp: number;
+};
+
 
 export class EnemyPlayer extends Container {
+  private readonly INTERPOLATION_DELAY = 50; // milliseconds - reduced from 100ms
   private id: string;
   private body: Graphics;
   private healthBar: Graphics;
@@ -14,13 +23,24 @@ export class EnemyPlayer extends Container {
   private isBystander: boolean;
   private nameText: Text;
   private tomatoSprite: Sprite | null = null;
+  private onSpawn: (enemyPlayer: EnemyPlayer) => void;
+  private isAlive: boolean = true; // Track if the enemy is currently alive
+  private positionBuffer: EnemyPosition[] = [];
 
 
-  constructor(id: string, spawnX: number, spawnY: number, isBystander: boolean = true, name: string = 'unknown player') {
+  constructor(
+    id: string, 
+    spawnX: number, 
+    spawnY: number,
+    onSpawn: (enemyPlayer: EnemyPlayer) => void,
+    isBystander: boolean = true, 
+    name: string = 'unknown player'
+  ) {
     
     super();
     this.id = id;
     this.isBystander = isBystander;
+    this.onSpawn = onSpawn;
     // Create main body
     const bodyColor = isBystander ? '#4c4c4c' : '#D06DFE';
     this.body = new Graphics().rect(0, 0, 50, 50).fill(bodyColor);
@@ -44,7 +64,7 @@ export class EnemyPlayer extends Container {
     this.nameText.anchor.set(0.5, 1); // Center horizontally, align bottom
     this.nameText.y = -20; // Position above health bar
     this.healthBarContainer.addChild(this.nameText);
-
+  
     // Create health bar background
     const healthBarBg = new Graphics()
       .rect(0, -15, this.HEALTH_BAR_WIDTH, this.HEALTH_BAR_HEIGHT)
@@ -62,8 +82,18 @@ export class EnemyPlayer extends Container {
     // Default spawn location
     this.x = spawnX;
     this.y = spawnY;
+
+    this.onSpawn(this);
   }
 
+
+  public onPositionUpdate(position: EnemyPosition): void {
+    this.positionBuffer.push(position);
+    if (this.positionBuffer.length > 10) { // Increased from 5 to 10
+      this.positionBuffer.shift(); // Maintain a max buffer size
+    }
+
+  }
   private updateHealthBar(): void {
     this.healthBar.clear();
     const healthPercentage = this.predictedHealth / this.maxHealth;
@@ -91,9 +121,7 @@ export class EnemyPlayer extends Container {
       this.isBystander = value;
       // Change color based on bystander status
       this.body.clear();  
-
       this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#D06DFE');
-
 
       if (this.isBystander === false) {
         this.tomatoSprite = Sprite.from('tomato');
@@ -112,13 +140,10 @@ export class EnemyPlayer extends Container {
       return this.isBystander;
   }
 
-  syncPosition(x: number, y: number) {
-    this.x = x;
-    this.y = y;
-  }
 
   setHealth(updatedServerHealth?: number): void {
-      if (updatedServerHealth === undefined) return;
+      if (updatedServerHealth === undefined || !this.isAlive) return;
+      
       this.serverHealth = updatedServerHealth;
       // Only lower predicted health if server health is lower
       // NOTE: this will likely break if health regen is introduced
@@ -137,6 +162,9 @@ export class EnemyPlayer extends Container {
   }
 
   damage(amount: number = 10) {
+    // Only take damage if alive
+    if (!this.isAlive) return;
+    
     this.predictedHealth = Math.max(0, this.predictedHealth - amount);
     this.updateHealthBar();
 
@@ -145,8 +173,11 @@ export class EnemyPlayer extends Container {
     this.body.rect(0, 0, 50, 50).fill(0xff0000);
 
     this.damageFlashTimeout = setTimeout(() => {
-      this.body.clear();
-      this.body.rect(0, 0, 50, 50).fill('#D06DFE');
+      // Only restore color if still alive
+      if (this.isAlive) {
+        this.body.clear();
+        this.body.rect(0, 0, 50, 50).fill('#D06DFE');
+      }
     }, 100);
   }
 
@@ -154,9 +185,72 @@ export class EnemyPlayer extends Container {
     return this.id;
   }
 
-  getBounds() {
-      // Only return bounds of the body
+  getBounds(skipUpdate?: boolean, bounds?: any) {
+      // Only return bounds of the body if alive
+      if (!this.isAlive) {
+          // Return super getBounds but with zero size for dead enemies
+          const emptyBounds = super.getBounds(skipUpdate, bounds);
+          emptyBounds.width = 0;
+          emptyBounds.height = 0;
+          return emptyBounds;
+      }
       return this.body.getBounds();
+  }
+
+  public isPlayerAlive(): boolean {
+      return this.isAlive;
+  }
+
+
+  /**
+   * Kill the enemy player - removes sprite from display but keeps object for reuse
+   */
+  public kill(): void {
+      if (!this.isAlive) return; // Already dead
+      
+      this.isAlive = false;
+      
+      // Clear any pending timeouts
+      if (this.damageFlashTimeout) {
+          clearTimeout(this.damageFlashTimeout);
+          this.damageFlashTimeout = undefined;
+      }
+      
+      // Remove from parent container (this removes from display)
+      if (this.parent) {
+          this.parent.removeChild(this);
+      }
+      
+      // Reset health to initial state
+      this.serverHealth = this.maxHealth;
+      this.predictedHealth = this.maxHealth;
+      
+      // Hide the entire container
+      this.visible = false;
+  }
+
+  /**
+   * Respawn the enemy player - re-adds sprite to display and resets state
+   */
+  public respawn(spawnX: number, spawnY: number): void {
+      this.isAlive = true;
+      
+      // Reset position
+      this.x = spawnX;
+      this.y = spawnY;
+            
+      // Reset health to full
+      this.serverHealth = this.maxHealth;
+      this.predictedHealth = this.maxHealth;
+      this.updateHealthBar();
+      
+      // Make visible again
+      this.visible = true;
+      
+      // Only call onSpawn if not already in a container
+      if (!this.parent) {
+          this.onSpawn(this);
+      }
   }
   
   destroy(): void {
@@ -178,5 +272,38 @@ export class EnemyPlayer extends Container {
     });
   }
   
+  public update(): void {
+    const currentTime = performance.now();
+    console.log('currentTime:', currentTime);
+    const networkManager = NetworkManager.getInstance();
+    const currentServerTime = currentTime + networkManager.getServerTimeOffset();
+    console.log('serverTimeOffset:', networkManager.getServerTimeOffset());
+    console.log('currentServerTime:', currentServerTime);
+    const adaptiveDelay = this.INTERPOLATION_DELAY + (networkManager.getSmoothedJitter() * 0.5); // Reduced from * 2
+    console.log('adaptiveDelay:', adaptiveDelay);
+    console.log('smoothiedPing:', networkManager.getSmoothedPing());
+    console.log('smootehedJitter:', networkManager.getSmoothedJitter());
+    const renderTime = currentServerTime - adaptiveDelay;
+
+    console.log('position buffer length:', this.positionBuffer.length);
+    if (this.positionBuffer.length > 0) {
+      console.log('oldest timestamp:', this.positionBuffer[0].timestamp);
+      console.log('newest timestamp:', this.positionBuffer[this.positionBuffer.length - 1].timestamp);
+      console.log('time gap (newest - oldest):', this.positionBuffer[this.positionBuffer.length - 1].timestamp - this.positionBuffer[0].timestamp);
+      console.log('render time vs oldest:', renderTime - this.positionBuffer[0].timestamp);
+      console.log('render time vs newest:', renderTime - this.positionBuffer[this.positionBuffer.length - 1].timestamp);
+    }
+    console.log('Render time:', renderTime);
+    const toPositionIndex = this.positionBuffer.findIndex(pos => pos.timestamp > renderTime);
+    console.log('To position index:', toPositionIndex);
+    const fromPosition = this.positionBuffer[toPositionIndex - 1];
+    const toPosition = this.positionBuffer[toPositionIndex];
+
+    if (fromPosition && toPosition) {
+      const t = (renderTime - fromPosition.timestamp) / (toPosition.timestamp - fromPosition.timestamp);
+      this.x = lerp(fromPosition.x, toPosition.x, t);
+      this.y = lerp(fromPosition.y, toPosition.y, t);
+    }
+  }
 
 }

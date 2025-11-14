@@ -15,7 +15,7 @@ import { AmmoBush } from '../components/game/AmmoBush';
 import { KillIndicator } from '../components/ui/KillIndicator';
 import { PingDisplay } from '../components/ui/PingDisplay';
 import { FPSDisplay } from '../components/ui/FPSDisplay';
-import { Vector2, type InputVector } from '../components/game/systems/Vector';
+import { Vector2, type InputVector, type PositionVector } from '../components/game/systems/Vector';
 import ObjectPool from '../components/game/systems/ObjectPool';
 
 import { AudioManager } from './AudioManager';
@@ -47,7 +47,13 @@ import { CameraManager } from './CameraManager';
 // In one test, it started at around 300ms and climbed all the way up to 25,000 after which the
 // connection was lost and the ping was then reset.
 
-// TODO: refactor code to not use new Vector in every tick. 
+// TODO: Update usage of this.entities.enemies... 
+// in places like showKillIndicator(), we use it to check if the enemy is alive or not. we can 
+// intead use a isAlive method from the EnemyPlayer class.
+
+// TODO: Also update projectiles and players so that upon death they are simply made invisible, not removed from the scene...
+// removing from scene is too expensive. If necessary, do this for pooled objects as well.
+
 interface EntityContainers {
   enemies: Map<string, EnemyPlayer>;
   enemyProjectiles: Map<string, EnemyProjectile>;
@@ -71,6 +77,7 @@ interface UIElements {
 //  Fat Love:
 // - Defense (fat love eats all projectiles)
 // - offense (fat love shoots every projectile he ate in the direction of the mouse)
+
 
 
 export class GameManager {
@@ -125,16 +132,19 @@ export class GameManager {
             players: [],
             projectiles: [],
             scores: [], 
-            serverTick: 0
+            sTick: 0,
+            sTime: 0
         },
         latestServerSnapshotProcessed: {
             players: [],
             projectiles: [],
             scores: [], 
-            serverTick: 0
+            sTick: 0,
+            sTime: 0
         },
         inputBuffer: [],
         stateBuffer: [],
+        enemyPositionBuffers: new Map<string, PositionVector[]>(),
     };
 
     private entities: EntityContainers = {
@@ -237,6 +247,7 @@ export class GameManager {
             networkManager.on('disconnect', this.handleConnectionLost);
             networkManager.on('stateUpdate', (state: ServerStateUpdate) => {
                 this.network.latestServerSnapshot = state;
+                this.integrateEnemyPositions(state);
             });
 
         } catch (error) {
@@ -336,9 +347,19 @@ export class GameManager {
 
 
 
-
-
-
+    private integrateEnemyPositions(latestServerSnapshot: ServerStateUpdate): void {
+        for (const enemyPlayer of latestServerSnapshot.players) {   
+            if (enemyPlayer.id === this.player.id) continue; // Skip self
+            const enemyGraphic = this.entities.enemies.get(enemyPlayer.id);
+            if (enemyGraphic) {
+                enemyGraphic.onPositionUpdate({ 
+                    x: enemyPlayer.x, 
+                    y: enemyPlayer.y, 
+                    timestamp: latestServerSnapshot.sTime
+                });
+            }
+        }
+    }
     private integrateStateUpdate(): void {
         const { players, projectiles } = this.network.latestServerSnapshot;
         const selfData = players.find(player => player.id === this.player.id);
@@ -369,12 +390,12 @@ export class GameManager {
         } else {
             // Enemy kill
             const enemyGraphic = this.entities.enemies.get(playerId);
-            if (enemyGraphic) {
+            if (enemyGraphic && enemyGraphic.isPlayerAlive() === true) {
                 const indicator = new KillIndicator(enemyGraphic.x, enemyGraphic.y - 50);
                 this.gameContainer.addChild(indicator);
                 // TODO: this seems to grow indefinetly even when destroy is called on kill indicators...
                 // consider using a pool of kill indicators that we can recycle instead of creating new ones each time
-                this.entities.killIndicators.push(indicator);
+                this.entities.killIndicators.push(indicator); // This too (why do we even need this array?)
             }
         }
     }
@@ -580,57 +601,84 @@ export class GameManager {
     }
 
     private integrateEnemyPlayers(): void {
-        const enemyPlayers = Array.from(this.network.latestServerSnapshot.players.values());
-        for (const enemyPlayer of enemyPlayers) {
-            if (enemyPlayer.id === this.player.id) continue; // Skip self
+        const livingPlayers = Array.from(this.network.latestServerSnapshot.players.values());
 
-            // TODO: Ensure all uses of enemeyPlayer.sessionId are changed from enemyPlayer.id
-            if (
-                this.entities.enemies.has(enemyPlayer.id) === false
-                && enemyPlayer.x !== undefined
-                && enemyPlayer.y !== undefined
-            ) {
-                // Spawning a new enemy player
-                // This doesn't trigger when match ends and player respawns immediately
-                const graphic = new EnemyPlayer(enemyPlayer.id, enemyPlayer.x, enemyPlayer.y, enemyPlayer?.by, enemyPlayer.name);
-                this.gameContainer.addChild(graphic);
-                this.entities.enemies.set(enemyPlayer.id, graphic);
-            } else {
-                const graphic = this.entities.enemies.get(enemyPlayer.id);
-                if (!graphic) continue;
-
-                graphic.setIsBystander(enemyPlayer.by);
-
-                // Only update health if we don't have a pending collision
-                const pendingCollision = this.gameState.pendingCollisions.get(enemyPlayer.id);
-                if (!pendingCollision && enemyPlayer.hp !== undefined) {
-                    graphic.setHealth(enemyPlayer.hp);
-                
-                    // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
-                    // than our prediction, collision was confirmed
-                    if (enemyPlayer.hp && enemyPlayer.hp <= graphic.getPredictedHealth()) {
-                        this.gameState.pendingCollisions.delete(enemyPlayer.id);
-                        graphic.setHealth(enemyPlayer.hp);
-                    }
-                }
-
-
-                if (enemyPlayer.x !== undefined && enemyPlayer.y !== undefined) {
-                    graphic?.syncPosition(enemyPlayer.x, enemyPlayer.y);
-                }
+        const connectedPlayers = this.network.latestServerSnapshot.scores.map(score => score.playerId);
+        // kill players that are connected but dead.
+        for (const id of connectedPlayers) {
+            if (id === this.player.id) continue; // Skip self
+            else if (livingPlayers.some(player => player.id === id) === false) {
+                const enemyPlayerGraphic = this.entities.enemies.get(id);
+                enemyPlayerGraphic?.kill();
             }
         }
 
 
-        // Remove stale enemy players
-        for (const [id, graphic] of this.entities.enemies.entries()) {
-            if (!enemyPlayers.some(player => player.id === id)) {
-                this.app.stage.removeChild(graphic);
+        
+        // remove enemies that are no longer connected
+        for (const [id, graphic] of this.entities.enemies) {
+            if (connectedPlayers.includes(id) === false) {
                 graphic.destroy();
+                this.removeEnemyGraphic(graphic);
                 this.entities.enemies.delete(id);
             }
         }
+
+ 
+        for (const enemyPlayer of livingPlayers) {
+            if (enemyPlayer.id === this.player.id) continue; // Skip self
+            
+            const enemyGraphic = this.entities.enemies.get(enemyPlayer.id);
+            if (enemyGraphic === undefined || enemyGraphic === null) {
+                // Spawning a new enemy player
+                const graphic = new EnemyPlayer(
+                    enemyPlayer.id, 
+                    enemyPlayer.x, 
+                    enemyPlayer.y,
+                    (enemy: EnemyPlayer) => this.gameContainer.addChild(enemy),
+                    enemyPlayer?.by, 
+                    enemyPlayer.name
+                );
+                console.log('Spawning new enemy player:', enemyPlayer.id);
+                this.entities.enemies.set(enemyPlayer.id, graphic);
+            } else {
+                // Existing enemy player, update state
+
+                if (enemyGraphic.isPlayerAlive() === false) {
+                    // Respawn a player that was dead but has since respawned server side
+                    enemyGraphic.respawn(
+                        enemyPlayer.x, 
+                        enemyPlayer.y
+                    );
+                } else {
+                    // Enemy is alive, proceed with state update
+                    enemyGraphic.setIsBystander(enemyPlayer.by);
+
+                    // Only update health if we don't have a pending collision
+                    const pendingCollision = this.gameState.pendingCollisions.get(enemyPlayer.id);
+                    if (!pendingCollision && enemyPlayer.hp !== undefined) {
+                        enemyGraphic.setHealth(enemyPlayer.hp);
+                    
+                        // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
+                        // than our prediction, collision was confirmed
+                        if (enemyPlayer.hp && enemyPlayer.hp <= enemyGraphic.getPredictedHealth()) {
+                            this.gameState.pendingCollisions.delete(enemyPlayer.id);
+                            enemyGraphic.setHealth(enemyPlayer.hp);
+                        }
+                    }
+                }
+            }
+        }
+
     }
+
+
+
+
+    private removeEnemyGraphic(graphic: EnemyPlayer): void {
+        this.gameContainer.removeChild(graphic);
+    }
+
 
     private integrateSelfUpdate(selfData: PlayerServerState | undefined): void {
         if (!selfData && this.player.sprite) {
@@ -683,7 +731,8 @@ export class GameManager {
             players: [],
             projectiles: [],
             scores: [],
-            serverTick: 0
+            sTick: 0,
+            sTime: 0
         };
 
 
@@ -829,7 +878,7 @@ export class GameManager {
         try {
             
             if (this.player.sprite) {
-                if (this.network.latestServerSnapshot.serverTick > this.network.latestServerSnapshotProcessed.serverTick) {
+                if (this.network.latestServerSnapshot.sTick > this.network.latestServerSnapshotProcessed.sTick) {
                     this.handleReconciliation();
                 }
 
@@ -851,6 +900,11 @@ export class GameManager {
             this.updateEnemyProjectiles();
             this.cleanupDestroyedProjectiles(); 
             this.cleanupPendingCollisions();
+            this.entities.enemies.forEach((enemy) => {
+                if (enemy.isPlayerAlive()) {
+                    enemy.update();
+                }
+            })
             this.world.ammoBush.update(this.player.sprite);
         } catch (error) {
             ErrorHandler.getInstance().handleError(
@@ -1015,7 +1069,11 @@ export class GameManager {
             // Check for collisions with enemy players
             if (this.gameState.phase === 'active') {
                 for (const [enemyId, enemyGraphic] of this.entities.enemies.entries()) {
-                    if (enemyGraphic.getIsBystander() === false && testForAABB(projectile, enemyGraphic)) {
+                    if (
+                        enemyGraphic.isPlayerAlive() === true
+                        && enemyGraphic.getIsBystander() === false 
+                        && testForAABB(projectile, enemyGraphic)
+                    ) {
                         this.networkManager.emit('projectileHit', enemyId);
                         // Record collision prediction
                         // This is required so we can reject stateUpdates that likely haven't computed
@@ -1081,7 +1139,8 @@ export class GameManager {
                     // Check collisions with other enemies
                     for (const [enemyId, enemyGraphic] of this.entities.enemies.entries()) {
                         if (
-                            enemyId !== projectile.getOwnerId() 
+                            enemyId !== projectile.getOwnerId()
+                            && enemyGraphic.isPlayerAlive() === true
                             && testForAABB(projectile, enemyGraphic)
                             && enemyGraphic.getIsBystander() === false
                         ) {
@@ -1092,8 +1151,7 @@ export class GameManager {
                                 projectileId: projectileId,
                                 timestamp: Date.now()
                             });
-
-
+  
                             AudioManager.getInstance().play('impact');
 
                             // Apply predicted damage
