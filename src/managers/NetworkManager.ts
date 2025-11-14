@@ -281,12 +281,12 @@ export class NetworkManager {
         this.smoothedJitter = lerp(this.smoothedJitter, rttDelta, 0.1);
         
 
-        console.log(`[NetworkManager] Ping: ${this.currentPing} ms, Smoothed Ping: ${Math.round(this.smoothedPing)} ms, Smoothed Jitter: ${Math.round(this.smoothedJitter)} ms`);
+        //console.log(`[NetworkManager] Ping: ${this.currentPing} ms, Smoothed Ping: ${Math.round(this.smoothedPing)} ms, Smoothed Jitter: ${Math.round(this.smoothedJitter)} ms`);
 
 
         const newServerTimeOffset = serverTime - (performance.now() + this.getOneWayDelay());
-        console.log('newServerTimeOffset:', newServerTimeOffset);
-        console.log('calculated by :', serverTime, '-', (performance.now() + this.getOneWayDelay()));
+        //console.log('newServerTimeOffset:', newServerTimeOffset);
+        //console.log('calculated by :', serverTime, '-', (performance.now() + this.getOneWayDelay()));
         this.serverTimeOffset = newServerTimeOffset;
     }
 

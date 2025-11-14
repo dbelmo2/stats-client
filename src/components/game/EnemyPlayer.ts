@@ -274,32 +274,34 @@ export class EnemyPlayer extends Container {
   
   public update(): void {
     const currentTime = performance.now();
-    console.log('currentTime:', currentTime);
+    //console.log('currentTime:', currentTime);
     const networkManager = NetworkManager.getInstance();
     const currentServerTime = currentTime + networkManager.getServerTimeOffset();
-    console.log('serverTimeOffset:', networkManager.getServerTimeOffset());
-    console.log('currentServerTime:', currentServerTime);
+    //console.log('serverTimeOffset:', networkManager.getServerTimeOffset());
+    //console.log('currentServerTime:', currentServerTime);
     const adaptiveDelay = this.INTERPOLATION_DELAY + (networkManager.getSmoothedJitter() * 0.5); // Reduced from * 2
-    console.log('adaptiveDelay:', adaptiveDelay);
-    console.log('smoothiedPing:', networkManager.getSmoothedPing());
-    console.log('smootehedJitter:', networkManager.getSmoothedJitter());
+   // console.log('adaptiveDelay:', adaptiveDelay);
+    //console.log('smoothiedPing:', networkManager.getSmoothedPing());
+    //console.log('smootehedJitter:', networkManager.getSmoothedJitter());
     const renderTime = currentServerTime - adaptiveDelay;
 
-    console.log('position buffer length:', this.positionBuffer.length);
+    //console.log('position buffer length:', this.positionBuffer.length);
     if (this.positionBuffer.length > 0) {
-      console.log('oldest timestamp:', this.positionBuffer[0].timestamp);
-      console.log('newest timestamp:', this.positionBuffer[this.positionBuffer.length - 1].timestamp);
-      console.log('time gap (newest - oldest):', this.positionBuffer[this.positionBuffer.length - 1].timestamp - this.positionBuffer[0].timestamp);
-      console.log('render time vs oldest:', renderTime - this.positionBuffer[0].timestamp);
-      console.log('render time vs newest:', renderTime - this.positionBuffer[this.positionBuffer.length - 1].timestamp);
+      //console.log('oldest timestamp:', this.positionBuffer[0].timestamp);
+      //console.log('newest timestamp:', this.positionBuffer[this.positionBuffer.length - 1].timestamp);
+      //console.log('time gap (newest - oldest):', this.positionBuffer[this.positionBuffer.length - 1].timestamp - this.positionBuffer[0].timestamp);
+      //console.log('render time vs oldest:', renderTime - this.positionBuffer[0].timestamp);
+      //console.log('render time vs newest:', renderTime - this.positionBuffer[this.positionBuffer.length - 1].timestamp);
     }
-    console.log('Render time:', renderTime);
+    //console.log('Render time:', renderTime);
     const toPositionIndex = this.positionBuffer.findIndex(pos => pos.timestamp > renderTime);
-    console.log('To position index:', toPositionIndex);
+    //console.log('To position index:', toPositionIndex);
     const fromPosition = this.positionBuffer[toPositionIndex - 1];
     const toPosition = this.positionBuffer[toPositionIndex];
 
+
     if (fromPosition && toPosition) {
+      console.log(`From position x: ${fromPosition.x} to position x: ${toPosition.x} `);
       const t = (renderTime - fromPosition.timestamp) / (toPosition.timestamp - fromPosition.timestamp);
       this.x = lerp(fromPosition.x, toPosition.x, t);
       this.y = lerp(fromPosition.y, toPosition.y, t);
