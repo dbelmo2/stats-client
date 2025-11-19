@@ -26,7 +26,7 @@ export class EnemyPlayer extends Container {
   private onSpawn: (enemyPlayer: EnemyPlayer) => void;
   private isAlive: boolean = true; // Track if the enemy is currently alive
   private positionBuffer: EnemyPosition[] = [];
-
+  public playerName: string;
 
   constructor(
     id: string, 
@@ -58,6 +58,7 @@ export class EnemyPlayer extends Container {
         align: 'center'
     });
 
+    this.playerName = name;
 
     this.nameText = new Text({ text: name, style: nameStyle });
     this.nameText.x = this.body.width / 2; // Center the text
@@ -116,9 +117,14 @@ export class EnemyPlayer extends Container {
   }
 
   public setIsBystander(value?: boolean): void {
-      if (value === undefined || value === null) return;
-      if (this.isBystander === value) return; // No change
+      if (value === undefined || value === null) {
+        return;
+      }
+      if (this.isBystander === value) {
+        return; // No change
+      }
       this.isBystander = value;
+
       // Change color based on bystander status
       this.body.clear();  
       this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#D06DFE');
@@ -206,39 +212,61 @@ export class EnemyPlayer extends Container {
    * Kill the enemy player - removes sprite from display but keeps object for reuse
    */
   public kill(): void {
-      if (!this.isAlive) return; // Already dead
-      
+    // TODO: fix issue where dead enemies are not removed from the stage...
+    // when they are dead, this function is called repeatedly
+      if (this.isAlive === false) return; // Already dead
+      console.log('killing enemy player', this.id);
+
       this.isAlive = false;
+      if (this.parent) {
+          this.parent.removeChild(this);
+      }
+            
+
       
+      this.positionBuffer = [];
+
       // Clear any pending timeouts
       if (this.damageFlashTimeout) {
           clearTimeout(this.damageFlashTimeout);
           this.damageFlashTimeout = undefined;
       }
-      
-      // Remove from parent container (this removes from display)
-      if (this.parent) {
-          this.parent.removeChild(this);
-      }
-      
+
       // Reset health to initial state
       this.serverHealth = this.maxHealth;
       this.predictedHealth = this.maxHealth;
       
       // Hide the entire container
       this.visible = false;
+
   }
 
   /**
    * Respawn the enemy player - re-adds sprite to display and resets state
    */
   public respawn(spawnX: number, spawnY: number): void {
-      this.isAlive = true;
+      // Clear position buffer and initialize with spawn position to prevent interpolation jump
+      this.positionBuffer = [];
       
+      this.body.clear();
+      this.body.rect(0, 0, 50, 50).fill('#D06DFE');
+
+
       // Reset position
       this.x = spawnX;
       this.y = spawnY;
-            
+      this.isAlive = true;
+
+      console.log('respawning enemy player at ', spawnX, spawnY);
+      
+      // Initialize position buffer with spawn position to prevent interpolation from old positions
+      const currentTime = performance.now() + NetworkManager.getInstance().getServerTimeOffset();
+      this.positionBuffer.push({
+          x: spawnX,
+          y: spawnY,
+          timestamp: currentTime
+      });
+      
       // Reset health to full
       this.serverHealth = this.maxHealth;
       this.predictedHealth = this.maxHealth;
@@ -271,37 +299,24 @@ export class EnemyPlayer extends Container {
         texture: true
     });
   }
-  
+
+  public getName(): string {
+    return this.playerName;
+  }
+
   public update(): void {
+    if (this.isAlive === false) return;
+
     const currentTime = performance.now();
-    //console.log('currentTime:', currentTime);
     const networkManager = NetworkManager.getInstance();
     const currentServerTime = currentTime + networkManager.getServerTimeOffset();
-    //console.log('serverTimeOffset:', networkManager.getServerTimeOffset());
-    //console.log('currentServerTime:', currentServerTime);
-    const adaptiveDelay = this.INTERPOLATION_DELAY + (networkManager.getSmoothedJitter() * 0.5); // Reduced from * 2
-   // console.log('adaptiveDelay:', adaptiveDelay);
-    //console.log('smoothiedPing:', networkManager.getSmoothedPing());
-    //console.log('smootehedJitter:', networkManager.getSmoothedJitter());
+    const adaptiveDelay = this.INTERPOLATION_DELAY + (networkManager.getSmoothedJitter() * 0.5);
     const renderTime = currentServerTime - adaptiveDelay;
-
-    //console.log('position buffer length:', this.positionBuffer.length);
-    if (this.positionBuffer.length > 0) {
-      //console.log('oldest timestamp:', this.positionBuffer[0].timestamp);
-      //console.log('newest timestamp:', this.positionBuffer[this.positionBuffer.length - 1].timestamp);
-      //console.log('time gap (newest - oldest):', this.positionBuffer[this.positionBuffer.length - 1].timestamp - this.positionBuffer[0].timestamp);
-      //console.log('render time vs oldest:', renderTime - this.positionBuffer[0].timestamp);
-      //console.log('render time vs newest:', renderTime - this.positionBuffer[this.positionBuffer.length - 1].timestamp);
-    }
-    //console.log('Render time:', renderTime);
     const toPositionIndex = this.positionBuffer.findIndex(pos => pos.timestamp > renderTime);
-    //console.log('To position index:', toPositionIndex);
     const fromPosition = this.positionBuffer[toPositionIndex - 1];
     const toPosition = this.positionBuffer[toPositionIndex];
 
-
     if (fromPosition && toPosition) {
-      console.log(`From position x: ${fromPosition.x} to position x: ${toPosition.x} `);
       const t = (renderTime - fromPosition.timestamp) / (toPosition.timestamp - fromPosition.timestamp);
       this.x = lerp(fromPosition.x, toPosition.x, t);
       this.y = lerp(fromPosition.y, toPosition.y, t);

@@ -13,9 +13,26 @@ export interface PlayerServerState {
   tick: number;
   vx: number;
   vy: number;
+  kills: number;
+  deaths: number;
+  isDead: boolean;
 }
 
 
+export interface PlayerServerPartialState {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  hp?: number;
+  by?: boolean;
+  name?: string;
+  tick?: number;
+  kills?: number;
+  deaths?: number;
+  isDead?: boolean;
+}
 export interface ProjectileServerState {
   id: string;
   x: number;
@@ -30,7 +47,6 @@ export interface ProjectileServerState {
 export interface ServerStateUpdate {
     players: PlayerServerState[];
     projectiles: ProjectileServerState[];
-    scores: PlayerScore[];
     sTick: number; // server tick
     sTime: number; // server timestamp
 };

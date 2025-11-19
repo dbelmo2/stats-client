@@ -9,7 +9,7 @@ import { EnemyProjectile } from '../components/game/EnemyProjectile';
 import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
 
 import { testForAABB } from '../components/game/systems/Collision';
-import { ScoreDisplay } from '../components/ui/ScoreDisplay';
+import { ScoreManager } from '../components/ui/ScoreDisplay';
 import { GameOverDisplay } from '../components/ui/GameOverDisplay';
 import { AmmoBush } from '../components/game/AmmoBush';
 import { KillIndicator } from '../components/ui/KillIndicator';
@@ -54,6 +54,9 @@ import { CameraManager } from './CameraManager';
 // TODO: Also update projectiles and players so that upon death they are simply made invisible, not removed from the scene...
 // removing from scene is too expensive. If necessary, do this for pooled objects as well.
 
+
+// TODO: Fix score issue after a match reset (confirmed server state update has reset scores, so it seems to be client side)
+
 interface EntityContainers {
   enemies: Map<string, EnemyPlayer>;
   enemyProjectiles: Map<string, EnemyProjectile>;
@@ -65,7 +68,6 @@ interface UIElements {
   gameOverDisplay: GameOverDisplay | null;
   pingDisplay: PingDisplay;
   fpsDisplay: FPSDisplay;
-  scoreDisplay: ScoreDisplay;
   pingUpdateCounter: number;
   overlayActive: boolean;
 }
@@ -104,6 +106,7 @@ export class GameManager {
     private bugReportManager: BugReportManager = BugReportManager.getInstance();
     private sceneManager: SceneManager = SceneManager.getInstance();
     private audioManager: AudioManager = AudioManager.getInstance();
+    private scoreManager: ScoreManager;
 
     private controller: Controller;
 
@@ -119,7 +122,6 @@ export class GameManager {
 
     private gameState: GameState = {
         phase: 'active',
-        scores: new Map<string, number>(),
         localTick: 0,
         accumulator: 0,
         pendingCollisions: new Map(),
@@ -131,14 +133,12 @@ export class GameManager {
         latestServerSnapshot: {
             players: [],
             projectiles: [],
-            scores: [], 
             sTick: 0,
             sTime: 0
         },
         latestServerSnapshotProcessed: {
             players: [],
             projectiles: [],
-            scores: [], 
             sTick: 0,
             sTime: 0
         },
@@ -165,7 +165,6 @@ export class GameManager {
         gameOverDisplay: null,
         pingDisplay: undefined as unknown as PingDisplay, // Will be initialized in constructor
         fpsDisplay: undefined as unknown as FPSDisplay,   // Will be initialized in constructor
-        scoreDisplay: undefined as unknown as ScoreDisplay, // Will be initialized in constructor
         pingUpdateCounter: 0,
         overlayActive: false
     };
@@ -175,8 +174,7 @@ export class GameManager {
         this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
         this.controller = new Controller();
         this.gameContainer = new Container();
-        this.ui.scoreDisplay = new ScoreDisplay();
-        
+        this.scoreManager = new ScoreManager(this.showKillIndicator.bind(this));
         // Initialize ObjectPools after gameContainer is created
         this.entities.killIndicatorPool = new ObjectPool<KillIndicator>(
             () => new KillIndicator(0, 0),
@@ -249,7 +247,7 @@ export class GameManager {
         await this.initializeNetworking(region);
         this.sceneManager.initializeTvManager();
         this.app.stage.addChild(this.cameraManager.getCamera());
-        this.app.stage.addChild(this.ui.scoreDisplay);
+        this.app.stage.addChild(this.scoreManager);
 
         TvManager.getInstance().startTv();
     }
@@ -266,8 +264,13 @@ export class GameManager {
             networkManager.on('gameOver', this.handleGameOver);
             networkManager.on('disconnect', this.handleConnectionLost);
             networkManager.on('stateUpdate', (state: ServerStateUpdate) => {
-                this.network.latestServerSnapshot = state;
+                this.integratePartialPlayerUpdates(state);
                 this.integrateEnemyPositions(state);
+
+                this.network.latestServerSnapshot.sTick = state.sTick;
+                this.network.latestServerSnapshot.sTime = state.sTime;
+                this.network.latestServerSnapshot.projectiles = state.projectiles;
+
             });
 
         } catch (error) {
@@ -324,6 +327,7 @@ export class GameManager {
 
     private handleMatchReset = () => {
         try {
+            this.audioManager.playRandomMatchStartSound();
             // Clean up active projectiles and return to pool
             for (const projectile of this.player.activeProjectiles) {
                 this.entities.projectilePool.releaseElement(projectile);
@@ -334,6 +338,7 @@ export class GameManager {
             for (const [_, projectile] of this.entities.enemyProjectiles) {
                 this.entities.enemyProjectilePool.releaseElement(projectile);
             }
+            
             this.entities.enemyProjectiles.clear();
             this.gameState.pendingCollisions.clear();
             this.gameState.destroyedProjectiles.clear();
@@ -354,12 +359,50 @@ export class GameManager {
 
 
     private handleConnectionLost = (reason: string, _region: string) => {
+        console.log('inside handleConnectionLost from GameManager');
         if (reason === "io server disconnect") {
             this.cleanupSession();
         }
     }
 
 
+    private integratePartialPlayerUpdates(state: ServerStateUpdate): void {
+        const updatedPlayers = [];
+
+        if (this.network.latestServerSnapshot.players.length === 0) {
+            this.network.latestServerSnapshot.players = state.players;
+            return;
+        }
+
+        for (const playerData of this.network.latestServerSnapshot.players) {
+            const update = state.players.find(p => p.id === playerData.id);
+            if (!update) {
+                console.log("!!!!!!!!!player disconnected:", playerData.id);
+                continue;
+            }
+
+
+            const updatedPlayer = {
+                ...playerData,
+                ...update
+            }
+
+
+
+            updatedPlayers.push(updatedPlayer);
+        }
+
+        for (const playerData of state.players) {
+            const existingPlayer = this.network.latestServerSnapshot.players.find(p => p.id === playerData.id);
+            if (!existingPlayer) {
+                updatedPlayers.push(playerData);
+            }
+        }
+
+    
+
+        this.network.latestServerSnapshot.players = updatedPlayers;
+    }
 
     private integrateEnemyPositions(latestServerSnapshot: ServerStateUpdate): void {
         for (const enemyPlayer of latestServerSnapshot.players) {   
@@ -382,23 +425,13 @@ export class GameManager {
         this.integrateEnemyPlayers();
     }
     
-    private checkForKills(scores: PlayerScore[]): void {
-        for (const score of scores) {
-            const previousKills = this.gameState.scores.get(score.playerId) || 0;
-            
-            if (score.kills > previousKills) {
-                this.showKillIndicator(score.playerId);
-            }
-            
-            this.gameState.scores.set(score.playerId, score.kills);
-        }
-    }
 
     private showKillIndicator(playerId: string): void {
         if (playerId === this.player.id && this.player.sprite) {
             // Player kill
             const indicator = this.entities.killIndicatorPool.getElement();
             indicator.initialize(this.player.sprite.x, this.player.sprite.y);
+            this.audioManager.playRandomKillSound();
 
         } else {
             // Enemy kill
@@ -540,7 +573,6 @@ export class GameManager {
             this.entities.projectilePool.destroy();
             this.entities.enemyProjectilePool.destroy();
             this.entities.killIndicatorPool.destroy();
-            this.gameState.scores.clear();
             this.gameState.pendingCollisions.clear();
             this.gameState.destroyedProjectiles.clear();
 
@@ -566,6 +598,7 @@ export class GameManager {
             DevModeManager.getInstance().cleanup();
             BugReportManager.getInstance().cleanup();
             SceneManager.getInstance().cleanup();
+            this.scoreManager.destroy();
 
         } catch (error) {
             ErrorHandler.getInstance().handleError(
@@ -577,34 +610,37 @@ export class GameManager {
     }
 
     private integrateEnemyPlayers(): void {
-        const livingPlayers = Array.from(this.network.latestServerSnapshot.players.values());
 
-        const connectedPlayers = this.network.latestServerSnapshot.scores.map(score => score.playerId);
-        // kill players that are connected but dead.
-        for (const id of connectedPlayers) {
-            if (id === this.player.id) continue; // Skip self
-            else if (livingPlayers.some(player => player.id === id) === false) {
-                const enemyPlayerGraphic = this.entities.enemies.get(id);
-                enemyPlayerGraphic?.kill();
+        for (const player of this.network.latestServerSnapshot.players) {
+            if (player.id === this.player.id) continue; // Skip self
+            if (player.isDead === true) {
+                const enemyPlayerGraphic = this.entities.enemies.get(player.id);
+                if (enemyPlayerGraphic?.isPlayerAlive() === true) {
+                    enemyPlayerGraphic?.kill();
+                }
             }
         }
+    
 
 
-        
         // remove enemies that are no longer connected
         for (const [id, graphic] of this.entities.enemies) {
-            if (connectedPlayers.includes(id) === false) {
+            if (this.network.latestServerSnapshot.players.some(player => player.id === id) === false) {
                 graphic.destroy();
                 this.removeEnemyGraphic(graphic);
                 this.entities.enemies.delete(id);
             }
         }
 
+
+        // TODO: fix issue where players the join after the player dont
+        // spawn in. 
  
-        for (const enemyPlayer of livingPlayers) {
+        for (const enemyPlayer of this.network.latestServerSnapshot.players) {
+
             if (enemyPlayer.id === this.player.id) continue; // Skip self
-            
             const enemyGraphic = this.entities.enemies.get(enemyPlayer.id);
+
             if (enemyGraphic === undefined || enemyGraphic === null) {
                 // Spawning a new enemy player
                 const graphic = new EnemyPlayer(
@@ -615,19 +651,18 @@ export class GameManager {
                     enemyPlayer?.by, 
                     enemyPlayer.name
                 );
-                console.log('Spawning new enemy player:', enemyPlayer.id);
                 this.entities.enemies.set(enemyPlayer.id, graphic);
             } else {
                 // Existing enemy player, update state
-
-                if (enemyGraphic.isPlayerAlive() === false) {
+                if (enemyGraphic.isPlayerAlive() === false && enemyPlayer.isDead === false) {
                     // Respawn a player that was dead but has since respawned server side
                     enemyGraphic.respawn(
                         enemyPlayer.x, 
                         enemyPlayer.y
                     );
-                } else {
+                } else if (enemyPlayer.isDead === false && enemyGraphic.isPlayerAlive() === true) {
                     // Enemy is alive, proceed with state update
+                
                     enemyGraphic.setIsBystander(enemyPlayer.by);
 
                     // Only update health if we don't have a pending collision
@@ -656,14 +691,14 @@ export class GameManager {
     }
 
 
-    private integrateSelfUpdate(selfData: PlayerServerState | undefined): void {
-        if (!selfData && this.player.sprite) {
+    private integrateSelfUpdate(selfData: PlayerServerState): void {
+        if (selfData?.isDead === true && this.player.sprite) {
             // Clean up the players sprite if no self data exists
             this.handlePlayerDeath();
             return;
         }
         if (!selfData) return;
-        if (selfData && !this.player.sprite) {
+        if (selfData?.isDead === false && !this.player.sprite) {
             // Create new player sprite if it doesn't exist
             this.spawnPlayer(selfData);
         }
@@ -682,6 +717,8 @@ export class GameManager {
         if (this.player.sprite) {
             this.app.stage.removeChild(this.player.sprite);
             this.player.sprite.destroy();
+            this.player.sprite = undefined;
+            this.audioManager.playRandomDeathSound();
         }
         this.player.sprite = undefined;
     }
@@ -706,7 +743,6 @@ export class GameManager {
         this.network.latestServerSnapshotProcessed = {
             players: [],
             projectiles: [],
-            scores: [],
             sTick: 0,
             sTime: 0
         };
@@ -794,9 +830,10 @@ export class GameManager {
     }
 
     private handleReconciliation(): void {
-        this.network.latestServerSnapshotProcessed = this.network.latestServerSnapshot;
+        this.network.latestServerSnapshotProcessed = { ...this.network.latestServerSnapshot };
         const selfData = this.network.latestServerSnapshotProcessed.players.find(player => player.id === this.player.id);
         if (!selfData  || !this.player.sprite) {
+            console.warn('skipping reconciliation, no self data or player sprite');
             return;
         }
 
@@ -813,7 +850,7 @@ export class GameManager {
             //console.warn(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
             // Server has marched ahead of the client...
             // As a temporary fix, we will simply sync the clint position with the server position
-            console.error(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
+            //console.error(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
             this.player.sprite.syncPosition(selfData.x, selfData.y, selfData.vx, selfData.vy);
             this.network.stateBuffer[serverStateBufferIndex] = { tick: tick, position: { x: selfData.x, y: selfData.y } };
             this.gameState.localTick = tick;
@@ -830,7 +867,6 @@ export class GameManager {
         const positionError = Vector2.subtractPositions({ x: selfData.x, y: selfData.y }, clientPosition);
 
         if (Vector2.len(positionError.x, positionError.y) > 0.0001) {
-            console.warn(`Server position at tick client tick ${selfData.tick}: ${selfData.x}, ${selfData.y}, Client position at local tick ${ this.network.stateBuffer[serverStateBufferIndex]?.tick}: ${clientPosition.x}, ${clientPosition.y}`);
             this.player.sprite.syncPosition(selfData.x, selfData.y, selfData.vx, selfData.vy);
             this.network.stateBuffer[serverStateBufferIndex].position = { x: selfData.x, y: selfData.y };
             let tickToResimulate = tick + 1;
@@ -862,7 +898,7 @@ export class GameManager {
 
                 // Update camera position and UI elements
                 this.cameraManager.updateCameraPositionLERP(this.player);
-                this.ui.scoreDisplay.fixPosition();
+                this.scoreManager.fixDisplayPosition();
                 DevModeManager.getInstance().fixPositions();
 
             }
@@ -979,9 +1015,8 @@ export class GameManager {
 
     // Any rendering logic not related to game objects. (FPS display, ping display, camera update, etc.)
     private render(deltaMs: number): void {
-
-        this.checkForKills(this.network.latestServerSnapshot.scores);
-        this.ui.scoreDisplay.updateScores(this.network.latestServerSnapshot.scores, this.player.id);
+        
+        this.scoreManager.updateScores(this.network.latestServerSnapshot.players, this.player.id);
         this.updateDevDisplays(deltaMs);
     }
 
@@ -997,11 +1032,11 @@ export class GameManager {
     }
 
     private showScoreBoard(): void {
-        this.ui.scoreDisplay.show();
+        this.scoreManager.showDisplay();
     }
 
     private hideScoreBoard(): void {
-        this.ui.scoreDisplay.hide();
+        this.scoreManager.hideDisplay();
     }
     
     private handleShooting(input: InputPayload): void {

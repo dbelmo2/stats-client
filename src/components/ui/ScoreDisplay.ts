@@ -1,15 +1,26 @@
 import { Container, Text, TextStyle } from 'pixi.js';
-export class ScoreDisplay extends Container {
-    private scores: Map<string, Text> = new Map();
+import type { PlayerScore, PlayerServerState } from '../../types/network.types';
+
+
+
+export class ScoreManager extends Container {
+    private scores: Map<string, { kills: number, deaths: number, name: string }> = new Map();
+    private displayScores: Map<string, Text> = new Map();
     private scoreContainer: Container;
     private header: Text;
     private largestWidth: number = 1920; // make dynamic;
-    
-    constructor() {
+    private onKill: (playerId: string) => void;
+    private onDeath?: (playerId: string) => void;
+
+    constructor(onKill: (playerId: string) => void, onDeath?: (playerId: string) => void) {
         super();
+        this.scores = new Map();
+        this.onKill = onKill;
+        this.onDeath = onDeath;
         // Create a container for the scores with fixed position relative to camera
         this.scoreContainer = new Container();
         this.addChild(this.scoreContainer);
+    
         
         // Create header
         const headerStyle = new TextStyle({
@@ -31,16 +42,29 @@ export class ScoreDisplay extends Container {
     // Update scoreboard with new scores
     // TODO: This is being called frequently... optimize to only update changed scores
     // ... ensure new TextStyle is either called less frequently or reused
-    updateScores(scores: Array<{ playerId: string, kills: number, deaths: number, name: string }>, selfId: string): void {
+    updateScoreDisplay(
+        newScores: PlayerScore[],
+        modifiedScores: PlayerScore[],
+        deletedScores: PlayerScore[],
+        selfId: string
+    ): void {
+
+        if (newScores.length === 0 && modifiedScores.length === 0 && deletedScores.length === 0) {
+            return; // No changes
+        }
+
+
         // Clear existing scores
-        for (const [_, text] of this.scores) {
+        for (const [_, text] of this.displayScores) {
             this.scoreContainer.removeChild(text);
             text.destroy();
         }
-        this.scores.clear();
+        this.displayScores.clear();
         
         // Sort scores by kills (descending)
-        const sortedScores = [...scores].sort((a, b) => b.kills - a.kills);
+        
+        const sortedScores = Array.from(this.scores.entries()).map(([id, score]) => ({ ...score, playerId: id })).sort((a, b) => b.kills - a.kills);
+
         
         let yOffset = 40; // Start below header
         
@@ -65,11 +89,80 @@ export class ScoreDisplay extends Container {
             yOffset += 20;
             
             this.scoreContainer.addChild(text);
-            this.scores.set(score.playerId, text);
+            this.displayScores.set(score.playerId, text);
         }
     }
     
-    public fixPosition(): void {
+
+
+
+    public updateScores(players: PlayerServerState[], selfId: string): void {
+        console.log('updating scores with players:', JSON.stringify(players));
+        const newScores: PlayerScore[] = [];
+        const modifiedScores: PlayerScore[] = [];
+        const deletedScores: PlayerScore[] = [];
+
+        for (const player of players) {
+            const score: PlayerScore = {
+                playerId: player.id,
+                kills: player.kills,
+                deaths: player.deaths,
+                name: player.name
+            };
+            const previousScore = this.scores.get(score.playerId);
+            
+            if (!previousScore) {
+                // new player score entry
+                this.scores.set(score.playerId, { kills: score.kills, deaths: score.deaths, name: score.name });
+                newScores.push({...this.scores.get(score.playerId)!, playerId: score.playerId });
+                continue;
+            }
+
+            let modified = false;
+
+            if (score.kills > previousScore.kills) {
+                modified = true;
+                this.onKill(score.playerId);
+            }
+
+            if (score.deaths > previousScore.deaths && this.onDeath) {
+                modified = true;
+                this.onDeath(score.playerId);
+            }
+
+
+            if (!modified) continue
+
+            const updatedScore = {
+                kills: score.kills,
+                deaths: score.deaths,
+                name: score.name
+            }
+
+            modifiedScores.push({
+                playerId: score.playerId,
+                kills: score.kills,
+                deaths: score.deaths,
+                name: score.name
+            });
+
+            this.scores.set(score.playerId, updatedScore);
+        }
+
+        for (const [playerId, score] of this.scores) {
+            if (!players.find(p => p.id === playerId)) {
+                deletedScores.push({ playerId, kills: score.kills, deaths: score.deaths, name: score.name });
+                this.scores.delete(playerId);
+            }
+        }
+
+        this.updateScoreDisplay(
+            newScores, modifiedScores, deletedScores, selfId
+        );
+
+    }
+
+    public fixDisplayPosition(): void {
         // Position in top left corner with slight margin
         const windowWidth = window.innerWidth;
         const largestWidth = this.largestWidth;
@@ -79,21 +172,23 @@ export class ScoreDisplay extends Container {
         this.y = 125;
     }
 
-    public show() {
+    public showDisplay() {
         this.visible = true;
     }
 
-    public hide() {
+    public hideDisplay() {
         // Hide the score display by removing it from the stage
         this.visible = false;
     }
 
-
     destroy(): void {
-        for (const text of this.scores.values()) {
+
+        this.scores.clear();
+
+        for (const text of this.displayScores.values()) {
             text.destroy();
         }
-        this.scores.clear();
+        this.displayScores.clear();
         super.destroy();
     }
 }

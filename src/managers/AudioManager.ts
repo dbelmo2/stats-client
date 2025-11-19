@@ -8,6 +8,29 @@ import jumpAudio from '../sounds/swipe-sound.mp3';
 import walkingAudio from '../sounds/walking-grass-sound.flac';
 import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
 
+// kill sounds
+import killSound1 from '../sounds/kill/erhaha.mp3';
+import killSound2 from '../sounds/kill/has-laugh.mp3';
+import killSound3 from '../sounds/kill/i-like-it-short.mp3';
+import killSound4 from '../sounds/kill/i-like-it.mp3';
+import killSound5 from '../sounds/kill/i-like-picasso.mp3';
+import killSound6 from '../sounds/kill/no-pickles.mp3';
+
+// death sounds 
+import deathSound1 from '../sounds/death/bye-trump.mp3';
+import deathSound2 from '../sounds/death/fuck-bowblax.mp3';
+import deathSound3 from '../sounds/death/fuck-you-ab.mp3'
+import deathSound4 from '../sounds/death/oh-god.mp3'
+import deathSound5 from '../sounds/death/okayyy.mp3'
+import deathSound6 from '../sounds/death/what.mp3'
+import deathSound7 from '../sounds/death/wtf.mp3'
+
+// match start sounds
+import matchStartSound1 from '../sounds/match-reset/fight.mp3';
+import matchStartSound2 from '../sounds/match-reset/fight-fight-fight.mp3';
+
+
+
 type AudioCategory = 'sfx' | 'music' | 'ui' | 'ambient';
 
 export interface SoundConfig {
@@ -36,6 +59,31 @@ export class AudioManager {
     private musicFadeTime: number = 1000;
     private currentMusic: string | null = null;
     private clearOnSettingsChangeListener: () => void;
+
+    private deathSounds: string[] = [
+        deathSound1,
+        deathSound2,
+        deathSound3,
+        deathSound4,
+        deathSound5,
+        deathSound6,
+        deathSound7
+    ];
+
+    private killSounds: string[] = [
+        // Add paths to kill sound files here
+        killSound1,
+        killSound2,
+        killSound3,
+        killSound4,
+        killSound5,
+        killSound6
+    ];
+
+    private matchStartSounds: string[] = [
+        matchStartSound1,
+        matchStartSound2
+    ];
 
     private constructor() {
         this.settingsManager = SettingsManager.getInstance();
@@ -93,9 +141,63 @@ export class AudioManager {
         this.registerSound('theme', {
             src: [h3Theme],
             loop: true,
-            volume: 0.50
+            volume: 0.30
         }, 'music');
 
+
+        for (let i = 0; i < this.deathSounds.length; i++) {
+            this.registerSound(`death${i+1}`, {
+                src: [this.deathSounds[i]],
+                volume: 0.45
+            }, 'sfx');
+        }
+
+        for (let i = 0; i < this.killSounds.length; i++) {
+            this.registerSound(`kill${i+1}`, {
+                src: [this.killSounds[i]],
+                volume: 0.45
+            }, 'sfx');
+        }
+
+        for (let i = 0; i < this.matchStartSounds.length; i++) {
+            this.registerSound(`matchStart${i+1}`, {
+                src: [this.matchStartSounds[i]],
+                volume: 0.75
+            }, 'sfx');
+        }
+    }
+
+    public async playRandomDeathSound(): Promise<number | undefined> {
+        const index = Math.floor(Math.random() * this.deathSounds.length);
+        return await this.play(`death${index+1}`);
+    }
+
+    public async playRandomKillSound(): Promise<number | undefined> {
+        try {
+            console.log('Playing random kill sound');
+            const index = Math.floor(Math.random() * this.killSounds.length);
+            const soundId = `kill${index+1}`;
+            console.log(`Attempting to play kill sound: ${soundId}`);
+            
+            if (!this.sounds.has(soundId)) {
+                console.error(`Kill sound ${soundId} not found in registered sounds`);
+                return undefined;
+            }
+            
+            return await this.play(soundId);
+        } catch (error) {
+            console.error('Error playing random kill sound:', error);
+            ErrorHandler.getInstance().handleError(error as Error,
+                ErrorType.AUDIO,
+                { phase: 'playRandomKillSound' }
+            );
+            return undefined;
+        }
+    }
+
+    public async playRandomMatchStartSound(): Promise<number | undefined> {
+        const index = Math.floor(Math.random() * this.matchStartSounds.length);
+        return await this.play(`matchStart${index+1}`);
     }
 
     public registerSound(soundId: string, config: SoundConfig, category: AudioCategory = 'sfx'): void {
@@ -311,11 +413,8 @@ export class AudioManager {
 
     public setMusicVolume(volume: number): void {
         try {
-            const soundsArray = Array.from(this.sounds.values());
-            const music = soundsArray.find((sound) => sound.category === 'music');
-            if (music) {
-                music.howl.volume(volume);
-            }
+            // Just apply the volume settings - don't update SettingsManager to avoid circular calls
+            this.applyVolumeSettings();
         } catch (error) {
             console.error('Unable to set music volume:', error);
             ErrorHandler.getInstance().handleError(error as Error,
@@ -328,11 +427,8 @@ export class AudioManager {
 
     public setSoundEffectsVolume(volume: number): void {
         try {
-            const soundsArray = Array.from(this.sounds.values());
-            const sfx = soundsArray.find((sound) => sound.category === 'sfx');
-            if (sfx) {
-                sfx.howl.volume(volume);
-            }
+            // Just apply the volume settings - don't update SettingsManager to avoid circular calls
+            this.applyVolumeSettings();
         } catch (error) {
             console.error('Unable to set sound effects volume:', error);
             ErrorHandler.getInstance().handleError(error as Error,

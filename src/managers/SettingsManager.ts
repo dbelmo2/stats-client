@@ -80,8 +80,8 @@ export class SettingsManager {
     private getDefaultSettings(): GameSettings {
         return {
             region: 'NA',
-            musicVolume: 0.5,
-            sfxVolume: 0.5,
+            musicVolume: 0.35,
+            sfxVolume: 0.40,
             muteAll: false,
             muteMusic: false,
             muteSfx: false,

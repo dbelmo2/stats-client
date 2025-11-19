@@ -21,12 +21,14 @@ export interface PlayerState {
     name: string;
     tick: number;
     velocity: PositionVector;
+    isDead: boolean;
+    kills: number;
+    deaths: number;
     [key: string]: any;
 }
 
 export interface GameState {
     phase: GamePhase;
-    scores: Map<string, number>;
     localTick: number;
     accumulator: number;
     pendingCollisions: Map<string, { projectileId: string, timestamp: number }>;

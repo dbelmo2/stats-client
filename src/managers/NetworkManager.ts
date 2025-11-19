@@ -59,7 +59,7 @@ export class NetworkManager {
         }
         
         this.socket = io(serverUrl, {
-          transports: ['websocket'], // Prefer WebSocket, fallback to polling
+          transports: ['websocket'],
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
           timeout: 20000,
@@ -102,10 +102,10 @@ export class NetworkManager {
           console.warn(`[NetworkManager] AFK Removed: ${message}`);
         });
 
-        this.socket.once('rejoinedMatch', this.handleSuccessfulRejoin);
+        this.socket.on('rejoinedMatch', this.handleSuccessfulRejoin);
         this.socket.on('afkWarning', this.handleAfkWarning);
 
-        this.joinQueue(playerName, region);
+        this.joinQueue({ name: playerName, region });
 
         const matchData = await this.waitForMatchFound();
         this.currentMatchData = matchData;
@@ -132,6 +132,7 @@ export class NetworkManager {
     }
 
     private handleConnectionLost = (reason: string, playerName: string, playerRegion: string) => {
+        console.log('Inside handleConnectionLost from NetworkManager');  
         if (!this.socket) {
             console.error('NetworkManager not initialized');
             return;
@@ -147,13 +148,14 @@ export class NetworkManager {
     }
 
     private handleReconnection = async (playerName: string, playerRegion: string) => {
+      console.log('Inside handleReconnection from NetworkManager');
         if (!this.socket) {
             console.error('NetworkManager not initialized');
             return;
         }
 
-        console.log('Reconnected to server, rejoining queue...');
-        this.joinQueue(playerName, playerRegion);
+        console.log('Reconnected to server, rejoining queue with player info...', { name: playerName, region: playerRegion, playerMatchId: this.playerId });
+        this.joinQueue({ name: playerName, region: playerRegion, playerMatchId: this.playerId });
     }
 
     private handleDisconnectedWarning = () => {
@@ -327,13 +329,13 @@ export class NetworkManager {
         };
     }
 
-    joinQueue(name: string, region: string) {
-      console.log(`[NetworkManager] Joining queue in region: ${region} as ${name}`);
+    joinQueue(data: { name: string; region: string, playerMatchId?: string }) {
+      console.log(`[NetworkManager] Joining queue in region: ${data.region} as ${data.name}`);
       if (!this.socket) {
         console.error('NetworkManager not initialized');
         return;
       }
-      this.socket.emit('joinQueue', { region, name });
+      this.socket.emit('joinQueue', data);
       console.log('[NetworkManager] joinQueue event emitted');
     }
 
@@ -403,6 +405,7 @@ export class NetworkManager {
 
     private async handleSuccessfulRejoin() {
       try {
+          console.log('Successfully rejoined the match after reconnection, closing modal');
           ModalManager.getInstance().closeModal();
       } catch (error) {
           ErrorHandler.getInstance().handleError(
