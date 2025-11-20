@@ -10,6 +10,8 @@ import j2 from './images/j2.png';
 import j3 from './images/j3.png';
 import j4 from './images/j4.png';
 import bush from './images/bush.png';
+import l3l3 from './images/l3l3.png';
+
 import bushTree from './images/bush-right.png';
 import tomato from './images/tomato.png';
 import ammoBush from './images/small-bush.png';
@@ -70,6 +72,7 @@ const isMobile = () => {
             { alias: 'bushTree', src: bushTree },
             { alias: 'tomatoBasket', src: tomatoBasket },
             { alias: 'grassOne', src: grassOne },
+            { alias: 'l3l3', src: l3l3 },
 
         ];
 
