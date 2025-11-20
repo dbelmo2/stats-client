@@ -89,7 +89,7 @@ export class GameManager {
     private readonly MIN_MS_BETWEEN_TICKS = 1000 / this.SERVER_TICK_RATE; 
     private readonly MIN_S_BETWEEN_TICKS = this.MIN_MS_BETWEEN_TICKS / 1000; 
     private readonly BUFFER_SIZE = 1024;
-    private readonly COLLISION_TIMEOUT = 2000; 
+    private readonly COLLISION_TIMEOUT = 3000; 
     private readonly GAME_BOUNDS = {
         left: 0,
         right: this.GAME_WIDTH,
@@ -527,6 +527,7 @@ export class GameManager {
 
         for (const [id, collision] of pendingCollisions.entries()) {
             if (now - collision.timestamp > this.COLLISION_TIMEOUT) {
+                console.log(`Reverting prediction for entity ${id} due to timeout.`);
                 // Get the affected entity (self or enemy)
                 if (this.player.sprite && id === this.player.id) {
                     this.player.sprite.revertPrediction();
@@ -666,17 +667,18 @@ export class GameManager {
                 
                     enemyGraphic.setIsBystander(enemyPlayer.by);
 
-                    // Only update health if we don't have a pending collision
+                    // Check for pending collision
                     const pendingCollision = this.gameState.pendingCollisions.get(enemyPlayer.id);
-                    if (!pendingCollision && enemyPlayer.hp !== undefined) {
-                        enemyGraphic.setHealth(enemyPlayer.hp);
                     
-                        // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
-                        // than our prediction, collision was confirmed
-                        if (enemyPlayer.hp && enemyPlayer.hp <= enemyGraphic.getPredictedHealth()) {
-                            this.gameState.pendingCollisions.delete(enemyPlayer.id);
-                            enemyGraphic.setHealth(enemyPlayer.hp);
-                        }
+                    // If server health is lower or equal than our prediction, collision was confirmed
+                    if (pendingCollision && enemyPlayer.hp !== undefined && 
+                        enemyPlayer.hp <= enemyGraphic.getPredictedHealth()) {
+                        // Collision confirmed - clear pending collision and update health
+                        this.gameState.pendingCollisions.delete(enemyPlayer.id);
+                        enemyGraphic.setHealth(enemyPlayer.hp);
+                    } else if (!pendingCollision && enemyPlayer.hp !== undefined) {
+                        // No pending collision - update health normally
+                        enemyGraphic.setHealth(enemyPlayer.hp);
                     }
                 }
             }
