@@ -328,6 +328,10 @@ export class GameManager {
     private handleMatchReset = () => {
         try {
             this.audioManager.playRandomMatchStartSound();
+            
+            // Reset score manager to clear all scores
+            this.scoreManager.reset();
+            
             // Clean up active projectiles and return to pool
             for (const projectile of this.player.activeProjectiles) {
                 this.entities.projectilePool.releaseElement(projectile);
@@ -384,10 +388,9 @@ export class GameManager {
 
             const updatedPlayer = {
                 ...playerData,
-                ...update
+                ...update,
+
             }
-
-
 
             updatedPlayers.push(updatedPlayer);
         }
@@ -398,8 +401,6 @@ export class GameManager {
                 updatedPlayers.push(playerData);
             }
         }
-
-    
 
         this.network.latestServerSnapshot.players = updatedPlayers;
     }
@@ -691,7 +692,8 @@ export class GameManager {
     }
 
 
-    private integrateSelfUpdate(selfData: PlayerServerState): void {
+    private integrateSelfUpdate(selfData: PlayerServerState | undefined): void {
+
         if (selfData?.isDead === true && this.player.sprite) {
             // Clean up the players sprite if no self data exists
             this.handlePlayerDeath();

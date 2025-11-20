@@ -94,10 +94,11 @@ export class ScoreManager extends Container {
     }
     
 
-
+    public reset() {
+        this.scores.clear();
+    }
 
     public updateScores(players: PlayerServerState[], selfId: string): void {
-        console.log('updating scores with players:', JSON.stringify(players));
         const newScores: PlayerScore[] = [];
         const modifiedScores: PlayerScore[] = [];
         const deletedScores: PlayerScore[] = [];
@@ -118,20 +119,18 @@ export class ScoreManager extends Container {
                 continue;
             }
 
-            let modified = false;
 
             if (score.kills > previousScore.kills) {
-                modified = true;
                 this.onKill(score.playerId);
             }
 
-            if (score.deaths > previousScore.deaths && this.onDeath) {
-                modified = true;
-                this.onDeath(score.playerId);
+            if (score.deaths > previousScore.deaths) {
+                if (this.onDeath) {
+                    this.onDeath(score.playerId);
+                }
             }
 
 
-            if (!modified) continue
 
             const updatedScore = {
                 kills: score.kills,
