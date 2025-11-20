@@ -119,12 +119,12 @@ export class AudioManager {
     private registerDefaultSounds(): void {
         this.registerSound('shoot', {
         src: [shootingAudio],
-        volume: 0.30
+        volume: 0.20
         }, 'sfx');
     
         this.registerSound('impact', {
             src: [impactAudio],
-            volume: 0.35
+            volume: 0.25
         }, 'sfx');
 
         this.registerSound('jump', {
@@ -141,21 +141,21 @@ export class AudioManager {
         this.registerSound('theme', {
             src: [h3Theme],
             loop: true,
-            volume: 0.30
+            volume: 0.15
         }, 'music');
 
 
         for (let i = 0; i < this.deathSounds.length; i++) {
             this.registerSound(`death${i+1}`, {
                 src: [this.deathSounds[i]],
-                volume: 0.45
+                volume: 0.50
             }, 'sfx');
         }
 
         for (let i = 0; i < this.killSounds.length; i++) {
             this.registerSound(`kill${i+1}`, {
                 src: [this.killSounds[i]],
-                volume: 0.45
+                volume: 0.50
             }, 'sfx');
         }
 
