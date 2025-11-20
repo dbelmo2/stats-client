@@ -20,10 +20,9 @@ import killSound6 from '../sounds/kill/no-pickles.mp3';
 import deathSound1 from '../sounds/death/bye-trump.mp3';
 import deathSound2 from '../sounds/death/fuck-bowblax.mp3';
 import deathSound3 from '../sounds/death/fuck-you-ab.mp3'
-import deathSound4 from '../sounds/death/oh-god.mp3'
-import deathSound5 from '../sounds/death/okayyy.mp3'
-import deathSound6 from '../sounds/death/what.mp3'
-import deathSound7 from '../sounds/death/wtf.mp3'
+import deathSound4 from '../sounds/death/okayyy.mp3'
+import deathSound5 from '../sounds/death/what.mp3'
+import deathSound6 from '../sounds/death/wtf.mp3'
 
 // match start sounds
 import matchStartSound1 from '../sounds/match-reset/fight.mp3';
@@ -67,7 +66,6 @@ export class AudioManager {
         deathSound4,
         deathSound5,
         deathSound6,
-        deathSound7
     ];
 
     private killSounds: string[] = [
