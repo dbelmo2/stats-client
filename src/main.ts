@@ -87,8 +87,10 @@ const isMobile = () => {
             loadedCount++;
         }
 
+
+        const percentage = loadedCount + 1 >= 10 ? 10 : loadedCount + 1;
         // Initialize PIXI Application
-        updateLoadingProgress(9, 10, 'Initializing game...');
+        updateLoadingProgress(percentage, 10, 'Initializing game...');
         const app = new Application();
         await app.init({ 
             background: '#202020',
@@ -114,7 +116,7 @@ const isMobile = () => {
         updateLoadingProgress(10, 10, 'Ready!');
         
         // Small delay to show completion
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 200));
         
         // Remove loading screen
         await removeLoadingScreen();
