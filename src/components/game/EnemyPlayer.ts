@@ -28,6 +28,14 @@ export class EnemyPlayer extends Container {
   private positionBuffer: EnemyPosition[] = [];
   public playerName: string;
 
+  // Invulnerability system
+  private static readonly INVULNERABILITY_DURATION_MS = 3000; // Configurable
+  private static readonly FLASH_START_RATIO = 0.7; // When flashing begins (70% through duration)
+  private invulnerabilityStartTime: number = 0;
+  private isInvulnerable: boolean = false;
+  private originalBodyColor: string = '#D06DFE'; // Default enemy color
+  private flashInterval?: NodeJS.Timeout;
+
   constructor(
     id: string, 
     spawnX: number, 
@@ -275,13 +283,102 @@ export class EnemyPlayer extends Container {
       // Make visible again
       this.visible = true;
       
+      // Start invulnerability on respawn
+      this.startInvulnerability();
+      
       // Only call onSpawn if not already in a container
       if (!this.parent) {
           this.onSpawn(this);
       }
   }
+
+  // Invulnerability system methods
+  public startInvulnerability(): void {
+    if (this.isInvulnerable) return; // Prevent overlapping invulnerability
+    
+    this.isInvulnerable = true;
+    this.invulnerabilityStartTime = Date.now();
+    this.body.clear();
+    this.body.rect(0, 0, 50, 50).fill('#FFD700'); // Golden color
+    console.log(`EnemyPlayer ${this.playerName} started invulnerability for ${EnemyPlayer.INVULNERABILITY_DURATION_MS}ms`);
+    
+    // Auto-end invulnerability after duration
+    setTimeout(() => {
+      this.endInvulnerability();
+    }, EnemyPlayer.INVULNERABILITY_DURATION_MS);
+    
+    // Start flashing at the configured ratio (70% through)
+    const flashStartDelay = EnemyPlayer.INVULNERABILITY_DURATION_MS * EnemyPlayer.FLASH_START_RATIO;
+    setTimeout(() => {
+      if (this.isInvulnerable) {
+        this.startFlashing();
+      }
+    }, flashStartDelay);
+  }
+
+  private startFlashing(): void {
+    let flashCount = 0;
+    const baseFlashInterval = 200; // Base flash rate in ms
+    
+    const flash = () => {
+      if (!this.isInvulnerable) return; // Stop if no longer invulnerable
+      
+      // Accelerating flash rate
+      const timeRemaining = EnemyPlayer.INVULNERABILITY_DURATION_MS - (Date.now() - this.invulnerabilityStartTime);
+      if (timeRemaining <= 0) return;
+      
+      // Faster flashing as time runs out
+      const accelerationFactor = Math.max(0.1, timeRemaining / (EnemyPlayer.INVULNERABILITY_DURATION_MS * (1 - EnemyPlayer.FLASH_START_RATIO)));
+      const currentFlashInterval = baseFlashInterval * accelerationFactor;
+      
+      // Toggle between golden and original color
+      this.body.clear();
+      if (flashCount % 2 === 0) {
+        this.body.rect(0, 0, 50, 50).fill(this.originalBodyColor);
+      } else {
+        this.body.rect(0, 0, 50, 50).fill('#FFD700');
+      }
+      flashCount++;
+      
+      this.flashInterval = setTimeout(flash, currentFlashInterval);
+    };
+    
+    flash();
+  }
+
+  public endInvulnerability(): void {
+    if (!this.isInvulnerable) return; // Already ended
+    
+    this.isInvulnerable = false;
+    this.body.clear();
+    this.body.rect(0, 0, 50, 50).fill(this.originalBodyColor);
+    
+    // Clear any ongoing flashing
+    if (this.flashInterval) {
+      clearTimeout(this.flashInterval);
+      this.flashInterval = undefined;
+    }
+    
+    console.log(`EnemyPlayer ${this.playerName} ended invulnerability`);
+  }
+
+  public getIsInvulnerable(): boolean {
+    return this.isInvulnerable;
+  }
+
+  public getInvulnerabilityTimeRemaining(): number {
+    if (!this.isInvulnerable) return 0;
+    const elapsed = Date.now() - this.invulnerabilityStartTime;
+    return Math.max(0, EnemyPlayer.INVULNERABILITY_DURATION_MS - elapsed);
+  }
   
   destroy(): void {
+    // Clean up invulnerability system
+    if (this.flashInterval) {
+      clearTimeout(this.flashInterval);
+      this.flashInterval = undefined;
+    }
+    
     // Clear any pending timeouts
     if (this.damageFlashTimeout) {
         clearTimeout(this.damageFlashTimeout);
