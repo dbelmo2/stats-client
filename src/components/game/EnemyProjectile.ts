@@ -26,7 +26,11 @@ export class EnemyProjectile extends Container {
     this.body = Sprite.from('tomato');
     this.body.width = 20;
     this.body.height = 20;
+
     this.addChild(this.body);
+    
+    // Set z-index on the container itself to ensure proper layering
+    this.zIndex = 3000;
 
     // Default position
     this.x = x;

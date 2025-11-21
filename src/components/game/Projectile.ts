@@ -63,6 +63,9 @@ export class Projectile extends Container {
     this.gravityEffect = gravityEffect;
     this.gameBounds = gameBounds;
     this.addChild(this.body);
+    
+    // Set z-index on the container itself to ensure proper layering
+    this.zIndex = 3000;
 
     // Calculate direction vector
     this.calculateVelocity(spawnX, spawnY, targetX, targetY);
