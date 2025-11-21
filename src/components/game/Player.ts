@@ -25,6 +25,8 @@ export class Player extends Container {
   private serverHealth: number = 100;
   private predictedHealth: number = 100;
 
+  private nonBystanderColor: number = 0x7ED9F8;
+
   private damageFlashTimeout?: NodeJS.Timeout;
   private healthBarContainer: Container;
   private healthBarBg: Graphics;
@@ -35,6 +37,13 @@ export class Player extends Container {
   private inputInterval: NodeJS.Timeout | null = null;
   private lastProcessedInputVector: InputVector = { x: 0, y: 0 };
   private tomatoSprite: Sprite | null = null;
+
+  // Invulnerability system
+  private static readonly INVULNERABILITY_DURATION_MS = 3000; // Configurable
+  private static readonly FLASH_START_RATIO = 0.7; // When flashing begins (70% through duration)
+  private invulnerabilityStartTime: number = 0;
+  private isInvulnerable: boolean = false;
+  private flashInterval?: NodeJS.Timeout;
 
   private isBystander: boolean = true;
   private isOnSurface: boolean = false;
@@ -100,8 +109,7 @@ export class Player extends Container {
       if (this.isBystander === value) return; // No change
       this.isBystander = value;
       this.body.clear();
-      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : '#7ED9F8');
-
+      this.body.rect(0, 0, 50, 50).fill(this.isBystander ? 0x808080 : this.nonBystanderColor);
       if (this.isBystander === false) {
         this.makeHealthBarVisible();
         this.updateHealthBar();
@@ -147,7 +155,6 @@ export class Player extends Container {
       this.healthBar.clear();
       const healthPercentage = this.predictedHealth / this.maxHealth;
       const barWidth = this.HEALTH_BAR_WIDTH * healthPercentage;
-      console.log(`Updating health bar: predictedHealth=${this.predictedHealth}, healthPercentage=${healthPercentage}, barWidth=${barWidth}`);
       // Health bar colors based on remaining health
       let color = 0x00ff00; // Green
       if (healthPercentage < 0.6) color = 0xffff00; // Yellow
@@ -332,6 +339,7 @@ export class Player extends Container {
       // NOTE: this will likely break if health regen is introduced
   
       if (updatedServerHealth < this.predictedHealth) {
+        console.log(`Setting predictedHealth to serverHealth: ${this.serverHealth} in setHealth()`);
           this.predictedHealth = updatedServerHealth;
       }
       this.updateHealthBar();
@@ -346,7 +354,9 @@ export class Player extends Container {
   }
 
   damage(amount: number = 10) {
+    
     if (this.isBystander) return; // Do not apply damage to bystanders
+    console.log(`Setting predictedHealth to ${Math.max(0, this.predictedHealth - amount)} in damage()`);
     this.predictedHealth = Math.max(0, this.predictedHealth - amount);
     this.updateHealthBar();
 
@@ -361,9 +371,98 @@ export class Player extends Container {
     }, 100);
   }
 
+  // Invulnerability system methods
+  public startInvulnerability(): void {
 
+    if (this.isBystander === true) return;
+
+    this.isInvulnerable = true;
+    this.invulnerabilityStartTime = Date.now();
+    
+    this.body.clear();
+    this.body.rect(0, 0, 50, 50).fill(0xFFD700);
+    // Set initial golden color
+    
+    // Clear any existing flash interval
+    if (this.flashInterval) {
+      clearInterval(this.flashInterval);
+    }
+    
+        
+    // Auto-end invulnerability
+    setTimeout(() => {
+      this.endInvulnerability();
+    }, Player.INVULNERABILITY_DURATION_MS);
+
+
+    // Start flash timer for the last 30% of duration
+    const flashStartTime = Player.INVULNERABILITY_DURATION_MS * Player.FLASH_START_RATIO;
+    setTimeout(() => {
+      this.startFlashing();
+    }, flashStartTime);
+
+  }
+
+  private startFlashing(): void {
+    let flashCount = 0;
+    const baseFlashInterval = 200; // Base flash rate in ms
+    
+    const flash = () => {
+      if (!this.isInvulnerable) return; // Stop if no longer invulnerable
+      
+      // Accelerating flash rate
+      const timeRemaining = Player.INVULNERABILITY_DURATION_MS - (Date.now() - this.invulnerabilityStartTime);
+      if (timeRemaining <= 0) return;
+      
+      // Faster flashing as time runs out
+      const accelerationFactor = Math.max(0.1, timeRemaining / (Player.INVULNERABILITY_DURATION_MS * (1 - Player.FLASH_START_RATIO)));
+      const currentFlashInterval = baseFlashInterval * accelerationFactor;
+      
+      // Toggle between golden and original color
+      this.body.clear();
+      if (flashCount % 2 === 0) {
+        this.body.rect(0, 0, 50, 50).fill(this.nonBystanderColor);
+      } else {
+        this.body.rect(0, 0, 50, 50).fill('#FFD700');
+      }
+      flashCount++;
+      
+      this.flashInterval = setTimeout(flash, currentFlashInterval);
+    };
+    
+    flash();
+  }
+
+
+  public endInvulnerability(): void {
+    if (!this.isInvulnerable) return; // Already ended
+    
+    this.isInvulnerable = false;
+    this.body.clear();
+    this.body.rect(0, 0, 50, 50).fill(this.nonBystanderColor);
+    
+    // Clear any ongoing flashing
+    if (this.flashInterval) {
+      clearTimeout(this.flashInterval);
+      this.flashInterval = undefined;
+    }
+    
+  }
+
+  public getIsInvulnerable(): boolean {
+    return this.isInvulnerable;
+  }
+
+  public getInvulnerabilityTimeRemaining(): number {
+    if (!this.isInvulnerable) return 0;
+    const elapsed = Date.now() - this.invulnerabilityStartTime;
+    return Math.max(0, Player.INVULNERABILITY_DURATION_MS - elapsed);
+  }
 
   destroy(): void {
+    // Clear invulnerability timers
+    this.endInvulnerability();
+
     // Clear any pending timeouts
     if (this.damageFlashTimeout) {
         clearTimeout(this.damageFlashTimeout);
