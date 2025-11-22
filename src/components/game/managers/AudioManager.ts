@@ -15,6 +15,7 @@ import killSound3 from '../sounds/kill/i-like-it-short.mp3';
 import killSound4 from '../sounds/kill/i-like-it.mp3';
 import killSound5 from '../sounds/kill/i-like-picasso.mp3';
 import killSound6 from '../sounds/kill/no-pickles.mp3';
+import killSound7 from '../sounds/kill/ninja-woo.mp3';
 
 // death sounds 
 import deathSound1 from '../sounds/death/bye-trump.mp3';
@@ -75,7 +76,8 @@ export class AudioManager {
         killSound3,
         killSound4,
         killSound5,
-        killSound6
+        killSound6,
+        killSound7
     ];
 
     private matchStartSounds: string[] = [
