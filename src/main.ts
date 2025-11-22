@@ -1,8 +1,6 @@
 import './style.css';
 import runGame from './components/game/main';
 
-console.log('Starting game...');
-
 const isMobile = () => {
     if(window.matchMedia("(any-hover:none)").matches) {
         return true;
@@ -14,7 +12,7 @@ const isMobile = () => {
 (async () => {
     if (isMobile()) {
         // Render the React mobile app and exit early
-        const { renderMobileApp } = await import('./components/MobileApp/Entry');
+        const { renderMobileApp } = await import('./components/MobileApp/main');
         renderMobileApp();
         return; // Exit early to avoid initializing the game
     }
