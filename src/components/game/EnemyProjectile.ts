@@ -8,6 +8,7 @@ export class EnemyProjectile extends Container {
   private gameBounds: { width: number; height: number };
   private id: string;
   private ownerId: string;
+  private isDud: boolean = false;
   
   constructor(
     id: string,
@@ -48,7 +49,14 @@ export class EnemyProjectile extends Container {
     }
   }
 
+  public getIsDud() {
+    return this.isDud;
+  }
 
+
+  public markAsDud() {
+    this.isDud = true;  
+  }
 
   isOutsideBounds() {
     return (

@@ -31,8 +31,7 @@ export interface GameState {
     phase: GamePhase;
     localTick: number;
     accumulator: number;
-    pendingCollisions: Map<string, { projectileId: string, timestamp: number }>;
-    destroyedProjectiles: Map<string, number>;
+    pendingCollisions: Map<string, { projectileId: string, timestamp: number, predictedHealthAfterHit: number }>;
 }
 
 export interface WorldObjects {

@@ -9,7 +9,6 @@ export class Projectile extends Container {
   protected gameBounds: { width: number; height: number };
   public shouldBeDestroyed = false;
   protected id: string;
-  public wasAcknowledged: boolean = false;
   background: Graphics;
   protected lifespanMS: number = 4000; // in frames
 
@@ -127,7 +126,6 @@ export class Projectile extends Container {
     
     // Reset state flags
     this.shouldBeDestroyed = false;
-    this.wasAcknowledged = false;
     
     // Generate new ID for reused projectile
     this.id = Math.random().toString(36).substring(2, 15);

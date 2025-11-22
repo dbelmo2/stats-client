@@ -40,8 +40,18 @@ export interface ProjectileServerState {
   vx: number;
   vy: number;
   ownerId: string;
+  dud: boolean;
 };
 
+export interface ProjectileServerStateUpdate {
+  id: string;
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+  ownerId?: string;
+  dud?: boolean;
+}
 
 
 export interface ServerStateUpdate {
@@ -77,9 +87,9 @@ export interface StatePayload {
 }
 
 export interface NetworkState {
+  enemyProjectileStates: Map<string, ProjectileServerState>;
   latestServerSnapshot: ServerStateUpdate;
   latestServerSnapshotProcessed: ServerStateUpdate;
   inputBuffer: InputPayload[];
   stateBuffer: StatePayload[];
-  enemyPositionBuffers: Map<string, PositionVector[]>;
 }

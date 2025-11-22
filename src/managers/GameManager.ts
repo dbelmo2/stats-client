@@ -15,7 +15,7 @@ import { AmmoBush } from '../components/game/AmmoBush';
 import { KillIndicator } from '../components/ui/KillIndicator';
 import { PingDisplay } from '../components/ui/PingDisplay';
 import { FPSDisplay } from '../components/ui/FPSDisplay';
-import { Vector2, type InputVector, type PositionVector } from '../components/game/systems/Vector';
+import { Vector2, type InputVector } from '../components/game/systems/Vector';
 import ObjectPool from '../components/game/systems/ObjectPool';
 
 import { AudioManager } from './AudioManager';
@@ -30,36 +30,10 @@ import { SceneManager } from './SceneManager';
 import { CameraManager } from './CameraManager';
 
 
-// Fix issue where after the match ends, and then begins again, an enemy ( and maybe self) 
-// can start with low health. Once they take damage, the health bar updates to the correct value.
-// There seems to be an issue with projectiles stopping and then resuming after match ends and restarts
-// (serverside related)
-
-
-
-
-// Look into drastric frame drop... occured when we tested laptop and desktop together in a game,
-// with dev tools open on both. From mac i can see dev tools took up to 3gb memory. could this be the cause?
-// both the desktop and laptop expereiced frame drops, with the laptop doing so first.
-
-
-// Another issue noticed is that sometimes the ping keeps climbing...
-// In one test, it started at around 300ms and climbed all the way up to 25,000 after which the
-// connection was lost and the ping was then reset.
-
-// TODO: Update usage of this.entities.enemies... 
-// in places like showKillIndicator(), we use it to check if the enemy is alive or not. we can 
-// intead use a isAlive method from the EnemyPlayer class.
-
-// TODO: Also update projectiles and players so that upon death they are simply made invisible, not removed from the scene...
-// removing from scene is too expensive. If necessary, do this for pooled objects as well.
-
-
-// TODO: Fix score issue after a match reset (confirmed server state update has reset scores, so it seems to be client side)
 
 interface EntityContainers {
   enemies: Map<string, EnemyPlayer>;
-  enemyProjectiles: Map<string, EnemyProjectile>;
+  enemyProjectileSprites: Map<string, EnemyProjectile>;
   killIndicatorPool: ObjectPool<KillIndicator>;
   projectilePool: ObjectPool<Projectile>;
   enemyProjectilePool: ObjectPool<EnemyProjectile>;
@@ -125,7 +99,6 @@ export class GameManager {
         localTick: 0,
         accumulator: 0,
         pendingCollisions: new Map(),
-        destroyedProjectiles: new Map()
     }
 
     
@@ -142,14 +115,14 @@ export class GameManager {
             sTick: 0,
             sTime: 0
         },
+        enemyProjectileStates: new Map<string, ProjectileServerState>(),
         inputBuffer: [],
         stateBuffer: [],
-        enemyPositionBuffers: new Map<string, PositionVector[]>(),
     };
 
     private entities: EntityContainers = {
         enemies: new Map<string, EnemyPlayer>(),
-        enemyProjectiles: new Map<string, EnemyProjectile>(),
+        enemyProjectileSprites: new Map<string, EnemyProjectile>(),
         killIndicatorPool: undefined as any, // Will be initialized in constructor
         projectilePool: undefined as any, // Will be initialized in constructor
         enemyProjectilePool: undefined as any // Will be initialized in constructor
@@ -174,6 +147,7 @@ export class GameManager {
         this.app.renderer.resize(this.GAME_WIDTH, this.GAME_HEIGHT);
         this.controller = new Controller();
         this.gameContainer = new Container();
+        this.gameContainer.sortableChildren = true; // Enable z-index sorting
         this.scoreManager = new ScoreManager(this.showKillIndicator.bind(this));
         // Initialize ObjectPools after gameContainer is created
         this.entities.killIndicatorPool = new ObjectPool<KillIndicator>(
@@ -266,6 +240,7 @@ export class GameManager {
             networkManager.on('stateUpdate', (state: ServerStateUpdate) => {
                 this.integratePartialPlayerUpdates(state);
                 this.integrateEnemyPositions(state);
+                this.integratePartialProjectileUpdates(state);
 
                 this.network.latestServerSnapshot.sTick = state.sTick;
                 this.network.latestServerSnapshot.sTime = state.sTime;
@@ -280,6 +255,56 @@ export class GameManager {
                 { phase: 'setup' }
             );
             throw error;
+        }
+    }
+
+
+    private integratePartialPlayerUpdates(state: ServerStateUpdate): void {
+        const updatedPlayers = [];
+
+        if (this.network.latestServerSnapshot.players.length === 0) {
+            this.network.latestServerSnapshot.players = state.players;
+            return;
+        }
+
+        for (const playerData of this.network.latestServerSnapshot.players) {
+            const update = state.players.find(p => p.id === playerData.id);
+            if (!update) {
+                console.log("!!!!!!!!!player disconnected:", playerData.id);
+                continue;
+            }
+
+
+            const updatedPlayer = {
+                ...playerData,
+                ...update,
+
+            }
+
+            updatedPlayers.push(updatedPlayer);
+        }
+
+        for (const playerData of state.players) {
+            const existingPlayer = this.network.latestServerSnapshot.players.find(p => p.id === playerData.id);
+            if (!existingPlayer) {
+                updatedPlayers.push(playerData);
+            }
+        }
+
+        this.network.latestServerSnapshot.players = updatedPlayers;
+    }
+
+
+    private integratePartialProjectileUpdates(state: ServerStateUpdate): void {
+        for (const projectileData of state.projectiles) {
+            const existingProjectile = this.network.enemyProjectileStates.get(projectileData.id);
+            if (!existingProjectile && projectileData.ownerId) {
+                this.network.enemyProjectileStates.set(projectileData.id, projectileData);
+            } else if (existingProjectile && projectileData.dud === true) {
+                existingProjectile.dud = true;
+                this.network.enemyProjectileStates.set(projectileData.id, existingProjectile);
+            }
+            // We dont do cleanup here because we handle that purley client side - not reliant on server
         }
     }
 
@@ -337,15 +362,15 @@ export class GameManager {
                 this.entities.projectilePool.releaseElement(projectile);
             }
             this.player.activeProjectiles.clear();
+            this.network.enemyProjectileStates.clear();
             
             // Clean up enemy projectiles and return to pool  
-            for (const [_, projectile] of this.entities.enemyProjectiles) {
+            for (const [_, projectile] of this.entities.enemyProjectileSprites) {
                 this.entities.enemyProjectilePool.releaseElement(projectile);
             }
             
-            this.entities.enemyProjectiles.clear();
+            this.entities.enemyProjectileSprites.clear();
             this.gameState.pendingCollisions.clear();
-            this.gameState.destroyedProjectiles.clear();
             if (this.ui.gameOverDisplay) {
                 this.app.stage.removeChild(this.ui.gameOverDisplay);
                 this.ui.gameOverDisplay.destroy();
@@ -370,40 +395,7 @@ export class GameManager {
     }
 
 
-    private integratePartialPlayerUpdates(state: ServerStateUpdate): void {
-        const updatedPlayers = [];
 
-        if (this.network.latestServerSnapshot.players.length === 0) {
-            this.network.latestServerSnapshot.players = state.players;
-            return;
-        }
-
-        for (const playerData of this.network.latestServerSnapshot.players) {
-            const update = state.players.find(p => p.id === playerData.id);
-            if (!update) {
-                console.log("!!!!!!!!!player disconnected:", playerData.id);
-                continue;
-            }
-
-
-            const updatedPlayer = {
-                ...playerData,
-                ...update,
-
-            }
-
-            updatedPlayers.push(updatedPlayer);
-        }
-
-        for (const playerData of state.players) {
-            const existingPlayer = this.network.latestServerSnapshot.players.find(p => p.id === playerData.id);
-            if (!existingPlayer) {
-                updatedPlayers.push(playerData);
-            }
-        }
-
-        this.network.latestServerSnapshot.players = updatedPlayers;
-    }
 
     private integrateEnemyPositions(latestServerSnapshot: ServerStateUpdate): void {
         for (const enemyPlayer of latestServerSnapshot.players) {   
@@ -419,10 +411,10 @@ export class GameManager {
         }
     }
     private integrateStateUpdate(): void {
-        const { players, projectiles } = this.network.latestServerSnapshot;
+        const { players } = this.network.latestServerSnapshot;
         const selfData = players.find(player => player.id === this.player.id);
         this.integrateSelfUpdate(selfData);
-        this.integrateProjectileUpdates(projectiles);
+        this.integrateProjectileUpdates();
         this.integrateEnemyPlayers();
     }
     
@@ -446,27 +438,14 @@ export class GameManager {
     
     // TODO: Can we avoid calling new Set() here?
     // If called often (integrateStateUpdates) it could cause a memory issue.
-    private integrateProjectileUpdates(projectiles: ProjectileServerState[]): void {
-        const activeProjectileIds = new Set(projectiles.map(p => p.id));
-        this.cleanupProjectiles(activeProjectileIds);
-
-        const { enemyProjectiles } = this.entities;
-        const { destroyedProjectiles } = this.gameState;
-
-        for (const projectile of projectiles) {
+    private integrateProjectileUpdates(): void {
+        const { enemyProjectileSprites } = this.entities;
+        for (const [_key, projectile] of this.network.enemyProjectileStates) {
             if (projectile.ownerId === this.player.id) {
-                // Mark own projectiles as acknowledged when they appear in server state
-                for (const ownProjectile of this.player.activeProjectiles) {
-                    if (ownProjectile.getId() === projectile.id) {
-                        ownProjectile.wasAcknowledged = true;
-                        break;
-                    }
-                }
-            } else if (!enemyProjectiles.has(projectile.id) && !destroyedProjectiles.has(projectile.id)) {
-                // Only create new projectile if it hasn't been destroyed locally
+                continue; // Skip own projectiles
+            }
+            if (enemyProjectileSprites.has(projectile.id) === false) {
                 const graphic = this.entities.enemyProjectilePool.getElement();
-                console.log(`enemyProjectilePoolStats: ${JSON.stringify(this.entities.enemyProjectilePool.getPoolStats())}`);
-                // Initialize the recycled projectile with server data
                 graphic.initialize(
                     projectile.id, 
                     projectile.ownerId, 
@@ -476,50 +455,10 @@ export class GameManager {
                     projectile.vy,
                     { width: this.app.canvas.width, height: this.app.canvas.height }
                 );
-                
-                enemyProjectiles.set(projectile.id, graphic);
+                enemyProjectileSprites.set(projectile.id, graphic);
             }
         }    
     }
-
-    private cleanupProjectiles(activeIds: Set<string>): void {
-        // Clean up enemy projectiles
-        const enemyProjectilesToRemove: string[] = [];
-        
-        for (const [id] of this.entities.enemyProjectiles.entries()) {
-            if (!activeIds.has(id)) {
-                enemyProjectilesToRemove.push(id);
-            }
-        }
-        
-        // Remove enemy projectiles and return to pool
-        for (const id of enemyProjectilesToRemove) {
-            const graphic = this.entities.enemyProjectiles.get(id);
-            if (graphic) {
-                this.entities.enemyProjectilePool.releaseElement(graphic);
-                this.entities.enemyProjectiles.delete(id);
-            }
-        }
-
-        // Clean up own projectiles only if they were in server state and now aren't
-        const projectilesToRemove: Projectile[] = [];
-        
-        for (const projectile of this.player.activeProjectiles) {
-            const projectileId = projectile.getId();
-            
-            // Only clean up projectiles that were previously acknowledged by server
-            if (projectile.wasAcknowledged && !activeIds.has(projectileId)) {
-                projectilesToRemove.push(projectile);
-            }
-        }
-        
-        // Remove projectiles and return to pool
-        for (const projectile of projectilesToRemove) {
-            this.player.activeProjectiles.delete(projectile);
-            this.entities.projectilePool.releaseElement(projectile);
-        }
-    }
-
 
     private cleanupPendingCollisions(): void {
         const now = Date.now();
@@ -527,7 +466,7 @@ export class GameManager {
 
         for (const [id, collision] of pendingCollisions.entries()) {
             if (now - collision.timestamp > this.COLLISION_TIMEOUT) {
-                console.log(`Reverting prediction for entity ${id} due to timeout.`);
+                //console.log(`Reverting prediction for entity ${id} due to timeout.`);
                 // Get the affected entity (self or enemy)
                 if (this.player.sprite && id === this.player.id) {
                     this.player.sprite.revertPrediction();
@@ -542,18 +481,6 @@ export class GameManager {
         }
     }
 
-    // Add cleanup for destroyed projectile IDs
-    private cleanupDestroyedProjectiles(): void {
-        const MAX_AGE = 5000; // 5 seconds
-        const now = Date.now();
-        const { destroyedProjectiles } = this.gameState;
-        for (const [id, timestamp] of destroyedProjectiles.entries()) {
-            if (now - timestamp > MAX_AGE) {
-                destroyedProjectiles.delete(id);
-            }
-        }
-    }
-
     private cleanupSession = (): void => {
         try {
             this.networkManager.cleanup();
@@ -564,10 +491,10 @@ export class GameManager {
             );
 
             this.app.ticker.stop();
-            const { enemyProjectiles, enemies } = this.entities;
+            const { enemyProjectileSprites, enemies } = this.entities;
 
             this.player.activeProjectiles.clear();
-            enemyProjectiles.clear();
+            enemyProjectileSprites.clear();
 
             // Since this is full session cleanup, destroy the pools completely
             // This ensures no lingering references and proper memory cleanup
@@ -576,8 +503,7 @@ export class GameManager {
             this.entities.enemyProjectilePool.destroy();
             this.entities.killIndicatorPool.destroy();
             this.gameState.pendingCollisions.clear();
-            this.gameState.destroyedProjectiles.clear();
-
+            this.network.enemyProjectileStates.clear();
             // Clean up enemy players
             for (const [_, enemy] of enemies) {
                 this.app.stage.removeChild(enemy);
@@ -634,9 +560,6 @@ export class GameManager {
             }
         }
 
-
-        // TODO: fix issue where players the join after the player dont
-        // spawn in. 
  
         for (const enemyPlayer of this.network.latestServerSnapshot.players) {
 
@@ -670,16 +593,25 @@ export class GameManager {
                     // Check for pending collision
                     const pendingCollision = this.gameState.pendingCollisions.get(enemyPlayer.id);
                     
-                    // If server health is lower or equal than our prediction, collision was confirmed
-                    if (pendingCollision && enemyPlayer.hp !== undefined && 
-                        enemyPlayer.hp <= enemyGraphic.getPredictedHealth()) {
-                        // Collision confirmed - clear pending collision and update health
-                        this.gameState.pendingCollisions.delete(enemyPlayer.id);
+
+                    if (!pendingCollision && enemyPlayer.hp !== undefined) {
                         enemyGraphic.setHealth(enemyPlayer.hp);
-                    } else if (!pendingCollision && enemyPlayer.hp !== undefined) {
-                        // No pending collision - update health normally
-                        enemyGraphic.setHealth(enemyPlayer.hp);
+
+                        // If server health is lower or equal (NOTE: this will likely break if health regen is introduced),
+                        // than our prediction, collision was confirmed
+                        if (enemyPlayer.hp && enemyPlayer.hp <= enemyGraphic.getPredictedHealth()) {
+                            this.gameState.pendingCollisions.delete(enemyPlayer.id);
+                            enemyGraphic.setHealth(enemyPlayer.hp);
+                        }
+                    } else if (pendingCollision && enemyPlayer.hp !== undefined) {
+                        // There is a pending collision, do not update health yet
+                        // Wait for server confirmation
+                        if (enemyPlayer.hp <= pendingCollision.predictedHealthAfterHit) {
+                            this.gameState.pendingCollisions.delete(enemyPlayer.id);
+                            enemyGraphic.setHealth(enemyPlayer.hp);
+                        }
                     }
+
                 }
             }
         }
@@ -704,6 +636,7 @@ export class GameManager {
         if (!selfData) return;
         if (selfData?.isDead === false && !this.player.sprite) {
             // Create new player sprite if it doesn't exist
+            
             this.spawnPlayer(selfData);
         }
         if (!this.player.sprite) return;
@@ -764,6 +697,11 @@ export class GameManager {
         this.player.sprite.setPlatforms(this.world.platforms);
         this.player.sprite.setIsBystander(bystanderStatus);
         this.player.sprite.setLastProcessedInputVector({ x: 0, y: 0 });
+        
+        // Start invulnerability on spawn
+        this.player.sprite.startInvulnerability();
+        
+
         this.gameContainer.addChild(this.player.sprite);
     }
 
@@ -909,8 +847,7 @@ export class GameManager {
 
             this.integrateStateUpdate();
             this.updateOwnProjectiles();
-            this.updateEnemyProjectiles();
-            this.cleanupDestroyedProjectiles(); 
+            this.updateEnemyProjectileSprites();
             this.cleanupPendingCollisions();
             this.entities.enemies.forEach((enemy) => {
                 if (enemy.isPlayerAlive()) {
@@ -956,6 +893,10 @@ export class GameManager {
             inputVector.x = 0; // Prevent input when overlay is active
             inputVector.y = 0; // Prevent input when overlay is active
             inputVector.mouse = undefined; // Prevent mouse input when overlay is active
+        }
+        
+        if (this.player.sprite.getIsInvulnerable()) {
+            inputVector.mouse = undefined; // Prevent shooting while invulnerable
         }
 
         this.player.disableInput = this.ui.overlayActive;
@@ -1025,6 +966,7 @@ export class GameManager {
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
+        console.log(`Broadcasting player with shooting input: ${inputPayload.vector.mouse !== undefined}`,)
         this.networkManager.emit('playerInput', inputPayload);
     }
 
@@ -1049,6 +991,7 @@ export class GameManager {
             || this.player.sprite.getIsBystander() 
             || this.gameState.phase !== 'active'
             || !input.vector.mouse
+            || (this.player.sprite.getIsInvulnerable() && this.player.sprite.getIsInvulnerable()) // Prevent shooting while invulnerable
         ) return;
         // Get projectile from pool instead of creating new one
         const projectile = this.entities.projectilePool.getElement();
@@ -1080,23 +1023,37 @@ export class GameManager {
                         enemyGraphic.isPlayerAlive() === true
                         && enemyGraphic.getIsBystander() === false 
                         && testForAABB(projectile, enemyGraphic)
+                        && projectile.shouldBeDestroyed === false
                     ) {
-                        this.networkManager.emit('projectileHit', enemyId);
-                        // Record collision prediction
-                        // This is required so we can reject stateUpdates that likely haven't computed
-                        // the collision yet due to network latency
-                        this.gameState.pendingCollisions.set(enemyId, {
-                            projectileId: projectile.getId(),
-                            timestamp: Date.now()
-                        });
+
+                        // Play sound effect regardless of invulnerability
+                        projectile.shouldBeDestroyed = true;
 
                         AudioManager.getInstance().play('impact');
+                        
+                        // Check if enemy is invulnerable
+                        if (enemyGraphic.getIsInvulnerable && enemyGraphic.getIsInvulnerable()) {
+                            console.log(`Hit invulnerable enemy ${enemyId}, no damage dealt`);
+                            // Just destroy projectile, no damage or server event
+                            break;
+                        }
+                        console.log('applying damage to enemy with predicted health', enemyGraphic.getPredictedHealth());
+                        this.networkManager.emit('projectileHit', { enemyId, projectileId: projectile.getId() });
+
+  
 
                         // Apply predicted damage (the server will confirm or correct this after a timeout)
                         enemyGraphic.damage();
+                        // Record collision prediction
+                        // This is required so we can reject stateUpdates that likely haven't computed
+                        // the collision yet due to network latency
+                         this.gameState.pendingCollisions.set(enemyId, {
+                            projectileId: projectile.getId(),
+                            timestamp: Date.now(),
+                            predictedHealthAfterHit: enemyGraphic.getPredictedHealth()
+                        });
                         
                         // Mark projectile for cleanup
-                        projectile.shouldBeDestroyed = true;
                         break; // Exit collision check loop once hit is found
                     }
                 }
@@ -1116,30 +1073,32 @@ export class GameManager {
         }
     }
 
-    private updateEnemyProjectiles(): void {
-        for (const [projectileId, projectile] of this.entities.enemyProjectiles.entries()) {
+    private updateEnemyProjectileSprites(): void {
+        const projectilesToRemove: EnemyProjectile[] = [];
+
+        for (const [projectileId, projectile] of this.entities.enemyProjectileSprites.entries()) {
             projectile.update();
-            
 
             if (this.gameState.phase === 'active') {
                 // Check collision with self first
-                if (this.player.sprite && this.player.sprite.getIsBystander() === false && testForAABB(projectile, this.player.sprite)) {
-                    // Add projectile to destroyed list
-                    // to avoid respawning it on delayed stateUpdates
-                    this.gameState.destroyedProjectiles.set(projectileId, Date.now());
-
-                    // Record collision prediction
-                    this.gameState.pendingCollisions.set(this.player.id, {
-                        projectileId: projectileId,
-                        timestamp: Date.now()
-                    });
-
-                    AudioManager.getInstance().play('impact');
-                    // Apply predicted damage to self
-                    this.player.sprite.damage();
-                    
-                    // Mark projectile for cleanup
+                if (
+                    this.player.sprite 
+                    && this.player.sprite.getIsBystander() === false 
+                    && testForAABB(projectile, this.player.sprite)
+                    && projectile.shouldBeDestroyed === false
+                ) {
                     projectile.shouldBeDestroyed = true;
+                    const projectileIsADud = this.network.enemyProjectileStates.get(projectileId)?.dud;
+                    AudioManager.getInstance().play('impact');
+
+                    if (this.player.sprite.getIsInvulnerable() === false && projectileIsADud === false) {
+                        this.player.sprite.damage();
+                        this.gameState.pendingCollisions.set(this.player.id, {
+                            projectileId: projectileId,
+                            timestamp: Date.now(),
+                            predictedHealthAfterHit: this.player.sprite.getPredictedHealth()
+                        });
+                    }
                 } else {
                     // Check collisions with other enemies
                     for (const [enemyId, enemyGraphic] of this.entities.enemies.entries()) {
@@ -1149,33 +1108,34 @@ export class GameManager {
                             && testForAABB(projectile, enemyGraphic)
                             && enemyGraphic.getIsBystander() === false
                         ) {
-                            
-                            this.gameState.destroyedProjectiles.set(projectileId, Date.now());
-                            // Record collision prediction
-                            this.gameState.pendingCollisions.set(enemyId, {
-                                projectileId: projectileId,
-                                timestamp: Date.now()
-                            });
-  
+                            projectile.shouldBeDestroyed = true;
+                            const projectileIsADud = this.network.enemyProjectileStates.get(projectileId)?.dud;
                             AudioManager.getInstance().play('impact');
 
-                            // Apply predicted damage
-                            enemyGraphic.damage();
-
-                            // Mark projectile for cleanup
-                            projectile.shouldBeDestroyed = true;
+                            if (enemyGraphic.getIsInvulnerable() === false || projectileIsADud === false) {
+                                enemyGraphic.damage();
+                                this.gameState.pendingCollisions.set(enemyId, {
+                                    projectileId: projectileId,
+                                    timestamp: Date.now(), 
+                                    predictedHealthAfterHit: enemyGraphic.getPredictedHealth()
+                                });
+                            }
                             break;
                         }
                     }
                 }
             }
 
-            // Clean up destroyed projectiles
             if (projectile.shouldBeDestroyed) {
-                // Release back to pool instead of destroying
-                this.entities.enemyProjectilePool.releaseElement(projectile);
-                this.entities.enemyProjectiles.delete(projectileId);
+                projectilesToRemove.push(projectile);
             }
+        }
+
+
+        for (const projectile of projectilesToRemove) {
+            this.network.enemyProjectileStates.delete(projectile.getId());
+            this.entities.enemyProjectileSprites.delete(projectile.getId());
+            this.entities.enemyProjectilePool.releaseElement(projectile);
         }
     }
 
