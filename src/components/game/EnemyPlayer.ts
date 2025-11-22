@@ -1,7 +1,7 @@
 import { Graphics, Container, TextStyle, Text, Sprite } from 'pixi.js';
 import type { PositionVector } from './systems/Vector';
-import { NetworkManager } from '../../managers/NetworkManager';
-import lerp from '../../utils/utils';
+import { NetworkManager } from './managers/NetworkManager';
+import lerp from './utils/utils';
 
 export interface EnemyPosition extends PositionVector {
     timestamp: number;

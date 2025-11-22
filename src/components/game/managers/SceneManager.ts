@@ -1,6 +1,6 @@
 import { Application, Container, Graphics, Sprite } from 'pixi.js';
-import { Platform } from '../components/game/Platform';
-import { AmmoBush } from '../components/game/AmmoBush';
+import { Platform } from '../Platform';
+import { AmmoBush } from '../AmmoBush';
 import { TvManager } from './TvManager';
 import type { WorldObjects } from '../types/game.types';
 import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';

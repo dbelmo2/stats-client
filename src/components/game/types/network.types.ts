@@ -1,4 +1,4 @@
-import type { InputVector, PositionVector } from "../components/game/systems/Vector";
+import type { InputVector, PositionVector } from "../systems/Vector";
 import type { PlayerState } from "./game.types";
 
 

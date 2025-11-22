@@ -1,5 +1,5 @@
 import { Container, Text, TextStyle } from 'pixi.js';
-import type { PlayerScore, PlayerServerState } from '../../types/network.types';
+import type { PlayerScore, PlayerServerState } from '../types/network.types';
 
 
 

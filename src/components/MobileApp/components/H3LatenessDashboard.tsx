@@ -34,7 +34,7 @@ import {
   Bar
 } from 'recharts';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
-import { YoutubeApiManager, type EpisodeWithDate, type Livestream, type StatsResponse } from '../../../managers/YoutubeApiManager';
+import { YoutubeApiManager, type EpisodeWithDate, type Livestream, type StatsResponse } from '../../game/managers/YoutubeApiManager';
 
 // Custom hook to fetch data
 const useH3Data = () => {

@@ -1,4 +1,4 @@
-import l3l3 from '../../images/l3l3.png';
+import l3l3 from '../images/l3l3.png';
 
 
 type Region = 'NA' | 'EU' | 'ASIA' | 'GLOBAL';;

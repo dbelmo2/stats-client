@@ -1,7 +1,7 @@
 import { Graphics, Container, Text, TextStyle, Sprite } from 'pixi.js';
 import { Platform } from './Platform';
 import { type PositionVector, type InputVector } from './systems/Vector';
-import { AudioManager } from '../../managers/AudioManager';
+import { AudioManager } from './managers/AudioManager';
 
 export interface PendingInput {
   seq: number; 

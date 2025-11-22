@@ -1,9 +1,9 @@
-import type { Platform } from "../components/game/Platform";
-import type { Player } from "../components/game/Player";
-import type { Projectile } from "../components/game/Projectile";
-import type { AmmoBush } from "../components/game/AmmoBush";
+import type { Platform } from "../Platform";
+import type { Player } from "../Player";
+import type { Projectile } from "../Projectile";
+import type { AmmoBush } from "../AmmoBush";
 import type { Sprite } from "pixi.js";
-import type { PositionVector } from "../components/game/systems/Vector";
+import type { PositionVector } from "../systems/Vector";
 
 export interface PlayerData {
     id: string;

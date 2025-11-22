@@ -306,7 +306,7 @@ export class ErrorHandler {
 
     private showUserNotification(error: GameError): void {
         // Dynamically import Modal to avoid circular dependencies
-        import('../components/ui/Modal').then(({ ModalManager }) => {
+        import('../ui/Modal').then(({ ModalManager }) => {
             const modal = ModalManager.getInstance();
             const userMessage = this.getUserFriendlyMessage(error);
             

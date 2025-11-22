@@ -1,6 +1,6 @@
 import { Text, Graphics, Sprite, BitmapText } from 'pixi.js';
 import { CRTFilter } from 'pixi-filters';
-import { TypeText } from '../components/ui/TypeText';
+import { TypeText } from '../ui/TypeText';
 import { YoutubeApiManager, type StatsResponse } from './YoutubeApiManager';
 import { formatDuration, formatToString } from '../utils/time';
 import { NetworkManager } from './NetworkManager';

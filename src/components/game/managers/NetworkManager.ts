@@ -1,6 +1,6 @@
 // src/managers/NetworkManager.ts
 import { io, Socket } from 'socket.io-client';
-import { ModalManager } from '../components/ui/Modal';
+import { ModalManager } from '../ui/Modal';
 import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
 import lerp from '../utils/utils';
 
