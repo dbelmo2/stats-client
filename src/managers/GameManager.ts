@@ -298,7 +298,7 @@ export class GameManager {
     private integratePartialProjectileUpdates(state: ServerStateUpdate): void {
         for (const projectileData of state.projectiles) {
             const existingProjectile = this.network.enemyProjectileStates.get(projectileData.id);
-            if (!existingProjectile && projectileData.ownerId) {
+            if (!existingProjectile && projectileData.ownerId && projectileData.ownerId !== this.player.id) {
                 this.network.enemyProjectileStates.set(projectileData.id, projectileData);
             } else if (existingProjectile && projectileData.dud === true) {
                 existingProjectile.dud = true;
@@ -966,7 +966,10 @@ export class GameManager {
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
-        console.log(`Broadcasting player with shooting input: ${inputPayload.vector.mouse !== undefined}`,)
+        const hasShootingInput = inputPayload.vector.mouse !== undefined;
+        console.log(`Broadcasting player with shooting input: ${hasShootingInput}`)
+        if (hasShootingInput)
+            console.log(inputPayload);
         this.networkManager.emit('playerInput', inputPayload);
     }
 
@@ -993,6 +996,7 @@ export class GameManager {
             || !input.vector.mouse
             || (this.player.sprite.getIsInvulnerable() && this.player.sprite.getIsInvulnerable()) // Prevent shooting while invulnerable
         ) return;
+        console.log('handling shooting input');
         // Get projectile from pool instead of creating new one
         const projectile = this.entities.projectilePool.getElement();
 
