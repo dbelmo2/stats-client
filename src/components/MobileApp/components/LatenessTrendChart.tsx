@@ -12,8 +12,8 @@ export function LatenessTrendChart({ livestreams }: LatenessTrendChartProps) {
   const chartData = livestreams
     .slice()
     .reverse()
-    .map((stream, index) => ({
-      index: index + 1,
+    .map((stream) => ({
+      date: new Date(stream.actualStartTime).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }),
       lateTime: stream.lateTime,
       lateMinutes: Math.floor(stream.lateTime / 60),
       title: stream.title,
@@ -30,7 +30,7 @@ export function LatenessTrendChart({ livestreams }: LatenessTrendChartProps) {
             LATENESS OVER TIME
           </h2>
           <p className="font-retro text-sm text-muted-foreground/70" data-testid="label-last-episodes">
-            (Last 100 Episodes)
+            (Last 10 Episodes)
           </p>
         </div>
         
@@ -39,10 +39,10 @@ export function LatenessTrendChart({ livestreams }: LatenessTrendChartProps) {
             <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
               <XAxis 
-                dataKey="index" 
+                dataKey="date" 
                 stroke="hsl(var(--muted-foreground))"
                 style={{ fontFamily: 'VT323, monospace', fontSize: '16px' }}
-                label={{ value: 'Episode #', position: 'insideBottom', offset: -5, style: { fill: 'hsl(var(--muted-foreground))', fontFamily: 'VT323, monospace', fontSize: '18px' } }}
+                label={{ value: 'Episode Date', position: 'insideBottom', offset: -5, style: { fill: 'hsl(var(--muted-foreground))', fontFamily: 'VT323, monospace', fontSize: '18px' } }}
               />
               <YAxis 
                 stroke="hsl(var(--muted-foreground))"
