@@ -23,40 +23,43 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--border))_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-[0.15] pointer-events-none" />
+    <div className="min-h-screen bg-background relative">
+      {/* Background patterns */}
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,hsl(var(--border))_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-[0.15] pointer-events-none z-0" />
       
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+      <div className="fixed inset-0 opacity-[0.03] pointer-events-none z-0">
         <div className="w-full h-1 bg-foreground/50 animate-scanline" />
       </div>
 
-      <div className="relative z-10">
-        <header className="border-b-2 border-primary/40 bg-card/80 backdrop-blur-md shadow-lg shadow-primary/10 sticky top-0 z-50">
-          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-md bg-primary/20 border-2 border-primary/40">
-                <Tv className="w-6 h-6 md:w-8 md:h-8 text-primary" strokeWidth={2.5} />
-              </div>
-              <div>
-                <h1 className="font-pixel text-xl md:text-2xl text-primary drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]" data-testid="heading-main">
-                  L3L3
-                </h1>
-                <p className="font-retro text-sm md:text-base text-muted-foreground hidden sm:block">
-                  LATENESS TRACKER
-                </p>
-              </div>
+      {/* Header */}
+      <header className="fixed top-0 left-0 right-0 border-b-2 border-primary/40 bg-card/90 backdrop-blur-md shadow-lg shadow-primary/10 z-50">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-md bg-primary/20 border-2 border-primary/40">
+              <Tv className="w-6 h-6 md:w-8 md:h-8 text-primary" strokeWidth={2.5} />
             </div>
-            
-            <div className="flex items-center gap-4">
-              <div className="hidden md:block font-retro text-sm text-muted-foreground" data-testid="text-last-updated">
-                Last Updated: {new Date(stats.lastUpdateDate).toLocaleDateString()}
-              </div>
-              <ThemeToggle />
+            <div>
+              <h1 className="font-pixel text-xl md:text-2xl text-primary drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]" data-testid="heading-main">
+                L3L3
+              </h1>
+              <p className="font-retro text-sm md:text-base text-muted-foreground hidden sm:block">
+                LATENESS TRACKER
+              </p>
             </div>
           </div>
-        </header>
+          
+          <div className="flex items-center gap-4">
+            <div className="hidden md:block font-retro text-sm text-muted-foreground" data-testid="text-last-updated">
+              Last Updated: {new Date(stats.lastUpdateDate).toLocaleDateString()}
+            </div>
+            <ThemeToggle />
+          </div>
+        </div>
+      </header>
 
-        <main className="container mx-auto px-4 py-6 md:py-8 space-y-6">
+      {/* Main content with proper top padding to account for fixed header */}
+      <main className="relative z-10 pt-20 pb-6">
+        <div className="container mx-auto px-4 py-20 md:py-8 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             <StatCard
               icon={Clock}
@@ -90,8 +93,8 @@ export default function Dashboard() {
               Last Updated: {new Date(stats.lastUpdateDate).toLocaleDateString()}
             </p>
           </footer>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
