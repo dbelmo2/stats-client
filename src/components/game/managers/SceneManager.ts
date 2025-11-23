@@ -657,17 +657,6 @@ export class SceneManager {
         }
     }
     
-    /**
-     * Resize scene elements when window resizes
-     */
-    public handleResize(newWidth: number, newHeight: number): void {
-        if (!this.isReady()) {
-            console.warn('SceneManager: handleResize called before initialization');
-            return;
-        }
-        
-    
-    }
     
     /**
      * Debug method to visualize scene bounds

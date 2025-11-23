@@ -258,8 +258,6 @@ export class Player extends Container {
   private resetJumpState(): void {
       this.canDoubleJump = true;
       this.velocity.y = 0;
-      this.isJumping = false;
-      this.indexPostJump = 0;
       this.isOnSurface = true;
   }
 
@@ -274,7 +272,6 @@ export class Player extends Container {
         this.velocity.y = inputVector.y * this.JUMP_STRENGTH;
         this.canDoubleJump = true; // Enable double jump
         this.isOnSurface = false;
-        this.isJumping = true;
         AudioManager.getInstance().play('jump');
     } else if (this.canDoubleJump) {
         // Double jump in air
