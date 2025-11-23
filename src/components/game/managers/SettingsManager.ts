@@ -596,7 +596,6 @@ export class SettingsManager {
                 modalContainer.style.transition = `opacity ${SETTINGS_CONSTANTS.UI.ANIMATION_DURATION}ms ease`;
                 modalContainer.style.opacity = '0';
                 this.saveSettings();
-                console.log('Settings saved: ', this.settings);
                 setTimeout(() => {
                     this.closeSettingsModal();
                 }, SETTINGS_CONSTANTS.UI.ANIMATION_DURATION);
@@ -1008,9 +1007,7 @@ export class SettingsManager {
 
             // Clear singleton instance
             SettingsManager.instance = null;
-            
-            console.log('SettingsManager destroyed successfully');
-            
+                        
         } catch (error) {
             ErrorHandler.getInstance().handleError(
                 error as Error,
@@ -1045,10 +1042,7 @@ export class SettingsManager {
             
             // Update internal settings reference
             this.settings = validatedSettings;
-            
-            // Log successful save for debugging
-            console.log('Settings saved successfully:', validatedSettings);
-            
+                        
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             

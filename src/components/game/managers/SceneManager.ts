@@ -666,11 +666,7 @@ export class SceneManager {
             return;
         }
         
-        console.log(`Scene resized to: ${newWidth}x${newHeight}`);
-        
-        // Update config if needed
-        // this.config!.GAME_WIDTH = newWidth;
-        // this.config!.GAME_HEIGHT = newHeight;
+    
     }
     
     /**
@@ -714,7 +710,6 @@ export class SceneManager {
      */
     public destroy(): void {
         try {
-            console.log('SceneManager: Destroying instance...');
             
             // First cleanup all resources
             this.cleanup();
@@ -722,7 +717,6 @@ export class SceneManager {
             // Reset static instance
             SceneManager.instance = undefined as any;
             
-            console.log('SceneManager: Instance destroyed');
         } catch (error) {
             ErrorHandler.getInstance().handleError(
                 error as Error,

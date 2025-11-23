@@ -125,14 +125,12 @@ export class NetworkManager {
         }
 
         this.socket.once('matchFound', (matchData: MatchData) => {
-          console.log('Match found:', matchData);
           resolve(matchData);
         });
       });
     }
 
     private handleConnectionLost = (reason: string, playerName: string, playerRegion: string) => {
-        console.log('Inside handleConnectionLost from NetworkManager');  
         if (!this.socket) {
             console.error('NetworkManager not initialized');
             return;
@@ -148,7 +146,6 @@ export class NetworkManager {
     }
 
     private handleReconnection = async (playerName: string, playerRegion: string) => {
-      console.log('Inside handleReconnection from NetworkManager');
         if (!this.socket) {
             console.error('NetworkManager not initialized');
             return;
@@ -283,12 +280,7 @@ export class NetworkManager {
         this.smoothedJitter = lerp(this.smoothedJitter, rttDelta, 0.1);
         
 
-        //console.log(`[NetworkManager] Ping: ${this.currentPing} ms, Smoothed Ping: ${Math.round(this.smoothedPing)} ms, Smoothed Jitter: ${Math.round(this.smoothedJitter)} ms`);
-
-
         const newServerTimeOffset = serverTime - (performance.now() + this.getOneWayDelay());
-        //console.log('newServerTimeOffset:', newServerTimeOffset);
-        //console.log('calculated by :', serverTime, '-', (performance.now() + this.getOneWayDelay()));
         this.serverTimeOffset = newServerTimeOffset;
     }
 
@@ -405,7 +397,6 @@ export class NetworkManager {
 
     private async handleSuccessfulRejoin() {
       try {
-          console.log('Successfully rejoined the match after reconnection, closing modal');
           ModalManager.getInstance().closeModal();
       } catch (error) {
           ErrorHandler.getInstance().handleError(

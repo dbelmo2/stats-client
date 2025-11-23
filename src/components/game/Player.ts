@@ -199,9 +199,6 @@ export class Player extends Container {
 
   
 
-  private isJumping = false;
-  private indexPostJump = 0
-
 
   update(inputVector: InputVector, dt: number): void {
 
@@ -236,10 +233,6 @@ export class Player extends Container {
           this.resetJumpState();
       }
 
-      if (this.isJumping && inputVector.y === 0 && inputVector.x === 0) {
-        this.indexPostJump++;
-        //console.log(`${isResimulating ? 'RES: ' : ''}Player coordinates ${this.indexPostJump} ticks after jump: ${this.x}, ${this.y}. Vy=${this.velocity.y}. local tick: ${localTick}`);
-      }
 
       // Check platform collisions
       const { isOnPlatform, platformTop } = this.checkPlatformCollisions();            
@@ -339,7 +332,6 @@ export class Player extends Container {
       // NOTE: this will likely break if health regen is introduced
   
       if (updatedServerHealth < this.predictedHealth) {
-        console.log(`Setting predictedHealth to serverHealth: ${this.serverHealth} in setHealth()`);
           this.predictedHealth = updatedServerHealth;
       }
       this.updateHealthBar();
@@ -356,7 +348,6 @@ export class Player extends Container {
   damage(amount: number = 10) {
     
     if (this.isBystander) return; // Do not apply damage to bystanders
-    console.log(`Setting predictedHealth to ${Math.max(0, this.predictedHealth - amount)} in damage()`);
     this.predictedHealth = Math.max(0, this.predictedHealth - amount);
     this.updateHealthBar();
 

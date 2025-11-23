@@ -270,7 +270,6 @@ export class GameManager {
         for (const playerData of this.network.latestServerSnapshot.players) {
             const update = state.players.find(p => p.id === playerData.id);
             if (!update) {
-                console.log("!!!!!!!!!player disconnected:", playerData.id);
                 continue;
             }
 
@@ -388,7 +387,6 @@ export class GameManager {
 
 
     private handleConnectionLost = (reason: string, _region: string) => {
-        console.log('inside handleConnectionLost from GameManager');
         if (reason === "io server disconnect") {
             this.cleanupSession();
         }
@@ -466,7 +464,6 @@ export class GameManager {
 
         for (const [id, collision] of pendingCollisions.entries()) {
             if (now - collision.timestamp > this.COLLISION_TIMEOUT) {
-                //console.log(`Reverting prediction for entity ${id} due to timeout.`);
                 // Get the affected entity (self or enemy)
                 if (this.player.sprite && id === this.player.id) {
                     this.player.sprite.revertPrediction();
@@ -775,7 +772,6 @@ export class GameManager {
         this.network.latestServerSnapshotProcessed = { ...this.network.latestServerSnapshot };
         const selfData = this.network.latestServerSnapshotProcessed.players.find(player => player.id === this.player.id);
         if (!selfData  || !this.player.sprite) {
-            console.warn('skipping reconciliation, no self data or player sprite');
             return;
         }
 
@@ -789,10 +785,8 @@ export class GameManager {
 
 
         if (tick >= this.gameState.localTick) {
-            //console.warn(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
             // Server has marched ahead of the client...
             // As a temporary fix, we will simply sync the clint position with the server position
-            //console.error(`Server tick ${tick} is ahead of client tick ${this.gameState.localTick}. Syncing client position.`);
             this.player.sprite.syncPosition(selfData.x, selfData.y, selfData.vx, selfData.vy);
             this.network.stateBuffer[serverStateBufferIndex] = { tick: tick, position: { x: selfData.x, y: selfData.y } };
             this.gameState.localTick = tick;
@@ -801,7 +795,6 @@ export class GameManager {
 
         // Temp fix for bug where this is undefined :()
         if (!clientPosition){
-            console.warn(`No client position found for buffer index ${serverStateBufferIndex} at tick ${tick}, cannot reconcile`);
             return;
         } 
 
@@ -816,7 +809,6 @@ export class GameManager {
                 const bufferIndex = tickToResimulate % this.BUFFER_SIZE;
                 const inputVector = this.network.inputBuffer[bufferIndex]?.vector;
                 if (!inputVector) {
-                    console.warn(`No input vector found for buffer index ${bufferIndex} at tick ${tickToResimulate}`);
                     tickToResimulate++;
                     continue; // No input to resimulate for this tick
                 }
@@ -966,10 +958,6 @@ export class GameManager {
     }
 
     private broadcastPlayerInput(inputPayload: InputPayload): void {
-        const hasShootingInput = inputPayload.vector.mouse !== undefined;
-        console.log(`Broadcasting player with shooting input: ${hasShootingInput}`)
-        if (hasShootingInput)
-            console.log(inputPayload);
         this.networkManager.emit('playerInput', inputPayload);
     }
 
@@ -996,7 +984,6 @@ export class GameManager {
             || !input.vector.mouse
             || (this.player.sprite.getIsInvulnerable() && this.player.sprite.getIsInvulnerable()) // Prevent shooting while invulnerable
         ) return;
-        console.log('handling shooting input');
         // Get projectile from pool instead of creating new one
         const projectile = this.entities.projectilePool.getElement();
 
@@ -1037,11 +1024,9 @@ export class GameManager {
                         
                         // Check if enemy is invulnerable
                         if (enemyGraphic.getIsInvulnerable && enemyGraphic.getIsInvulnerable()) {
-                            console.log(`Hit invulnerable enemy ${enemyId}, no damage dealt`);
                             // Just destroy projectile, no damage or server event
                             break;
                         }
-                        console.log('applying damage to enemy with predicted health', enemyGraphic.getPredictedHealth());
                         this.networkManager.emit('projectileHit', { enemyId, projectileId: projectile.getId() });
 
   

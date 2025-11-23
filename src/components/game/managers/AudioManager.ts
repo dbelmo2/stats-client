@@ -174,10 +174,8 @@ export class AudioManager {
 
     public async playRandomKillSound(): Promise<number | undefined> {
         try {
-            console.log('Playing random kill sound');
             const index = Math.floor(Math.random() * this.killSounds.length);
             const soundId = `kill${index+1}`;
-            console.log(`Attempting to play kill sound: ${soundId}`);
             
             if (!this.sounds.has(soundId)) {
                 console.error(`Kill sound ${soundId} not found in registered sounds`);
@@ -252,7 +250,6 @@ export class AudioManager {
             }
 
             if (sound.category === 'music' && settings.muteMusic) {
-                console.log("Music category is muted, cannot play sound.");
                 return undefined;
             }
 
@@ -380,7 +377,6 @@ export class AudioManager {
     public unmuteCategory(category: AudioCategory): void {
         this.categoryMutes[category] = false;
         this.applyVolumeSettings();
-        console.log(`Unmuted category: ${category}`);
         if (category === 'music') {
             this.play('theme');
         }
@@ -573,7 +569,6 @@ export class AudioManager {
     private applyMuteSettings(): void {
         const settings  = this.settingsManager.getSettings();
         if (settings.muteAll) {
-            console.log("Applying global mute settings.");
             this.muteAll();
         }
         if (settings.muteMusic) {

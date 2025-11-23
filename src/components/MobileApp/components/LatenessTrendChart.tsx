@@ -8,7 +8,6 @@ interface LatenessTrendChartProps {
 }
 
 export function LatenessTrendChart({ livestreams }: LatenessTrendChartProps) {
-  console.log('LatenessTrendChart livestreams:', livestreams);
   const chartData = livestreams
     .slice()
     .reverse()

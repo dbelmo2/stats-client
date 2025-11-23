@@ -52,7 +52,6 @@ export class DevModeManager {
      * Handle dev mode toggle from settings
      */
     private handleDevModeChange(enabled: boolean): void {
-        console.log(`Dev mode ${enabled ? 'enabled' : 'disabled'}`);
         this.isDevModeActive = enabled;
         
         if (enabled) {
