@@ -127,7 +127,7 @@ export function VoteResults() {
                   setSortField(event.target.value as SortField);
                   setPage(0);
                 }}
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 font-retro text-sm"
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 font-retro text-md"
                 data-testid="select-sort-field"
               >
                 <option value="proximityScore">Off By (Proximity)</option>
@@ -143,7 +143,7 @@ export function VoteResults() {
                   setSortDirection(event.target.value as SortDirection);
                   setPage(0);
                 }}
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 font-retro text-sm"
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 font-retro text-md"
                 data-testid="select-sort-direction"
               >
                 <option value="asc">ASC</option>
@@ -159,7 +159,7 @@ export function VoteResults() {
                   setPageSize(Number(event.target.value));
                   setPage(0);
                 }}
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 font-retro text-sm"
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 font-retro text-md"
                 data-testid="select-page-size"
               >
                 <option value={10}>10</option>
@@ -191,7 +191,7 @@ export function VoteResults() {
               </p>
             )}
             {latestActualResult !== undefined && (
-              <p className="font-retro text-sm text-muted-foreground mt-2">
+              <p className="font-retro text-md text-muted-foreground mt-2">
                 Actual Result: {formatVoteGuess(latestActualResult)}
               </p>
             )}
@@ -199,7 +199,7 @@ export function VoteResults() {
 
           {leaderboardFetching && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-card/70 backdrop-blur-[1px]">
-              <div className="font-retro text-sm text-muted-foreground animate-pulse" data-testid="table-loading-overlay">
+              <div className="font-retro text-md text-muted-foreground animate-pulse" data-testid="table-loading-overlay">
                 Loading vote results...
               </div>
             </div>
@@ -207,17 +207,17 @@ export function VoteResults() {
 
           <div className="overflow-x-auto">
             {leaderboardPending && !leaderboardPage ? (
-              <div className="p-8 text-center font-retro text-sm text-muted-foreground">
+              <div className="p-8 text-center font-retro text-md text-muted-foreground">
                 Loading vote results...
               </div>
             ) : leaderboardErrorMessage ? (
               <div className="p-8 text-center">
-                <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 font-retro text-sm text-destructive">
+                <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 font-retro text-md text-destructive">
                   {leaderboardErrorMessage}
                 </div>
               </div>
             ) : rows.length === 0 ? (
-              <div className="p-8 text-center font-retro text-sm text-muted-foreground">
+              <div className="p-8 text-center font-retro text-md text-muted-foreground">
                 No vote results yet — check back after the next stream!
               </div>
             ) : (
@@ -237,8 +237,8 @@ export function VoteResults() {
 
                     return (
                       <tr key={`${entry.userName}-${index}`} className="border-b border-border/30 hover:bg-muted/10 transition-colors">
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-sm text-foreground/70">{page * pageSize + index + 1}</td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-sm text-foreground/90 break-all">
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-md text-foreground/70">{page * pageSize + index + 1}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-md text-foreground/90 break-all">
                           <span className="inline-flex items-center gap-2">
                             <span>{entry.userName}</span>
                             {topRank && (
@@ -249,8 +249,8 @@ export function VoteResults() {
                             )}
                           </span>
                         </td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-sm text-foreground/90 whitespace-nowrap">{formatVoteGuess(entry.userGuess)}</td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-sm text-foreground/90 whitespace-nowrap">{formatVoteGuess(entry.proximityScore, true)}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-md text-foreground/90 whitespace-nowrap">{formatVoteGuess(entry.userGuess)}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-md text-foreground/90 whitespace-nowrap">{formatVoteGuess(entry.proximityScore, true)}</td>
                       </tr>
                     );
                   })}
@@ -264,7 +264,7 @@ export function VoteResults() {
       {/* Pagination */}
       {rows.length > 0 && (
         <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-          <p className="font-retro text-sm text-muted-foreground" data-testid="text-table-summary">
+          <p className="font-retro text-md text-muted-foreground" data-testid="text-table-summary">
             Showing {rows.length} of {totalElements} votes
           </p>
 
@@ -278,7 +278,7 @@ export function VoteResults() {
               Previous
             </Button>
 
-            <span className="font-retro text-sm text-foreground/90" data-testid="text-page-indicator">
+            <span className="font-retro text-md text-foreground/90" data-testid="text-page-indicator">
               Page {currentPage} of {totalPages}
             </span>
 

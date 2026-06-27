@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ArrowLeft, Film, Trophy, Zap } from "lucide-react";
-import { ThemeToggle } from "../components/ThemeToggle";
+import { Film, Trophy, Zap } from "lucide-react";
 import { LoadingScreen } from "../components/LoadingScreen";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -14,7 +13,8 @@ import type { PaginatedResponse } from "../shared/schema";
 import { apiRequest } from "../lib/queryClient";
 import { useVoterToken, getStoredSubmitterName } from "../hooks/useVoterToken";
 import { config } from "../../game/utils/config";
-import Logo from "../../game/images/l3l3.png";
+import { pauseForVideo, resumeAfterVideo } from "../lib/dashboardAudio";
+
 
 const PAGE_SIZE = 4;
 
@@ -44,6 +44,23 @@ export default function ContestPage() {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [pendingClipId, setPendingClipId] = useState<number | null>(null);
   const [voteError, setVoteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (!event.origin.includes('youtube.com')) return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data?.event !== 'onStateChange') return;
+        if (data.info === 1) {
+          pauseForVideo();
+        } else if (data.info === 0 || data.info === 2) {
+          resumeAfterVideo();
+        }
+      } catch {}
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   // Fetch active contest — 404 → null (no contest)
   const { data: contest, isLoading: contestLoading } = useQuery<Contest | null>({
@@ -133,36 +150,7 @@ export default function ContestPage() {
   const isVoting = voteMutation.isPending || unvoteMutation.isPending;
 
   return (
-    <div className="min-h-screen bg-background relative">
-      {/* Background */}
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,hsl(var(--border))_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-[0.15] pointer-events-none z-0" />
-      <div className="fixed inset-0 opacity-[0.03] pointer-events-none z-0">
-        <div className="w-full h-1 bg-foreground/50 animate-scanline" />
-      </div>
-
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 border-b-2 border-primary/40 bg-card/90 backdrop-blur-md shadow-lg shadow-primary/10 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setLocation("/dashboard")}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <img src={Logo} alt="L3L3 Logo" className="w-12 h-12 md:w-16 md:h-16" />
-            <div className="min-w-0">
-              <h1 className="font-pixel text-lg md:text-2xl text-primary truncate drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]">
-                CLIP CONTEST
-              </h1>
-            </div>
-          </div>
-          <ThemeToggle />
-        </div>
-      </header>
-
-      {/* Main */}
+    <>
       <main className="relative z-10 pt-24 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-8">
         <div className="container mx-auto px-4 space-y-6 pt-4 md:pt-0">
 
@@ -206,7 +194,7 @@ export default function ContestPage() {
                           {contest.type === "WEEKLY" ? "Weekly" : "Monthly"} Contest
                         </span>
                       </div>
-                      <p className="font-retro text-sm text-muted-foreground">
+                      <p className="font-retro text-md text-muted-foreground">
                         {formatContestDate(contest.startDate)} — {formatContestDate(contest.endDate)}
                       </p>
                     </div>
@@ -246,7 +234,7 @@ export default function ContestPage() {
                         <Zap className="w-4 h-4 text-accent" />
                       </div>
                       <div>
-                        <div className="font-pixel text-sm text-accent">
+                        <div className="font-pixel text-md text-accent">
                           {votesRemaining}{" "}
                           {votesRemaining === 1 ? "VOTE" : "VOTES"} REMAINING
                         </div>
@@ -271,7 +259,7 @@ export default function ContestPage() {
 
               {/* Vote error */}
               {voteError && (
-                <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 font-retro text-sm text-destructive">
+                <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 font-retro text-md text-destructive">
                   {voteError}
                 </p>
               )}
@@ -283,7 +271,7 @@ export default function ContestPage() {
                     TOP CLIPS
                   </h2>
                   {totalClips > 0 && (
-                    <span className="font-retro text-sm text-muted-foreground">
+                    <span className="font-retro text-md text-muted-foreground">
                       {totalClips} submission{totalClips !== 1 ? "s" : ""}
                     </span>
                   )}
@@ -303,8 +291,8 @@ export default function ContestPage() {
                     <div className="p-4 rounded-full bg-muted/30 border border-border">
                       <Film className="w-10 h-10 text-muted-foreground/40" />
                     </div>
-                    <p className="font-pixel text-sm text-muted-foreground">NO CLIPS YET</p>
-                    <p className="font-retro text-sm text-muted-foreground">
+                    <p className="font-pixel text-md text-muted-foreground">NO CLIPS YET</p>
+                    <p className="font-retro text-md text-muted-foreground">
                       Be the first to submit a clip!
                     </p>
                     <Button
@@ -346,7 +334,7 @@ export default function ContestPage() {
                     >
                       ← Prev
                     </Button>
-                    <span className="font-retro text-sm text-muted-foreground">
+                    <span className="font-retro text-md text-muted-foreground">
                       {page + 1} / {totalPages}
                     </span>
                     <Button
@@ -365,9 +353,8 @@ export default function ContestPage() {
           )}
 
           {/* Footer */}
-          <footer className="text-center font-retro text-sm text-muted-foreground py-4">
+          <footer className="text-center font-retro text-base text-muted-foreground py-4">
             <p>Submit your favorite moments from this week's streams</p>
-            <p className="text-xs mt-1">This is a fan made website and is not associated with the H3 Podcast</p>
           </footer>
         </div>
       </main>
@@ -386,6 +373,6 @@ export default function ContestPage() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }

@@ -25,6 +25,9 @@ export default {
           foreground: "hsl(var(--card-foreground) / <alpha-value>)",
           border: "hsl(var(--card-border) / <alpha-value>)",
         },
+        footer: {
+          DEFAULT: "var(--footer)",
+        },
         popover: {
           DEFAULT: "hsl(var(--popover) / <alpha-value>)",
           foreground: "hsl(var(--popover-foreground) / <alpha-value>)",

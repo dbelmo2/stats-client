@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Pause, Play, Square } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,8 @@ import type { LivestreamRecord } from "../../shared/schema";
 import { apiRequest } from "../../lib/queryClient";
 import { saveSubmitterName } from "../../hooks/useVoterToken";
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
 function parseNonNegativeInt(val: string): number {
   const n = parseInt(val, 10);
   return Number.isFinite(n) && n >= 0 ? n : 0;
@@ -23,6 +25,19 @@ function parseNonNegativeInt(val: string): number {
 
 function hmsToSeconds(h: string, m: string, s: string): number {
   return parseNonNegativeInt(h) * 3600 + parseNonNegativeInt(m) * 60 + parseNonNegativeInt(s);
+}
+
+function secondsToHMS(total: number): [string, string, string] {
+  const t = Math.max(0, Math.floor(total));
+  return [String(Math.floor(t / 3600)), String(Math.floor((t % 3600) / 60)), String(t % 60)];
+}
+
+function formatTimestamp(s: number): string {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
 function getReadableError(error: unknown): string {
@@ -34,6 +49,95 @@ function getReadableError(error: unknown): string {
   return "Unable to submit clip. Please try again.";
 }
 
+// ── Dual-handle range slider ───────────────────────────────────────────────────
+
+interface DualRangeSliderProps {
+  min: number;
+  max: number;
+  start: number;
+  end: number;
+  valid: boolean;
+  onStartChange: (v: number) => void;
+  onEndChange: (v: number) => void;
+}
+
+function DualRangeSlider({ min, max, start, end, valid, onStartChange, onEndChange }: DualRangeSliderProps) {
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  function toPercent(v: number) {
+    if (max <= min) return 0;
+    return ((Math.max(min, Math.min(max, v)) - min) / (max - min)) * 100;
+  }
+
+  function clientXToValue(clientX: number): number {
+    if (!trackRef.current) return min;
+    const rect = trackRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(min + ratio * (max - min));
+  }
+
+  function makeThumbHandlers(onChange: (v: number) => void) {
+    return {
+      onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.stopPropagation();
+      },
+      onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+        onChange(clientXToValue(e.clientX));
+      },
+      onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      },
+    };
+  }
+
+  // Clicking on the track itself moves the nearest thumb
+  function onTrackClick(e: React.MouseEvent<HTMLDivElement>) {
+    const v = clientXToValue(e.clientX);
+    if (Math.abs(v - start) <= Math.abs(v - end)) onStartChange(v);
+    else onEndChange(v);
+  }
+
+  const startPct = toPercent(start);
+  const endPct = toPercent(end);
+  const fillLeft = Math.min(startPct, endPct);
+  const fillWidth = Math.abs(endPct - startPct);
+
+  return (
+    <div className="relative py-2 select-none">
+      {/* Clickable track area */}
+      <div
+        ref={trackRef}
+        className="relative h-2 rounded-full bg-muted cursor-pointer"
+        onClick={onTrackClick}
+      >
+        {/* Filled region */}
+        <div
+          className={`absolute h-2 rounded-full transition-colors ${valid ? "bg-primary" : "bg-destructive/70"}`}
+          style={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
+        />
+      </div>
+
+      {/* Start thumb */}
+      <div
+        className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-primary border-2 border-background shadow-md cursor-grab active:cursor-grabbing touch-none z-10"
+        style={{ left: `calc(${startPct}% - 10px)` }}
+        {...makeThumbHandlers(onStartChange)}
+      />
+
+      {/* End thumb */}
+      <div
+        className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-primary border-2 border-background shadow-md cursor-grab active:cursor-grabbing touch-none z-20"
+        style={{ left: `calc(${endPct}% - 10px)` }}
+        {...makeThumbHandlers(onEndChange)}
+      />
+    </div>
+  );
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────────────
+
 interface SubmitClipModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,6 +146,8 @@ interface SubmitClipModalProps {
   initialSubmitterName: string;
   onSuccess: () => void;
 }
+
+const FALLBACK_DURATION = 14400;
 
 export function SubmitClipModal({
   open,
@@ -62,10 +168,30 @@ export function SubmitClipModal({
   const [description, setDescription] = useState("");
   const [submitterName, setSubmitterName] = useState(initialSubmitterName);
   const [formError, setFormError] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
 
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Derived ────────────────────────────────────────────────────────────────
   const startSeconds = hmsToSeconds(startH, startM, startS);
   const endSeconds = hmsToSeconds(endH, endM, endS);
+  const clipDuration = endSeconds - startSeconds;
+  const sliderMax = videoDuration > 0 ? videoDuration : FALLBACK_DURATION;
 
+  const startExceedsVideo = videoDuration > 0 && startSeconds > videoDuration;
+  const endExceedsVideo = videoDuration > 0 && endSeconds > videoDuration;
+  const isTimestampValid =
+    endSeconds > startSeconds &&
+    clipDuration >= 5 &&
+    clipDuration <= contest.maxClipDurationSeconds &&
+    !startExceedsVideo &&
+    !endExceedsVideo;
+
+  // ── Data ───────────────────────────────────────────────────────────────────
   const { data: eligibleStreams, isLoading: streamsLoading } = useQuery<LivestreamRecord[]>({
     queryKey: ["eligible-streams", contest.id],
     queryFn: () =>
@@ -91,11 +217,159 @@ export function SubmitClipModal({
       onSuccess();
       handleClose();
     },
-    onError: (err) => {
-      setFormError(getReadableError(err));
-    },
+    onError: (err) => setFormError(getReadableError(err)),
   });
 
+  // ── YouTube message listener ───────────────────────────────────────────────
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (!e.origin.includes("youtube.com")) return;
+      try {
+        const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+        if (data?.info?.duration && data.info.duration > 0) {
+          setVideoDuration(Math.floor(data.info.duration));
+        }
+        // Sync isPlaying if video pauses/ends on its own
+        const ps = data?.info?.playerState;
+        if (ps === 2 || ps === 0) {
+          if (previewTimerRef.current) {
+            clearTimeout(previewTimerRef.current);
+            previewTimerRef.current = null;
+          }
+          setIsPreviewing(false);
+          setIsPlaying(false);
+        }
+      } catch {}
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  // Reset when stream changes
+  useEffect(() => {
+    setVideoDuration(0);
+    setStartH("0"); setStartM("0"); setStartS("0");
+    setEndH("0"); setEndM("0"); setEndS("0");
+    clearPreviewTimer();
+    setIsPreviewing(false);
+    setIsPlaying(false);
+  }, [selectedVideoId]);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function postToPlayer(func: string, args: unknown[] = []) {
+    iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: "command", func, args }),
+      "https://www.youtube.com"
+    );
+  }
+
+  function clearPreviewTimer() {
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+  }
+
+  function onIframeLoad() {
+    iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: "listening" }),
+      "https://www.youtube.com"
+    );
+  }
+
+  // ── Playback controls ──────────────────────────────────────────────────────
+  function handlePlayPause() {
+    clearPreviewTimer();
+    setIsPreviewing(false);
+    if (isPlaying) {
+      postToPlayer("pauseVideo");
+      setIsPlaying(false);
+    } else {
+      postToPlayer("playVideo");
+      setIsPlaying(true);
+    }
+  }
+
+  function handlePreviewClip() {
+    clearPreviewTimer();
+    postToPlayer("seekTo", [startSeconds, true]);
+    setTimeout(() => postToPlayer("playVideo"), 300);
+    setIsPreviewing(true);
+    setIsPlaying(true);
+    previewTimerRef.current = setTimeout(() => {
+      postToPlayer("pauseVideo");
+      setIsPreviewing(false);
+      setIsPlaying(false);
+    }, clipDuration * 1000 + 400);
+  }
+
+  function handleStopPreview() {
+    clearPreviewTimer();
+    postToPlayer("pauseVideo");
+    setIsPreviewing(false);
+    setIsPlaying(false);
+  }
+
+  // ── Nudge start / end timestamp (buttons in transport bar) ────────────────
+  function adjustStart(delta: number) {
+    const newVal = Math.max(0, Math.min(sliderMax, startSeconds + delta));
+    const [h, m, s] = secondsToHMS(newVal);
+    setStartH(h); setStartM(m); setStartS(s);
+    clearPreviewTimer();
+    setIsPreviewing(false);
+    postToPlayer("seekTo", [newVal, true]);
+  }
+
+  function adjustEnd(delta: number) {
+    const newVal = Math.max(0, Math.min(sliderMax, endSeconds + delta));
+    const [h, m, s] = secondsToHMS(newVal);
+    setEndH(h); setEndM(m); setEndS(s);
+    clearPreviewTimer();
+    setIsPreviewing(false);
+    postToPlayer("seekTo", [newVal, true]);
+  }
+
+  // ── Slider change handlers ─────────────────────────────────────────────────
+  function handleStartChange(value: number) {
+    const [h, m, s] = secondsToHMS(value);
+    setStartH(h); setStartM(m); setStartS(s);
+    clearPreviewTimer();
+    setIsPreviewing(false);
+    setIsPlaying(false);
+    postToPlayer("seekTo", [value, true]);
+    postToPlayer("pauseVideo");
+  }
+
+  function handleEndChange(value: number) {
+    const [h, m, s] = secondsToHMS(value);
+    setEndH(h); setEndM(m); setEndS(s);
+    clearPreviewTimer();
+    setIsPreviewing(false);
+    setIsPlaying(false);
+    postToPlayer("seekTo", [value, true]);
+    postToPlayer("pauseVideo");
+  }
+
+  // ── Manual text field blur → seek ─────────────────────────────────────────
+  function seekStart(h: string, m: string, s: string) {
+    if (!selectedVideoId) return;
+    clearPreviewTimer();
+    setIsPreviewing(false);
+    setIsPlaying(false);
+    postToPlayer("seekTo", [hmsToSeconds(h, m, s), true]);
+    postToPlayer("pauseVideo");
+  }
+
+  function seekEnd(h: string, m: string, s: string) {
+    if (!selectedVideoId) return;
+    clearPreviewTimer();
+    setIsPreviewing(false);
+    setIsPlaying(false);
+    postToPlayer("seekTo", [hmsToSeconds(h, m, s), true]);
+    postToPlayer("pauseVideo");
+  }
+
+  // ── Dialog lifecycle ───────────────────────────────────────────────────────
   function handleClose() {
     onOpenChange(false);
     setSelectedVideoId("");
@@ -104,73 +378,54 @@ export function SubmitClipModal({
     setTitle("");
     setDescription("");
     setFormError(null);
+    setVideoDuration(0);
+    setManualEntryOpen(false);
+    clearPreviewTimer();
+    setIsPreviewing(false);
+    setIsPlaying(false);
     submitMutation.reset();
   }
 
   function handleSubmit() {
     setFormError(null);
-
-    if (!selectedVideoId) {
-      setFormError("Please select a stream to clip.");
-      return;
-    }
-    if (!submitterName.trim()) {
-      setFormError("Please enter your display name.");
-      return;
-    }
-    if (!title.trim()) {
-      setFormError("Please enter a title for your clip.");
-      return;
-    }
-    if (endSeconds <= startSeconds) {
-      setFormError("End time must be after start time.");
-      return;
-    }
-
-    const duration = endSeconds - startSeconds;
-    if (duration < 5) {
-      setFormError("Clip must be at least 5 seconds long.");
-      return;
-    }
-    if (duration > contest.maxClipDurationSeconds) {
-      setFormError(`Clip cannot be longer than ${contest.maxClipDurationSeconds} seconds.`);
-      return;
-    }
-
+    if (!selectedVideoId) { setFormError("Please select a stream to clip."); return; }
+    if (!submitterName.trim()) { setFormError("Please enter your display name."); return; }
+    if (!title.trim()) { setFormError("Please enter a title for your clip."); return; }
+    if (!isTimestampValid) { setFormError("Please set a valid clip range."); return; }
     submitMutation.mutate();
   }
 
-  const previewYouTubeUrl = selectedVideoId
-    ? `https://www.youtube.com/watch?v=${selectedVideoId}&t=${startSeconds}`
-    : null;
-
+  // ── Styles ─────────────────────────────────────────────────────────────────
   const inputClass =
-    "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-retro placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+    "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-md font-retro placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-  const hmsInputClass =
-    "w-16 h-10 rounded-md border border-input bg-background px-2 py-2 text-sm font-retro text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const hmsBase =
+    "w-16 h-10 rounded-md border px-2 py-2 text-md font-retro text-center bg-background focus-visible:outline-none focus-visible:ring-2";
+  const hmsOk = `${hmsBase} border-input focus-visible:ring-ring`;
+  const hmsErr = `${hmsBase} border-destructive text-destructive focus-visible:ring-destructive`;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="font-pixel text-primary text-sm">SUBMIT A CLIP</DialogTitle>
-          <DialogDescription className="font-retro text-xs text-muted-foreground">
-            Select a moment from this week's streams. Max {contest.maxClipDurationSeconds}s per clip, up to {contest.maxSubmissionsPerUser} clips total.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="w-full max-w-[90vw] sm:max-w-xl lg:max-w-[min(50vw,860px)] h-[88vh] flex flex-col gap-0 p-0 overflow-hidden">
 
-        <div className="space-y-5 py-2">
-          {/* Stream selector */}
-          <div className="space-y-1.5">
-            <Label className="font-retro text-xs uppercase text-muted-foreground">Stream</Label>
+        {/* Fixed header */}
+        <div className="px-6 pt-6 pb-4 border-b border-border/40 shrink-0">
+          <DialogHeader>
+            <DialogTitle className="font-pixel text-primary text-md">SUBMIT A CLIP</DialogTitle>
+            <DialogDescription className="font-retro text-md text-muted-foreground">
+              Select a moment from this week's streams. Max {contest.maxClipDurationSeconds}s per clip, up to {contest.maxSubmissionsPerUser} submissions.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-1.5 mt-4">
+            <Label className="font-retro text-md uppercase text-muted-foreground">Stream</Label>
             {streamsLoading ? (
               <div className="flex items-center gap-2 h-10 px-3 border border-input rounded-md">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                <span className="font-retro text-sm text-muted-foreground">Loading streams...</span>
+                <span className="font-retro text-md text-muted-foreground">Loading streams...</span>
               </div>
             ) : !eligibleStreams?.length ? (
-              <p className="font-retro text-sm text-muted-foreground px-3 py-2 border border-input rounded-md">
+              <p className="font-retro text-md text-muted-foreground px-3 py-2 border border-input rounded-md">
                 No streams available for this contest period.
               </p>
             ) : (
@@ -183,183 +438,283 @@ export function SubmitClipModal({
                 {eligibleStreams.map((s) => (
                   <option key={s.videoId} value={s.videoId}>
                     {s.title}
-                    {s.actualStart
-                      ? ` — ${new Date(s.actualStart).toLocaleDateString()}`
-                      : ""}
+                    {s.actualStart ? ` — ${new Date(s.actualStart).toLocaleDateString()}` : ""}
                   </option>
                 ))}
               </select>
             )}
           </div>
-
-          {/* Timestamps */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="font-retro text-xs uppercase text-muted-foreground">Start Time</Label>
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  min="0"
-                  value={startH}
-                  onChange={(e) => setStartH(e.target.value)}
-                  className={hmsInputClass}
-                  placeholder="0"
-                />
-                <span className="font-retro text-xs text-muted-foreground">h</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={startM}
-                  onChange={(e) => setStartM(e.target.value)}
-                  className={hmsInputClass}
-                  placeholder="0"
-                />
-                <span className="font-retro text-xs text-muted-foreground">m</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={startS}
-                  onChange={(e) => setStartS(e.target.value)}
-                  className={hmsInputClass}
-                  placeholder="0"
-                />
-                <span className="font-retro text-xs text-muted-foreground">s</span>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="font-retro text-xs uppercase text-muted-foreground">End Time</Label>
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  min="0"
-                  value={endH}
-                  onChange={(e) => setEndH(e.target.value)}
-                  className={hmsInputClass}
-                  placeholder="0"
-                />
-                <span className="font-retro text-xs text-muted-foreground">h</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={endM}
-                  onChange={(e) => setEndM(e.target.value)}
-                  className={hmsInputClass}
-                  placeholder="0"
-                />
-                <span className="font-retro text-xs text-muted-foreground">m</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={endS}
-                  onChange={(e) => setEndS(e.target.value)}
-                  className={hmsInputClass}
-                  placeholder="0"
-                />
-                <span className="font-retro text-xs text-muted-foreground">s</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Preview link */}
-          {previewYouTubeUrl && endSeconds > startSeconds && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="font-retro text-xs uppercase w-full"
-              onClick={() => window.open(previewYouTubeUrl, "_blank", "noopener,noreferrer")}
-            >
-              <ExternalLink className="w-3 h-3 mr-2" />
-              Preview on YouTube at {startSeconds}s
-            </Button>
-          )}
-
-          {/* Title */}
-          <div className="space-y-1.5">
-            <Label className="font-retro text-xs uppercase text-muted-foreground">
-              Title <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Why is this the best moment?"
-              maxLength={120}
-              className="font-retro"
-            />
-            <p className="font-retro text-xs text-muted-foreground text-right">
-              {title.length}/120
-            </p>
-          </div>
-
-          {/* Description */}
-          <div className="space-y-1.5">
-            <Label className="font-retro text-xs uppercase text-muted-foreground">
-              Description <span className="text-muted-foreground/50">(optional)</span>
-            </Label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add some context..."
-              rows={2}
-              maxLength={280}
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-retro placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-            />
-          </div>
-
-          {/* Display name */}
-          <div className="space-y-1.5">
-            <Label className="font-retro text-xs uppercase text-muted-foreground">
-              Your Name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              value={submitterName}
-              onChange={(e) => setSubmitterName(e.target.value)}
-              placeholder="What should we call you?"
-              maxLength={40}
-              className="font-retro"
-            />
-            <p className="font-retro text-xs text-muted-foreground">
-              Displayed on leaderboard and winners list.
-            </p>
-          </div>
-
-          {/* Error */}
-          {formError && (
-            <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 font-retro text-sm text-destructive">
-              {formError}
-            </p>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-1">
-            <Button
-              variant="outline"
-              className="font-retro uppercase flex-1"
-              onClick={handleClose}
-              disabled={submitMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="font-retro uppercase flex-1"
-              onClick={handleSubmit}
-              disabled={submitMutation.isPending}
-            >
-              {submitMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                "Submit Clip"
-              )}
-            </Button>
-          </div>
         </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5">
+          {!selectedVideoId ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="font-retro text-lg text-muted-foreground/50 text-center">
+                Select a recent stream to get started
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+
+              {/* 16:9 embed */}
+              <div
+                className="relative w-full rounded-md overflow-hidden border border-border/50"
+                style={{ paddingBottom: "56.25%" }}
+              >
+                <iframe
+                  ref={iframeRef}
+                  className="absolute inset-0 w-full h-full"
+                  src={`https://www.youtube.com/embed/${selectedVideoId}?enablejsapi=1&autoplay=0&controls=0&disablekb=1&iv_load_policy=3&rel=0`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  onLoad={onIframeLoad}
+                  title="Stream preview"
+                />
+              </div>
+
+              {/* Transport bar — [S−15] [S−5] [▶/⏸] [E+5] [E+15] */}
+              <div className="space-y-1">
+                <div className="flex justify-between px-0.5">
+                  <span className="font-retro text-md text-muted-foreground/60">Start</span>
+                  <span className="font-retro text-md text-muted-foreground/60">End</span>
+                </div>
+                <div className="flex gap-1 items-center">
+                  <Button variant="outline" className="flex-1 font-retro text-md h-10 px-1" onClick={() => adjustStart(-15)}>−15s</Button>
+                  <Button variant="outline" className="flex-1 font-retro text-md h-10 px-1" onClick={() => adjustStart(-5)}>−5s</Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0 h-10 w-12 mx-1"
+                    onClick={handlePlayPause}
+                    title={isPlaying ? "Pause" : "Play"}
+                  >
+                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  </Button>
+                  <Button variant="outline" className="flex-1 font-retro text-md h-10 px-1" onClick={() => adjustEnd(5)}>+5s</Button>
+                  <Button variant="outline" className="flex-1 font-retro text-md h-10 px-1" onClick={() => adjustEnd(15)}>+15s</Button>
+                </div>
+              </div>
+
+              {/* Dual-handle range slider */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-retro text-md text-muted-foreground">
+                    Start: <span className="text-primary tabular-nums">{formatTimestamp(startSeconds)}</span>
+                  </span>
+                  <span className="font-retro text-md text-muted-foreground">
+                    End: <span className="text-primary tabular-nums">{formatTimestamp(endSeconds)}</span>
+                  </span>
+                </div>
+                <DualRangeSlider
+                  min={0}
+                  max={sliderMax}
+                  start={startSeconds}
+                  end={endSeconds}
+                  valid={isTimestampValid}
+                  onStartChange={handleStartChange}
+                  onEndChange={handleEndChange}
+                />
+              </div>
+
+              {/* Validation hint */}
+              <p className={`font-retro text-md text-center ${isTimestampValid ? "text-muted-foreground" : "text-destructive"}`}>
+                {endSeconds <= startSeconds
+                  ? "Set an end time after the start"
+                  : clipDuration > contest.maxClipDurationSeconds
+                  ? `Clip too long — max ${contest.maxClipDurationSeconds}s`
+                  : clipDuration < 5
+                  ? "Clip must be at least 5 seconds"
+                  : `Clip length: ${formatTimestamp(clipDuration)}`}
+              </p>
+
+              {/* Play Clip / Stop Preview */}
+              <Button
+                variant="outline"
+                className="w-full font-retro uppercase"
+                onClick={isPreviewing ? handleStopPreview : handlePreviewClip}
+                disabled={!isPreviewing && !isTimestampValid}
+              >
+                {isPreviewing ? (
+                  <><Square className="w-4 h-4 mr-2" />Stop Preview</>
+                ) : (
+                  <><Play className="w-4 h-4 mr-2" />Play Clip</>
+                )}
+              </Button>
+
+              {/* Manual entry accordion */}
+              <div className="border border-border/50 rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setManualEntryOpen((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 font-retro text-md text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+                >
+                  <span>Enter timestamps manually</span>
+                  {manualEntryOpen
+                    ? <ChevronUp className="w-4 h-4 shrink-0" />
+                    : <ChevronDown className="w-4 h-4 shrink-0" />}
+                </button>
+
+                {manualEntryOpen && (
+                  <div className="px-4 pb-4 pt-2 space-y-4 border-t border-border/50">
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Start time */}
+                      <div className="space-y-1.5">
+                        <Label className="font-retro text-md uppercase text-muted-foreground">Start Time</Label>
+                        <div className="flex items-center gap-1">
+                          <input type="number" min="0" value={startH}
+                            onChange={(e) => setStartH(e.target.value)}
+                            onBlur={(e) => {
+                              const h = e.target.value === "" ? (setStartH("0"), "0") : e.target.value;
+                              seekStart(h, startM, startS);
+                            }}
+                            className={startExceedsVideo ? hmsErr : hmsOk} placeholder="0" />
+                          <span className="font-retro text-md text-muted-foreground">h</span>
+                          <input type="number" min="0" max="59" value={startM}
+                            onChange={(e) => setStartM(e.target.value)}
+                            onBlur={(e) => {
+                              const m = e.target.value === "" ? (setStartM("0"), "0") : e.target.value;
+                              seekStart(startH, m, startS);
+                            }}
+                            className={startExceedsVideo ? hmsErr : hmsOk} placeholder="0" />
+                          <span className="font-retro text-md text-muted-foreground">m</span>
+                          <input type="number" min="0" max="59" value={startS}
+                            onChange={(e) => setStartS(e.target.value)}
+                            onBlur={(e) => {
+                              const s = e.target.value === "" ? (setStartS("0"), "0") : e.target.value;
+                              seekStart(startH, startM, s);
+                            }}
+                            className={startExceedsVideo ? hmsErr : hmsOk} placeholder="0" />
+                          <span className="font-retro text-md text-muted-foreground">s</span>
+                        </div>
+                        {startExceedsVideo && (
+                          <p className="font-retro text-md text-destructive">
+                            Exceeds stream length ({formatTimestamp(videoDuration)})
+                          </p>
+                        )}
+                      </div>
+
+                      {/* End time */}
+                      <div className="space-y-1.5">
+                        <Label className="font-retro text-md uppercase text-muted-foreground">End Time</Label>
+                        <div className="flex items-center gap-1">
+                          <input type="number" min="0" value={endH}
+                            onChange={(e) => setEndH(e.target.value)}
+                            onBlur={(e) => {
+                              const h = e.target.value === "" ? (setEndH("0"), "0") : e.target.value;
+                              seekEnd(h, endM, endS);
+                            }}
+                            className={endExceedsVideo ? hmsErr : hmsOk} placeholder="0" />
+                          <span className="font-retro text-md text-muted-foreground">h</span>
+                          <input type="number" min="0" max="59" value={endM}
+                            onChange={(e) => setEndM(e.target.value)}
+                            onBlur={(e) => {
+                              const m = e.target.value === "" ? (setEndM("0"), "0") : e.target.value;
+                              seekEnd(endH, m, endS);
+                            }}
+                            className={endExceedsVideo ? hmsErr : hmsOk} placeholder="0" />
+                          <span className="font-retro text-md text-muted-foreground">m</span>
+                          <input type="number" min="0" max="59" value={endS}
+                            onChange={(e) => setEndS(e.target.value)}
+                            onBlur={(e) => {
+                              const s = e.target.value === "" ? (setEndS("0"), "0") : e.target.value;
+                              seekEnd(endH, endM, s);
+                            }}
+                            className={endExceedsVideo ? hmsErr : hmsOk} placeholder="0" />
+                          <span className="font-retro text-md text-muted-foreground">s</span>
+                        </div>
+                        {endExceedsVideo && (
+                          <p className="font-retro text-md text-destructive">
+                            Exceeds stream length ({formatTimestamp(videoDuration)})
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Title */}
+              <div className="space-y-1.5">
+                <Label className="font-retro text-md uppercase text-muted-foreground">
+                  Title <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Why is this the best moment?"
+                  maxLength={120}
+                  className="font-retro"
+                />
+                <p className="font-retro text-md text-muted-foreground text-right">{title.length}/120</p>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1.5">
+                <Label className="font-retro text-md uppercase text-muted-foreground">
+                  Description <span className="text-muted-foreground/50">(optional)</span>
+                </Label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Add some context..."
+                  rows={2}
+                  maxLength={280}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-md font-retro placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                />
+              </div>
+
+              {/* Display name */}
+              <div className="space-y-1.5">
+                <Label className="font-retro text-md uppercase text-muted-foreground">
+                  Your Name <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={submitterName}
+                  onChange={(e) => setSubmitterName(e.target.value)}
+                  placeholder="What should we call you?"
+                  maxLength={40}
+                  className="font-retro"
+                />
+                <p className="font-retro text-md text-muted-foreground">
+                  Displayed on leaderboard and winners list.
+                </p>
+              </div>
+
+              {/* Error */}
+              {formError && (
+                <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 font-retro text-md text-destructive">
+                  {formError}
+                </p>
+              )}
+
+            </div>
+          )}
+        </div>
+
+        {/* Pinned action buttons */}
+        <div className="px-6 py-4 border-t border-border/40 shrink-0 flex gap-3">
+          <Button
+            variant="outline"
+            className="font-retro uppercase flex-1"
+            onClick={handleClose}
+            disabled={submitMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="font-retro uppercase flex-1"
+            onClick={handleSubmit}
+            disabled={submitMutation.isPending || !selectedVideoId || !isTimestampValid}
+          >
+            {submitMutation.isPending ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting...</>
+            ) : (
+              "Submit Clip"
+            )}
+          </Button>
+        </div>
+
       </DialogContent>
     </Dialog>
   );

@@ -31,6 +31,7 @@ function getReadableError(error: unknown): string {
 }
 
 const RANK_ICONS: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
+const DURATION_ICON: string = "⏳";
 const REPORT_REASONS = [
   { value: "INAPPROPRIATE", label: "Inappropriate" },
   { value: "SPAM", label: "Spam" },
@@ -119,31 +120,31 @@ export function ContestClipCard({
         {/* Card body */}
         <div className="relative z-10 p-4 flex flex-col gap-3 flex-1">
           {/* Rank + title row */}
-          <div className="flex items-start gap-2">
+          <div className="flex items-center gap-2">
             {rank <= 3 && (
-              <span className="text-lg leading-none mt-0.5 shrink-0">{RANK_ICONS[rank]}</span>
+              <span className="text-3xl px-2 leading-none mt-0.5 shrink-0">{RANK_ICONS[rank]}</span>
             )}
             {rank > 3 && (
-              <span className="font-pixel text-xs text-muted-foreground shrink-0 mt-1">#{rank}</span>
+              <span className="font-pixel text-md text-muted-foreground shrink-0 mt-1">#{rank}</span>
             )}
             <div className="min-w-0 flex-1">
-              <p className="font-retro text-base text-foreground leading-snug line-clamp-2">{clip.title}</p>
+              <p className="font-retro text-2xl text-foreground leading-snug line-clamp-2">{clip.title}</p>
               {clip.description && (
-                <p className="font-retro text-xs text-muted-foreground mt-1 line-clamp-2">{clip.description}</p>
+                <p className="font-retro text-md text-muted-foreground mt-1 line-clamp-2">{clip.description}</p>
               )}
             </div>
           </div>
 
           {/* Meta row */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="font-retro text-xs text-muted-foreground">
-              <span className="text-foreground/70">{clip.submitterName}</span>
+            <div className="font-retro text-md text-muted-foreground">
+              <span className="text-foreground/70"> Submitted By: {clip.submitterName}</span>
               {isMyClip && (
-                <span className="ml-1 text-accent text-xs">(you)</span>
+                <span className="ml-1 text-accent text-md"> Submitted By: (you)</span>
               )}
             </div>
-            <div className="flex items-center gap-1 font-retro text-xs text-muted-foreground">
-              <span>{formatTimestamp(clip.startSeconds)} – {formatTimestamp(clip.endSeconds)}</span>
+            <div className="flex items-center gap-1 font-retro text-md text-muted-foreground">
+              <span className="text-sm  leading-none mt-0.5 shrink-0">{DURATION_ICON}</span>
               <span className="text-muted-foreground/50">•</span>
               <span>{duration}s</span>
             </div>
@@ -153,14 +154,14 @@ export function ContestClipCard({
           <div className="flex items-center justify-between gap-2 mt-auto pt-1 border-t border-border/40">
             <div className="flex items-center gap-2">
               <ThumbsUp className={`w-4 h-4 ${hasVoted ? "text-primary fill-primary" : "text-muted-foreground"}`} />
-              <span className="font-pixel text-sm text-primary">{clip.voteCount}</span>
+              <span className="font-pixel text-md text-primary">{clip.voteCount}</span>
             </div>
 
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                className="font-retro text-xs text-muted-foreground/50 hover:text-destructive h-7 px-2"
+                className="font-retro text-md text-muted-foreground/50 hover:text-destructive h-7 px-2"
                 onClick={() => { setReportOpen(true); setReportDone(false); setReportError(null); }}
               >
                 <Flag className="w-3 h-3 mr-1" />
@@ -170,7 +171,7 @@ export function ContestClipCard({
               <Button
                 variant="ghost"
                 size="sm"
-                className="font-retro text-xs text-muted-foreground/50 hover:text-foreground h-7 px-2"
+                className="font-retro text-md text-muted-foreground/50 hover:text-foreground h-7 px-2"
                 onClick={() => window.open(`https://www.youtube.com/watch?v=${clip.videoId}&t=${clip.startSeconds}`, "_blank", "noopener,noreferrer")}
               >
                 <ExternalLink className="w-3 h-3 mr-1" />
@@ -182,7 +183,7 @@ export function ContestClipCard({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="font-retro text-xs uppercase border-primary/50 text-primary h-8"
+                    className="font-retro text-md uppercase border-primary/50 text-primary h-8"
                     onClick={() => onUnvote(clip.id)}
                     disabled={isVoting}
                   >
@@ -191,7 +192,7 @@ export function ContestClipCard({
                 ) : (
                   <Button
                     size="sm"
-                    className="font-retro text-xs uppercase h-8"
+                    className="font-retro text-md uppercase h-8"
                     onClick={() => onVote(clip.id)}
                     disabled={isVoting || votesRemaining === 0}
                     title={votesRemaining === 0 ? "No votes remaining today" : undefined}
@@ -211,7 +212,7 @@ export function ContestClipCard({
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-pixel text-sm text-primary">REPORT CLIP</DialogTitle>
+            <DialogTitle className="font-pixel text-md text-primary">REPORT CLIP</DialogTitle>
           </DialogHeader>
 
           {reportDone ? (
@@ -228,11 +229,11 @@ export function ContestClipCard({
           ) : (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label className="font-retro text-xs uppercase text-muted-foreground">Reason</Label>
+                <Label className="font-retro text-md uppercase text-muted-foreground">Reason</Label>
                 <select
                   value={reportReason}
                   onChange={(e) => setReportReason(e.target.value as ReportReason)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-retro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-md font-retro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {REPORT_REASONS.map((r) => (
                     <option key={r.value} value={r.value}>{r.label}</option>
@@ -241,18 +242,18 @@ export function ContestClipCard({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="font-retro text-xs uppercase text-muted-foreground">Details (optional)</Label>
+                <Label className="font-retro text-md uppercase text-muted-foreground">Details (optional)</Label>
                 <textarea
                   value={reportDescription}
                   onChange={(e) => setReportDescription(e.target.value)}
                   placeholder="Describe the issue..."
                   rows={3}
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-retro placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-md font-retro placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
                 />
               </div>
 
               {reportError && (
-                <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 font-retro text-sm text-destructive">
+                <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 font-retro text-md text-destructive">
                   {reportError}
                 </p>
               )}

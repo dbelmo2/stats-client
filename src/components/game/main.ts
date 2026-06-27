@@ -22,6 +22,7 @@ import grassOne from './images/grass-tile-fuller.png';
 
 
 import { SettingsManager } from './managers/SettingsManager';
+import { AudioManager } from './managers/AudioManager';
 import { BugReportManager } from './managers/BugReportManager';
 import { MenuManager } from './managers/MenuManager';
 import { createLoadingScreen, removeLoadingScreen, updateLoadingProgress } from './ui/Loading';
@@ -52,6 +53,9 @@ export function destroyGame(): void {
             activeGameManager.cleanupSession();
             activeGameManager = null;
         }
+
+        // Destroy audio before SettingsManager (AudioManager depends on it)
+        AudioManager.getInstance().destroy();
 
         // Clean up UI managers
         MenuManager.getInstance().cleanup();

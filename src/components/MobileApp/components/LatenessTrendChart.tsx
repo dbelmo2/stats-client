@@ -29,7 +29,7 @@ export function LatenessTrendChart({ livestreams }: LatenessTrendChartProps) {
           <h2 className="font-pixel text-xl md:text-2xl text-primary drop-shadow-[0_0_8px_rgba(168,85,247,0.4)]" data-testid="heading-lateness-trend">
             LATENESS OVER TIME
           </h2>
-          <p className="font-retro text-sm text-muted-foreground/70" data-testid="label-last-episodes">
+          <p className="font-retro text-md text-muted-foreground/70" data-testid="label-last-episodes">
             (Last 10 Episodes)
           </p>
         </div>

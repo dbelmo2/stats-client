@@ -1,15 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronUp, Trophy } from "lucide-react";
-import { ThemeToggle } from "../components/ThemeToggle";
+import { ChevronDown, ChevronUp, Trophy } from "lucide-react";
 import { LoadingScreen } from "../components/LoadingScreen";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import type { Contest, ContestResult } from "../shared/contestSchema";
 import type { PaginatedResponse } from "../shared/schema";
 import { apiRequest } from "../lib/queryClient";
-import Logo from "../../game/images/l3l3.png";
 
 const RANK_ICONS = ["🥇", "🥈", "🥉"];
 const RANK_LABELS = ["1st Place", "2nd Place", "3rd Place"];
@@ -49,10 +47,10 @@ function PastContestRow({ contest }: PastContestRowProps) {
         onClick={() => setExpanded((v) => !v)}
       >
         <div>
-          <div className="font-pixel text-sm text-primary drop-shadow-[0_0_6px_rgba(168,85,247,0.4)]">
+          <div className="font-pixel text-md text-primary drop-shadow-[0_0_6px_rgba(168,85,247,0.4)]">
             {contest.type === "WEEKLY" ? "WEEKLY" : "MONTHLY"} CONTEST
           </div>
-          <div className="font-retro text-sm text-muted-foreground mt-0.5">
+          <div className="font-retro text-md text-muted-foreground mt-0.5">
             {formatContestRange(contest.startDate, contest.endDate)}
           </div>
         </div>
@@ -72,7 +70,7 @@ function PastContestRow({ contest }: PastContestRowProps) {
               ))}
             </div>
           ) : !results?.length ? (
-            <p className="font-retro text-sm text-muted-foreground text-center py-4">
+            <p className="font-retro text-md text-muted-foreground text-center py-4">
               No results recorded for this contest.
             </p>
           ) : (
@@ -92,7 +90,7 @@ function PastContestRow({ contest }: PastContestRowProps) {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="font-pixel text-sm text-primary">{result.voteCount}</div>
+                    <div className="font-pixel text-md text-primary">{result.voteCount}</div>
                     <div className="font-retro text-xs text-muted-foreground">votes</div>
                   </div>
                 </div>
@@ -125,37 +123,7 @@ export default function HallOfFamePage() {
   const totalPages = historyPage?.totalPages ?? 0;
 
   return (
-    <div className="min-h-screen bg-background relative">
-      {/* Background */}
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,hsl(var(--border))_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-[0.15] pointer-events-none z-0" />
-      <div className="fixed inset-0 opacity-[0.03] pointer-events-none z-0">
-        <div className="w-full h-1 bg-foreground/50 animate-scanline" />
-      </div>
-
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 border-b-2 border-primary/40 bg-card/90 backdrop-blur-md shadow-lg shadow-primary/10 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setLocation("/contest")}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <img src={Logo} alt="L3L3 Logo" className="w-12 h-12 md:w-16 md:h-16" />
-            <div className="min-w-0">
-              <h1 className="font-pixel text-lg md:text-2xl text-primary truncate drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]">
-                HALL OF FAME
-              </h1>
-            </div>
-          </div>
-          <ThemeToggle />
-        </div>
-      </header>
-
-      {/* Main */}
-      <main className="relative z-10 pt-24 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-8">
+    <main className="relative z-10 pt-24 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-8">
         <div className="container mx-auto px-4 space-y-4 pt-4 md:pt-0">
 
           {/* Intro card */}
@@ -169,7 +137,7 @@ export default function HallOfFamePage() {
                 <h2 className="font-pixel text-base text-secondary drop-shadow-[0_0_8px_rgba(236,72,153,0.4)]">
                   PAST CHAMPIONS
                 </h2>
-                <p className="font-retro text-sm text-muted-foreground mt-1">
+                <p className="font-retro text-md text-muted-foreground mt-1">
                   The best clips from every contest, voted on by the community.
                 </p>
               </div>
@@ -183,8 +151,8 @@ export default function HallOfFamePage() {
               <div className="p-4 rounded-full bg-muted/30 border border-border">
                 <Trophy className="w-10 h-10 text-muted-foreground/40" />
               </div>
-              <p className="font-pixel text-sm text-muted-foreground">NO CONTESTS YET</p>
-              <p className="font-retro text-sm text-muted-foreground">
+              <p className="font-pixel text-md text-muted-foreground">NO CONTESTS YET</p>
+              <p className="font-retro text-md text-muted-foreground">
                 Past contest results will appear here.
               </p>
               <Button
@@ -214,7 +182,7 @@ export default function HallOfFamePage() {
               >
                 ← Prev
               </Button>
-              <span className="font-retro text-sm text-muted-foreground">
+              <span className="font-retro text-md text-muted-foreground">
                 {page + 1} / {totalPages}
               </span>
               <Button
@@ -229,11 +197,7 @@ export default function HallOfFamePage() {
             </div>
           )}
 
-          <footer className="text-center font-retro text-sm text-muted-foreground py-4">
-            <p>This is a fan made website and is not associated with the H3 Podcast</p>
-          </footer>
         </div>
       </main>
-    </div>
   );
 }

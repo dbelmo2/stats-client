@@ -32,7 +32,7 @@ export function TimeStatusPieChart({
           <h2 className="font-pixel text-xl md:text-2xl text-accent drop-shadow-[0_0_8px_rgba(34,197,94,0.35)]" data-testid="heading-time-status-breakdown">
             START TIME BREAKDOWN
           </h2>
-          <p className="font-retro text-sm text-muted-foreground/70" data-testid="label-time-status-breakdown-subtitle">
+          <p className="font-retro text-md text-muted-foreground/70" data-testid="label-time-status-breakdown-subtitle">
             (% and stream count)
           </p>
         </div>
@@ -86,7 +86,7 @@ export function TimeStatusPieChart({
               <div className="font-pixel text-lg leading-none" style={{ color: entry.color }}>
                 {entry.percentage.toFixed(1)}%
               </div>
-              <div className="font-retro text-sm text-foreground/90">{entry.count} streams</div>
+              <div className="font-retro text-md text-foreground/90">{entry.count} streams</div>
             </div>
           ))}
         </div>

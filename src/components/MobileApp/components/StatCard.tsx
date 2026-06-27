@@ -80,7 +80,7 @@ export function StatCard({
             )}
 
             {detail && (
-              <div className="font-retro text-sm text-muted-foreground" data-testid={`detail-${label.toLowerCase().replace(/\s+/g, '-')}`}>
+              <div className="font-retro text-md text-muted-foreground" data-testid={`detail-${label.toLowerCase().replace(/\s+/g, '-')}`}>
                 {detail}
               </div>
             )}

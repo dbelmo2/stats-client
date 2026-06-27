@@ -53,7 +53,7 @@ export function CastVote({
             <h2 className="font-pixel text-xl text-primary">
               How late will the next stream be?
             </h2>
-            <p className="font-retro text-sm text-muted-foreground mt-0.5">
+            <p className="font-retro text-md text-muted-foreground mt-0.5">
               {hasPendingVote ? "Vote submitted!" : "Submit your vote!"}
             </p>
           </div>
@@ -65,7 +65,7 @@ export function CastVote({
               <CheckCircle className="w-5 h-5" />
               <span className="font-retro">{voteSuccessMessage}</span>
             </div>
-            <p className="font-retro text-sm text-muted-foreground">
+            <p className="font-retro text-md text-muted-foreground">
               Check back here once the pod goes live to see the results!
             </p>
           </div>
@@ -93,7 +93,7 @@ export function CastVote({
                 id="vote-direction"
                 value={voteDirection}
                 onChange={(event) => onDirectionChange(event.target.value as TimeStatus)}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 font-retro text-sm"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 font-retro text-md"
                 data-testid="select-vote-direction"
               >
                 <option value="LATE">LATE</option>
@@ -114,6 +114,8 @@ export function CastVote({
                   step={1}
                   value={voteHours}
                   onChange={(event) => onHoursChange(event.target.value)}
+                  onFocus={() => { if (voteHours === "0") onHoursChange(""); }}
+                  onBlur={() => { if (voteHours === "") onHoursChange("0"); }}
                   disabled={voteDirection === "ON_TIME"}
                   className="font-retro"
                   data-testid="input-vote-hours"
@@ -131,6 +133,8 @@ export function CastVote({
                   step={1}
                   value={voteMinutes}
                   onChange={(event) => onMinutesChange(event.target.value)}
+                  onFocus={() => { if (voteMinutes === "0") onMinutesChange(""); }}
+                  onBlur={() => { if (voteMinutes === "") onMinutesChange("0"); }}
                   disabled={voteDirection === "ON_TIME"}
                   className="font-retro"
                   data-testid="input-vote-minutes"
@@ -148,6 +152,8 @@ export function CastVote({
                   step={1}
                   value={voteSeconds}
                   onChange={(event) => onSecondsChange(event.target.value)}
+                  onFocus={() => { if (voteSeconds === "0") onSecondsChange(""); }}
+                  onBlur={() => { if (voteSeconds === "") onSecondsChange("0"); }}
                   disabled={voteDirection === "ON_TIME"}
                   className="font-retro"
                   data-testid="input-vote-seconds"
@@ -157,7 +163,7 @@ export function CastVote({
 
             {voteFormError && (
               <div
-                className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 font-retro text-sm text-destructive"
+                className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 font-retro text-md text-destructive"
                 data-testid="text-vote-error"
               >
                 {voteFormError}

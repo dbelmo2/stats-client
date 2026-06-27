@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { ArrowLeft, Tv, X } from "lucide-react";
+import { Tv, X } from "lucide-react";
 import { FaYoutube } from "react-icons/fa";
 import {
   DataGrid,
@@ -14,7 +13,6 @@ import type { GridColDef, GridFilterModel, GridSortModel } from "@mui/x-data-gri
 import Badge from "@mui/material/Badge";
 import Tooltip from "@mui/material/Tooltip";
 import FilterListIcon from "@mui/icons-material/FilterList";
-import { ThemeToggle } from "../components/ThemeToggle";
 import { LoadingScreen } from "../components/LoadingScreen";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -103,7 +101,7 @@ function LivestreamToolbar({
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
         placeholder="Search by video ID or title..."
-        className="h-12 flex-1 min-w-[180px] max-w-sm rounded-md border border-input bg-background px-3 font-retro text-sm placeholder:text-muted-foreground/50"
+        className="h-12 flex-1 min-w-[180px] max-w-sm rounded-md border border-input bg-background px-3 font-retro text-md placeholder:text-muted-foreground/50"
         data-testid="input-search"
       />
       <Tooltip title="Filters">
@@ -125,7 +123,7 @@ function CustomFilterPanel(props: React.ComponentProps<typeof GridFilterPanel>) 
   return (
     <div>
       <div className="hidden sm:flex items-center px-3 py-2 border-b border-border/40">
-        <span className="font-retro text-sm uppercase tracking-wide text-muted-foreground">
+        <span className="font-retro text-md uppercase tracking-wide text-muted-foreground">
           Add a filter
         </span>
       </div>
@@ -136,7 +134,7 @@ function CustomFilterPanel(props: React.ComponentProps<typeof GridFilterPanel>) 
 
 function CancelFilterIcon() {
   return (
-    <span className="flex items-center gap-1 font-retro text-sm">
+    <span className="flex items-center gap-1 font-retro text-md">
       <X className="w-3.5 h-3.5" />
       Cancel
     </span>
@@ -144,7 +142,7 @@ function CancelFilterIcon() {
 }
 
 export default function LivestreamDataPage() {
-  const [, setLocation] = useLocation();
+
 
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
@@ -214,7 +212,7 @@ export default function LivestreamDataPage() {
       sortable: false,
       filterable: false,
       renderCell: ({ value }) => (
-        <span className="font-retro text-sm text-foreground/80">{value}</span>
+        <span className="font-retro text-md text-foreground/80">{value}</span>
       ),
     },
     {
@@ -226,7 +224,7 @@ export default function LivestreamDataPage() {
       filterable: false,
       renderCell: ({ row }) => (
         <div className="flex items-start gap-2 py-1 w-full">
-          <div className="line-clamp-2 flex-1 min-w-0 font-retro text-sm text-foreground">
+          <div className="line-clamp-2 flex-1 min-w-0 font-retro text-md text-foreground">
             {row.title}
           </div>
           <Button
@@ -254,7 +252,7 @@ export default function LivestreamDataPage() {
       sortable: true,
       filterable: false,
       renderCell: ({ value }) => (
-        <span className="font-retro text-sm text-foreground/80">{formatDateTime(value)}</span>
+        <span className="font-retro text-md text-foreground/80">{formatDateTime(value)}</span>
       ),
     },
     {
@@ -264,7 +262,7 @@ export default function LivestreamDataPage() {
       sortable: true,
       filterable: false,
       renderCell: ({ value }) => (
-        <span className="font-retro text-sm text-foreground/80">{formatDateTime(value)}</span>
+        <span className="font-retro text-md text-foreground/80">{formatDateTime(value)}</span>
       ),
     },
     {
@@ -274,7 +272,7 @@ export default function LivestreamDataPage() {
       sortable: true,
       filterable: false,
       renderCell: ({ row }) => (
-        <span className="font-retro text-sm text-foreground/90">
+        <span className="font-retro text-md text-foreground/90">
           {formatTimeStatusDelta(row.diffSeconds, row.timeStatus)}
         </span>
       ),
@@ -314,7 +312,7 @@ export default function LivestreamDataPage() {
       sortable: true,
       filterable: false,
       renderCell: ({ value }) => (
-        <span className="font-retro text-sm text-foreground/80">{formatDuration(value)}</span>
+        <span className="font-retro text-md text-foreground/80">{formatDuration(value)}</span>
       ),
     },
   ], []);
@@ -327,44 +325,7 @@ export default function LivestreamDataPage() {
   const totalElements = data?.totalElements ?? 0;
 
   return (
-    <div className="min-h-screen bg-background relative">
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,hsl(var(--border))_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-[0.15] pointer-events-none z-0" />
-
-      <div className="fixed inset-0 opacity-[0.03] pointer-events-none z-0">
-        <div className="w-full h-1 bg-foreground/50 animate-scanline" />
-      </div>
-
-      <header className="fixed top-0 left-0 right-0 border-b-2 border-primary/40 bg-card/90 backdrop-blur-md shadow-lg shadow-primary/10 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setLocation("/")}
-              data-testid="button-back-dashboard"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-
-            <div className="p-2 rounded-md bg-primary/20 border-2 border-primary/40">
-              <Tv className="w-6 h-6 md:w-8 md:h-8 text-primary" strokeWidth={2.5} />
-            </div>
-
-            <div className="min-w-0">
-              <h1
-                className="font-pixel text-lg md:text-2xl text-primary truncate drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]"
-                data-testid="heading-livestream-data"
-              >
-                LIVESTREAMS
-              </h1>
-            </div>
-          </div>
-
-          <ThemeToggle />
-        </div>
-      </header>
-
-      <main className="relative z-10 pt-24 pb-8">
+    <main className="relative z-10 pt-24 pb-8">
         <div className="container mx-auto px-4 space-y-6">
           <Card className="relative overflow-hidden border-2 border-secondary/40 bg-card/95 backdrop-blur-sm p-0 shadow-lg shadow-secondary/20 mt-20">
             <div className="absolute inset-0 bg-gradient-to-br from-secondary/5 to-transparent pointer-events-none z-0" />
@@ -423,6 +384,5 @@ export default function LivestreamDataPage() {
           </Card>
         </div>
       </main>
-    </div>
   );
 }

@@ -7,6 +7,7 @@ import { Toaster } from "./components/ui/toaster";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useDarkMode } from "./hooks/useDarkMode";
 import { createAppTheme } from "./lib/muiTheme";
+import { Layout } from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import LivestreamDataPage from "./pages/LivestreamDataPage";
 import VotePage from "./pages/VotePage";
@@ -45,7 +46,9 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <Layout>
+            <Router />
+          </Layout>
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
