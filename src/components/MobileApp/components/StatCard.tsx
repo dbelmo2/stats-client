@@ -63,7 +63,7 @@ export function StatCard({
             <div className="p-2 rounded-md bg-primary/20 border border-primary/40">
               <Icon className="w-6 h-6 text-primary" strokeWidth={2.5} />
             </div>
-            <span className="font-retro text-lg uppercase tracking-wide text-muted-foreground" data-testid={`label-${label.toLowerCase().replace(/\s+/g, '-')}`}>
+            <span className="font-retro text-2xl uppercase tracking-wide text-muted-foreground" data-testid={`label-${label.toLowerCase().replace(/\s+/g, '-')}`}>
               {label}
             </span>
           </div>

@@ -71,24 +71,15 @@ export function isMuted(): boolean {
     return _muted;
 }
 
-/**
- * Temporarily pause music while a video clip is playing.
- * Uses pause (not stop) so resumeAfterVideo restores the same position.
- * No-ops if already muted by the user or already paused for video.
- */
 export function pauseForVideo(): void {
     if (_pausedForVideo || !howl || _muted) return;
     _pausedForVideo = true;
     howl.pause();
 }
 
-/**
- * Resume music after a video clip has stopped or paused.
- * Only resumes if we were the ones who paused it and the user hasn't since manually muted.
- */
 export function resumeAfterVideo(): void {
     if (!_pausedForVideo) return;
     _pausedForVideo = false;
-    if (!howl || _muted || howl.playing()) return;
+    if (!howl || _muted) return;
     howl.play();
 }

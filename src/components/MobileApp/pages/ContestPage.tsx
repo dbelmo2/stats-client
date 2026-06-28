@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Film, Trophy, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp, Film, Search, Trophy, X, Zap } from "lucide-react";
 import { LoadingScreen } from "../components/LoadingScreen";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -13,10 +13,46 @@ import type { PaginatedResponse } from "../shared/schema";
 import { apiRequest } from "../lib/queryClient";
 import { useVoterToken, getStoredSubmitterName } from "../hooks/useVoterToken";
 import { config } from "../../game/utils/config";
-import { pauseForVideo, resumeAfterVideo } from "../lib/dashboardAudio";
+import { resumeAfterVideo } from "../lib/dashboardAudio";
 
 
 const PAGE_SIZE = 4;
+
+type SortField = "votes" | "submittedAt" | "duration";
+
+const SORT_OPTIONS: { field: SortField; label: string }[] = [
+  { field: "votes",       label: "Votes"   },
+  { field: "submittedAt", label: "Date"   },
+  { field: "duration",    label: "Length" },
+];
+
+function filterAndSort(
+  clips: ContestClip[],
+  query: string,
+  field: SortField,
+  dir: "asc" | "desc"
+): ContestClip[] {
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? clips.filter(
+        (c) =>
+          c.title.toLowerCase().includes(q) ||
+          (c.description?.toLowerCase().includes(q) ?? false)
+      )
+    : [...clips];
+
+  filtered.sort((a, b) => {
+    let diff = 0;
+    if (field === "votes") diff = a.voteCount - b.voteCount;
+    else if (field === "submittedAt")
+      diff = new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime();
+    else if (field === "duration")
+      diff = (a.endSeconds - a.startSeconds) - (b.endSeconds - b.startSeconds);
+    return dir === "desc" ? -diff : diff;
+  });
+
+  return filtered;
+}
 
 function formatContestDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -44,22 +80,14 @@ export default function ContestPage() {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [pendingClipId, setPendingClipId] = useState<number | null>(null);
   const [voteError, setVoteError] = useState<string | null>(null);
+  const [pinnedClip, setPinnedClip] = useState<ContestClip | null>(null);
+  const [autoPlayClipId, setAutoPlayClipId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState<SortField>("votes");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (!event.origin.includes('youtube.com')) return;
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data?.event !== 'onStateChange') return;
-        if (data.info === 1) {
-          pauseForVideo();
-        } else if (data.info === 0 || data.info === 2) {
-          resumeAfterVideo();
-        }
-      } catch {}
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    return () => resumeAfterVideo();
   }, []);
 
   // Fetch active contest — 404 → null (no contest)
@@ -75,6 +103,23 @@ export default function ContestPage() {
 
   const contestId = contest?.id ?? null;
 
+  // Read pinned/autoplay clip from sessionStorage (set when navigating here from dashboard)
+  useEffect(() => {
+    if (!contestId) return;
+    const storedId = sessionStorage.getItem("contest:pinnedClipId");
+    const autoPlayId = sessionStorage.getItem("contest:autoPlayClipId");
+    if (autoPlayId) {
+      sessionStorage.removeItem("contest:autoPlayClipId");
+      setAutoPlayClipId(Number(autoPlayId));
+    }
+    if (!storedId) return;
+    sessionStorage.removeItem("contest:pinnedClipId");
+    apiRequest("GET", `/api/contest/clip-contest/clips/${storedId}`)
+      .then((r) => r.json())
+      .then((clip: ContestClip) => setPinnedClip(clip))
+      .catch(() => {});
+  }, [contestId]);
+
   // Fetch clips for this page
   const { data: clipsPage, isLoading: clipsLoading } = useQuery<PaginatedResponse<ContestClip>>({
     queryKey: ["contest-clips", contestId, page],
@@ -84,6 +129,18 @@ export default function ContestPage() {
         `/api/contest/clip-contest/${contestId}/clips?page=${page}&size=${PAGE_SIZE}`
       ).then((r) => r.json()),
     enabled: !!contestId,
+  });
+
+  const isFiltered = searchQuery.trim() !== "" || sortField !== "votes" || sortDir !== "desc";
+
+  // All clips — only fetched when search or non-default sort is active
+  const { data: allClipsPage, isLoading: allClipsLoading } = useQuery<PaginatedResponse<ContestClip>>({
+    queryKey: ["contest-clips-all", contestId],
+    queryFn: () =>
+      apiRequest("GET", `/api/contest/clip-contest/${contestId}/clips?page=0&size=500`).then((r) =>
+        r.json()
+      ),
+    enabled: !!contestId && isFiltered,
   });
 
   // Fetch voter status (budget + which clips voted on)
@@ -142,9 +199,16 @@ export default function ContestPage() {
 
   if (contestLoading) return <LoadingScreen />;
 
-  const clips = clipsPage?.content ?? [];
-  const totalPages = clipsPage?.totalPages ?? 0;
-  const totalClips = clipsPage?.totalElements ?? 0;
+  const rawClips = clipsPage?.content ?? [];
+  const pinnedClips = pinnedClip && !isFiltered
+    ? [pinnedClip, ...rawClips.filter((c) => c.id !== pinnedClip.id)]
+    : rawClips;
+  const displayClips = isFiltered
+    ? filterAndSort(allClipsPage?.content ?? [], searchQuery, sortField, sortDir)
+    : pinnedClips;
+  const isClipsLoading = isFiltered ? allClipsLoading : clipsLoading;
+  const totalPages = isFiltered ? 0 : (clipsPage?.totalPages ?? 0);
+  const totalClips = isFiltered ? displayClips.length : (clipsPage?.totalElements ?? 0);
   const votesRemaining = voterStatus?.votesRemainingToday ?? 0;
   const votedClipIds = new Set(voterStatus?.votedClipIds ?? []);
   const isVoting = voteMutation.isPending || unvoteMutation.isPending;
@@ -264,6 +328,58 @@ export default function ContestPage() {
                 </p>
               )}
 
+              {/* Search & sort controls */}
+              <div className="space-y-2.5">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="search"
+                    placeholder="Search by title or description..."
+                    value={searchQuery}
+                    onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+                    className="w-full pl-9 pr-9 h-10 rounded-md border border-input bg-background font-retro text-md placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Clear search"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-retro text-md text-muted-foreground shrink-0">Sort:</span>
+                  {SORT_OPTIONS.map(({ field, label }) => {
+                    const active = sortField === field;
+                    return (
+                      <Button
+                        key={field}
+                        variant={active ? "default" : "outline"}
+                        size="sm"
+                        className="font-retro text-xs h-8 px-3 gap-1"
+                        onClick={() => {
+                          if (active) {
+                            setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+                          } else {
+                            setSortField(field);
+                            setSortDir("desc");
+                            setPage(0);
+                          }
+                        }}
+                      >
+                        {label}
+                        {active && (sortDir === "desc"
+                          ? <ChevronDown className="w-3 h-3 shrink-0" />
+                          : <ChevronUp className="w-3 h-3 shrink-0" />
+                        )}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Clips leaderboard */}
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -277,7 +393,7 @@ export default function ContestPage() {
                   )}
                 </div>
 
-                {clipsLoading ? (
+                {isClipsLoading ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {Array.from({ length: PAGE_SIZE }).map((_, i) => (
                       <div
@@ -286,35 +402,47 @@ export default function ContestPage() {
                       />
                     ))}
                   </div>
-                ) : clips.length === 0 ? (
+                ) : displayClips.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
                     <div className="p-4 rounded-full bg-muted/30 border border-border">
                       <Film className="w-10 h-10 text-muted-foreground/40" />
                     </div>
-                    <p className="font-pixel text-md text-muted-foreground">NO CLIPS YET</p>
-                    <p className="font-retro text-md text-muted-foreground">
-                      Be the first to submit a clip!
-                    </p>
-                    <Button
-                      className="font-retro uppercase mt-2"
-                      onClick={() => setSubmitOpen(true)}
-                    >
-                      + Submit a Clip
-                    </Button>
+                    {searchQuery ? (
+                      <>
+                        <p className="font-pixel text-md text-muted-foreground">NO RESULTS</p>
+                        <p className="font-retro text-md text-muted-foreground">
+                          No clips match "{searchQuery}"
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-pixel text-md text-muted-foreground">NO CLIPS YET</p>
+                        <p className="font-retro text-md text-muted-foreground">
+                          Be the first to submit a clip!
+                        </p>
+                        <Button
+                          className="font-retro uppercase mt-2"
+                          onClick={() => setSubmitOpen(true)}
+                        >
+                          + Submit a Clip
+                        </Button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {clips.map((clip, i) => (
+                    {displayClips.map((clip: ContestClip, i: number) => (
                       <ContestClipCard
                         key={clip.id}
                         clip={clip}
-                        rank={i + 1 + page * PAGE_SIZE}
+                        rank={isFiltered ? i + 1 : i + 1 + page * PAGE_SIZE}
                         voterToken={voterToken}
                         hasVoted={votedClipIds.has(clip.id)}
                         votesRemaining={votesRemaining}
                         isVoting={isVoting && pendingClipId === clip.id}
                         contestActive={contest.status === "ACTIVE"}
                         isMyClip={clip.submitterToken === voterToken}
+                        autoPlay={clip.id === autoPlayClipId}
                         onVote={(id) => voteMutation.mutate(id)}
                         onUnvote={(id) => unvoteMutation.mutate(id)}
                       />
@@ -322,8 +450,8 @@ export default function ContestPage() {
                   </div>
                 )}
 
-                {/* Pagination */}
-                {totalPages > 1 && (
+                {/* Pagination — hidden when search/sort is active */}
+                {!isFiltered && totalPages > 1 && (
                   <div className="flex items-center justify-center gap-3 mt-6">
                     <Button
                       variant="outline"
@@ -367,7 +495,8 @@ export default function ContestPage() {
           contest={contest}
           voterToken={voterToken}
           initialSubmitterName={getStoredSubmitterName()}
-          onSuccess={() => {
+          onSuccess={(clip) => {
+            setPinnedClip(clip);
             queryClient.invalidateQueries({ queryKey: ["contest-clips", contestId] });
             setPage(0);
           }}

@@ -17,7 +17,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   "/dashboard":            { title: "H3 POD", subtitle: "LATE TRACKER" },
   "/vote":                 { title: "VOTE", backTo: "/dashboard" },
   "/data":                 { title: "LIVESTREAMS", backTo: "/dashboard" },
-  "/contest":              { title: "CLIP CONTEST", backTo: "/dashboard" },
+  "/contest":              { title: "TOP CLIPS", backTo: "/dashboard" },
   "/contest/hall-of-fame": { title: "HALL OF FAME", backTo: "/contest" },
 };
 

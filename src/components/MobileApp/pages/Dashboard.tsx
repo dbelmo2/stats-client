@@ -14,6 +14,7 @@ import { LatenessTrendChart } from "../components/LatenessTrendChart";
 import { TimeStatusPieChart } from "../components/TimeStatusPieChart";
 import { DayOfWeekChart } from "../components/DayOfWeekChart";
 import { LoadingScreen } from "../components/LoadingScreen";
+import { TopClipsCard } from "../components/TopClipsCard";
 import { Button } from "../components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { Clock, Film, Info, TrendingUp } from "lucide-react";
@@ -157,6 +158,7 @@ export default function Dashboard() {
           />
         </div>
 
+
         <TotalStatsCard
           humanReadable={totalLateTimeHumanReadable}
           averageLateTime={averageLateSeconds}
@@ -174,7 +176,11 @@ export default function Dashboard() {
             <LatenessTrendChart livestreams={trendLivestreams} />
           </div>
           <DayOfWeekChart dailyStats={dailyStats} />
+          <TopClipsCard />
+
         </div>
+
+
 
         <div className="flex justify-center gap-3 flex-wrap">
           <Button
@@ -192,7 +198,7 @@ export default function Dashboard() {
             data-testid="button-clip-contest"
           >
             <Film className="w-4 h-4 mr-2" />
-            Clip Contest
+            Top Clips
           </Button>
         </div>
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ThumbsUp, ExternalLink, Flag } from "lucide-react";
 import { Card } from "../ui/card";
@@ -12,6 +12,37 @@ import {
 } from "../ui/dialog";
 import type { ContestClip } from "../../shared/contestSchema";
 import { apiRequest } from "../../lib/queryClient";
+import { pauseForVideo, resumeAfterVideo } from "../../lib/dashboardAudio";
+
+declare global {
+  interface Window {
+    YT: {
+      Player: new (
+        element: HTMLIFrameElement,
+        options: { events?: { onStateChange?: (e: { data: number }) => void } }
+      ) => { destroy: () => void };
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+let _ytReady = false;
+const _ytQueue: (() => void)[] = [];
+
+function loadYTApi(cb: () => void): void {
+  if (_ytReady) { cb(); return; }
+  _ytQueue.push(cb);
+  if (document.querySelector('script[src*="youtube.com/iframe_api"]')) return;
+  const prev = window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady = () => {
+    _ytReady = true;
+    if (prev) prev();
+    _ytQueue.splice(0).forEach(fn => fn());
+  };
+  const tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+}
 
 function formatTimestamp(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -50,6 +81,7 @@ interface ContestClipCardProps {
   isVoting: boolean;
   contestActive: boolean;
   isMyClip: boolean;
+  autoPlay?: boolean;
   onVote: (clipId: number) => void;
   onUnvote: (clipId: number) => void;
 }
@@ -63,6 +95,7 @@ export function ContestClipCard({
   isVoting,
   contestActive,
   isMyClip,
+  autoPlay = false,
   onVote,
   onUnvote,
 }: ContestClipCardProps) {
@@ -72,7 +105,29 @@ export function ContestClipCard({
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportDone, setReportDone] = useState(false);
 
-  const embedSrc = `https://www.youtube.com/embed/${clip.videoId}?start=${clip.startSeconds}&end=${clip.endSeconds}&autoplay=0`;
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    let player: { destroy: () => void } | null = null;
+    let mounted = true;
+    loadYTApi(() => {
+      if (!mounted || !iframeRef.current) return;
+      player = new window.YT.Player(iframeRef.current, {
+        events: {
+          onStateChange: ({ data }: { data: number }) => {
+            if (data === 1) pauseForVideo();
+            else if (data === 0 || data === 2) resumeAfterVideo();
+          },
+        },
+      });
+    });
+    return () => {
+      mounted = false;
+      try { player?.destroy(); } catch {}
+    };
+  }, []);
+
+  const embedSrc = `https://www.youtube.com/embed/${clip.videoId}?start=${clip.startSeconds}&end=${clip.endSeconds}&autoplay=${autoPlay ? 1 : 0}&enablejsapi=1`;
   const duration = clip.endSeconds - clip.startSeconds;
 
   const reportMutation = useMutation({
@@ -108,6 +163,7 @@ export function ContestClipCard({
         {/* YouTube embed */}
         <div className="relative w-full aspect-video bg-black/40">
           <iframe
+            ref={iframeRef}
             src={embedSrc}
             className="absolute inset-0 w-full h-full"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

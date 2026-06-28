@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Loader2, Pause, Play, Square } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Play, Square } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import type { Contest } from "../../shared/contestSchema";
+import type { Contest, ContestClip } from "../../shared/contestSchema";
 import type { LivestreamRecord } from "../../shared/schema";
 import { apiRequest } from "../../lib/queryClient";
 import { saveSubmitterName } from "../../hooks/useVoterToken";
@@ -49,93 +49,6 @@ function getReadableError(error: unknown): string {
   return "Unable to submit clip. Please try again.";
 }
 
-// ── Dual-handle range slider ───────────────────────────────────────────────────
-
-interface DualRangeSliderProps {
-  min: number;
-  max: number;
-  start: number;
-  end: number;
-  valid: boolean;
-  onStartChange: (v: number) => void;
-  onEndChange: (v: number) => void;
-}
-
-function DualRangeSlider({ min, max, start, end, valid, onStartChange, onEndChange }: DualRangeSliderProps) {
-  const trackRef = useRef<HTMLDivElement>(null);
-
-  function toPercent(v: number) {
-    if (max <= min) return 0;
-    return ((Math.max(min, Math.min(max, v)) - min) / (max - min)) * 100;
-  }
-
-  function clientXToValue(clientX: number): number {
-    if (!trackRef.current) return min;
-    const rect = trackRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    return Math.round(min + ratio * (max - min));
-  }
-
-  function makeThumbHandlers(onChange: (v: number) => void) {
-    return {
-      onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-        e.currentTarget.setPointerCapture(e.pointerId);
-        e.stopPropagation();
-      },
-      onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
-        onChange(clientXToValue(e.clientX));
-      },
-      onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      },
-    };
-  }
-
-  // Clicking on the track itself moves the nearest thumb
-  function onTrackClick(e: React.MouseEvent<HTMLDivElement>) {
-    const v = clientXToValue(e.clientX);
-    if (Math.abs(v - start) <= Math.abs(v - end)) onStartChange(v);
-    else onEndChange(v);
-  }
-
-  const startPct = toPercent(start);
-  const endPct = toPercent(end);
-  const fillLeft = Math.min(startPct, endPct);
-  const fillWidth = Math.abs(endPct - startPct);
-
-  return (
-    <div className="relative py-2 select-none">
-      {/* Clickable track area */}
-      <div
-        ref={trackRef}
-        className="relative h-2 rounded-full bg-muted cursor-pointer"
-        onClick={onTrackClick}
-      >
-        {/* Filled region */}
-        <div
-          className={`absolute h-2 rounded-full transition-colors ${valid ? "bg-primary" : "bg-destructive/70"}`}
-          style={{ left: `${fillLeft}%`, width: `${fillWidth}%` }}
-        />
-      </div>
-
-      {/* Start thumb */}
-      <div
-        className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-primary border-2 border-background shadow-md cursor-grab active:cursor-grabbing touch-none z-10"
-        style={{ left: `calc(${startPct}% - 10px)` }}
-        {...makeThumbHandlers(onStartChange)}
-      />
-
-      {/* End thumb */}
-      <div
-        className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-primary border-2 border-background shadow-md cursor-grab active:cursor-grabbing touch-none z-20"
-        style={{ left: `calc(${endPct}% - 10px)` }}
-        {...makeThumbHandlers(onEndChange)}
-      />
-    </div>
-  );
-}
-
 // ── Modal ──────────────────────────────────────────────────────────────────────
 
 interface SubmitClipModalProps {
@@ -144,10 +57,8 @@ interface SubmitClipModalProps {
   contest: Contest;
   voterToken: string;
   initialSubmitterName: string;
-  onSuccess: () => void;
+  onSuccess: (clip: ContestClip) => void;
 }
-
-const FALLBACK_DURATION = 14400;
 
 export function SubmitClipModal({
   open,
@@ -169,19 +80,22 @@ export function SubmitClipModal({
   const [submitterName, setSubmitterName] = useState(initialSubmitterName);
   const [formError, setFormError] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [captureState, setCaptureState] = useState<"idle" | "capturing">("idle");
+  const [liveEndSeconds, setLiveEndSeconds] = useState(0);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const captureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentVideoTimeRef = useRef<number>(0);
+  const captureStartTimeRef = useRef<number>(0);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const startSeconds = hmsToSeconds(startH, startM, startS);
   const endSeconds = hmsToSeconds(endH, endM, endS);
   const clipDuration = endSeconds - startSeconds;
-  const sliderMax = videoDuration > 0 ? videoDuration : FALLBACK_DURATION;
-
   const startExceedsVideo = videoDuration > 0 && startSeconds > videoDuration;
   const endExceedsVideo = videoDuration > 0 && endSeconds > videoDuration;
   const isTimestampValid =
@@ -190,6 +104,8 @@ export function SubmitClipModal({
     clipDuration <= contest.maxClipDurationSeconds &&
     !startExceedsVideo &&
     !endExceedsVideo;
+
+  const hasAnyTimestamp = captureState === "capturing" || startSeconds > 0 || endSeconds > 0;
 
   // ── Data ───────────────────────────────────────────────────────────────────
   const { data: eligibleStreams, isLoading: streamsLoading } = useQuery<LivestreamRecord[]>({
@@ -211,10 +127,10 @@ export function SubmitClipModal({
         endSeconds,
         submitterToken: voterToken,
         submitterName: submitterName.trim(),
-      }),
-    onSuccess: () => {
+      }).then((r) => r.json() as Promise<ContestClip>),
+    onSuccess: (clip) => {
       saveSubmitterName(submitterName.trim());
-      onSuccess();
+      onSuccess(clip);
       handleClose();
     },
     onError: (err) => setFormError(getReadableError(err)),
@@ -229,15 +145,15 @@ export function SubmitClipModal({
         if (data?.info?.duration && data.info.duration > 0) {
           setVideoDuration(Math.floor(data.info.duration));
         }
-        // Sync isPlaying if video pauses/ends on its own
+        if (data?.info?.currentTime !== undefined) {
+          currentVideoTimeRef.current = data.info.currentTime;
+        }
+        // If video ends naturally while previewing, clean up
         const ps = data?.info?.playerState;
-        if (ps === 2 || ps === 0) {
-          if (previewTimerRef.current) {
-            clearTimeout(previewTimerRef.current);
-            previewTimerRef.current = null;
-          }
+        if ((ps === 2 || ps === 0) && previewTimerRef.current) {
+          clearTimeout(previewTimerRef.current);
+          previewTimerRef.current = null;
           setIsPreviewing(false);
-          setIsPlaying(false);
         }
       } catch {}
     };
@@ -250,24 +166,22 @@ export function SubmitClipModal({
     setVideoDuration(0);
     setStartH("0"); setStartM("0"); setStartS("0");
     setEndH("0"); setEndM("0"); setEndS("0");
-    clearPreviewTimer();
+    currentVideoTimeRef.current = 0;
+    captureStartTimeRef.current = 0;
+    if (captureTimerRef.current) { clearTimeout(captureTimerRef.current); captureTimerRef.current = null; }
+    if (previewTimerRef.current) { clearTimeout(previewTimerRef.current); previewTimerRef.current = null; }
+    if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; }
+    setCaptureState("idle");
+    setLiveEndSeconds(0);
     setIsPreviewing(false);
-    setIsPlaying(false);
   }, [selectedVideoId]);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── YouTube postMessage helpers ────────────────────────────────────────────
   function postToPlayer(func: string, args: unknown[] = []) {
     iframeRef.current?.contentWindow?.postMessage(
       JSON.stringify({ event: "command", func, args }),
       "https://www.youtube.com"
     );
-  }
-
-  function clearPreviewTimer() {
-    if (previewTimerRef.current) {
-      clearTimeout(previewTimerRef.current);
-      previewTimerRef.current = null;
-    }
   }
 
   function onIframeLoad() {
@@ -277,96 +191,82 @@ export function SubmitClipModal({
     );
   }
 
-  // ── Playback controls ──────────────────────────────────────────────────────
-  function handlePlayPause() {
-    clearPreviewTimer();
-    setIsPreviewing(false);
-    if (isPlaying) {
-      postToPlayer("pauseVideo");
-      setIsPlaying(false);
-    } else {
+  // ── Capture flow ───────────────────────────────────────────────────────────
+  function stopLiveInterval() {
+    if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; }
+  }
+
+  function handleCaptureButton() {
+    if (captureState === "idle") {
+      const t = Math.floor(currentVideoTimeRef.current);
+      captureStartTimeRef.current = t;
+      const [h, m, s] = secondsToHMS(t);
+      setStartH(h); setStartM(m); setStartS(s);
+      setEndH("0"); setEndM("0"); setEndS("0");
+      setLiveEndSeconds(t);
       postToPlayer("playVideo");
-      setIsPlaying(true);
+      setCaptureState("capturing");
+      if (previewTimerRef.current) { clearTimeout(previewTimerRef.current); previewTimerRef.current = null; }
+      setIsPreviewing(false);
+      // Tick the live end display every 250 ms from currentVideoTimeRef
+      stopLiveInterval();
+      liveIntervalRef.current = setInterval(() => {
+        setLiveEndSeconds(Math.floor(currentVideoTimeRef.current));
+      }, 250);
+      // Auto-stop after max clip duration
+      captureTimerRef.current = setTimeout(() => {
+        stopLiveInterval();
+        const endT = captureStartTimeRef.current + contest.maxClipDurationSeconds;
+        const [eh, em, es] = secondsToHMS(endT);
+        setEndH(eh); setEndM(em); setEndS(es);
+        setLiveEndSeconds(endT);
+        postToPlayer("pauseVideo");
+        setCaptureState("idle");
+        captureTimerRef.current = null;
+      }, contest.maxClipDurationSeconds * 1000);
+    } else {
+      finishCapture();
     }
   }
 
+  function finishCapture() {
+    if (captureTimerRef.current) { clearTimeout(captureTimerRef.current); captureTimerRef.current = null; }
+    stopLiveInterval();
+    const t = Math.floor(currentVideoTimeRef.current);
+    const [h, m, s] = secondsToHMS(t);
+    setEndH(h); setEndM(m); setEndS(s);
+    setLiveEndSeconds(t);
+    postToPlayer("pauseVideo");
+    setCaptureState("idle");
+  }
+
+  // ── Play Clip preview ──────────────────────────────────────────────────────
   function handlePreviewClip() {
-    clearPreviewTimer();
+    if (previewTimerRef.current) { clearTimeout(previewTimerRef.current); previewTimerRef.current = null; }
     postToPlayer("seekTo", [startSeconds, true]);
     setTimeout(() => postToPlayer("playVideo"), 300);
     setIsPreviewing(true);
-    setIsPlaying(true);
     previewTimerRef.current = setTimeout(() => {
       postToPlayer("pauseVideo");
       setIsPreviewing(false);
-      setIsPlaying(false);
     }, clipDuration * 1000 + 400);
   }
 
   function handleStopPreview() {
-    clearPreviewTimer();
+    if (previewTimerRef.current) { clearTimeout(previewTimerRef.current); previewTimerRef.current = null; }
     postToPlayer("pauseVideo");
     setIsPreviewing(false);
-    setIsPlaying(false);
-  }
-
-  // ── Nudge start / end timestamp (buttons in transport bar) ────────────────
-  function adjustStart(delta: number) {
-    const newVal = Math.max(0, Math.min(sliderMax, startSeconds + delta));
-    const [h, m, s] = secondsToHMS(newVal);
-    setStartH(h); setStartM(m); setStartS(s);
-    clearPreviewTimer();
-    setIsPreviewing(false);
-    postToPlayer("seekTo", [newVal, true]);
-  }
-
-  function adjustEnd(delta: number) {
-    const newVal = Math.max(0, Math.min(sliderMax, endSeconds + delta));
-    const [h, m, s] = secondsToHMS(newVal);
-    setEndH(h); setEndM(m); setEndS(s);
-    clearPreviewTimer();
-    setIsPreviewing(false);
-    postToPlayer("seekTo", [newVal, true]);
-  }
-
-  // ── Slider change handlers ─────────────────────────────────────────────────
-  function handleStartChange(value: number) {
-    const [h, m, s] = secondsToHMS(value);
-    setStartH(h); setStartM(m); setStartS(s);
-    clearPreviewTimer();
-    setIsPreviewing(false);
-    setIsPlaying(false);
-    postToPlayer("seekTo", [value, true]);
-    postToPlayer("pauseVideo");
-  }
-
-  function handleEndChange(value: number) {
-    const [h, m, s] = secondsToHMS(value);
-    setEndH(h); setEndM(m); setEndS(s);
-    clearPreviewTimer();
-    setIsPreviewing(false);
-    setIsPlaying(false);
-    postToPlayer("seekTo", [value, true]);
-    postToPlayer("pauseVideo");
   }
 
   // ── Manual text field blur → seek ─────────────────────────────────────────
   function seekStart(h: string, m: string, s: string) {
     if (!selectedVideoId) return;
-    clearPreviewTimer();
-    setIsPreviewing(false);
-    setIsPlaying(false);
     postToPlayer("seekTo", [hmsToSeconds(h, m, s), true]);
-    postToPlayer("pauseVideo");
   }
 
   function seekEnd(h: string, m: string, s: string) {
     if (!selectedVideoId) return;
-    clearPreviewTimer();
-    setIsPreviewing(false);
-    setIsPlaying(false);
     postToPlayer("seekTo", [hmsToSeconds(h, m, s), true]);
-    postToPlayer("pauseVideo");
   }
 
   // ── Dialog lifecycle ───────────────────────────────────────────────────────
@@ -380,9 +280,14 @@ export function SubmitClipModal({
     setFormError(null);
     setVideoDuration(0);
     setManualEntryOpen(false);
-    clearPreviewTimer();
+    currentVideoTimeRef.current = 0;
+    captureStartTimeRef.current = 0;
+    if (captureTimerRef.current) { clearTimeout(captureTimerRef.current); captureTimerRef.current = null; }
+    if (previewTimerRef.current) { clearTimeout(previewTimerRef.current); previewTimerRef.current = null; }
+    if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; }
+    setCaptureState("idle");
+    setLiveEndSeconds(0);
     setIsPreviewing(false);
-    setIsPlaying(false);
     submitMutation.reset();
   }
 
@@ -455,9 +360,9 @@ export function SubmitClipModal({
               </p>
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-4">
 
-              {/* 16:9 embed */}
+              {/* 16:9 embed — controls re-enabled */}
               <div
                 className="relative w-full rounded-md overflow-hidden border border-border/50"
                 style={{ paddingBottom: "56.25%" }}
@@ -465,7 +370,7 @@ export function SubmitClipModal({
                 <iframe
                   ref={iframeRef}
                   className="absolute inset-0 w-full h-full"
-                  src={`https://www.youtube.com/embed/${selectedVideoId}?enablejsapi=1&autoplay=0&controls=0&disablekb=1&iv_load_policy=3&rel=0`}
+                  src={`https://www.youtube.com/embed/${selectedVideoId}?enablejsapi=1&autoplay=0&iv_load_policy=3&rel=0`}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                   onLoad={onIframeLoad}
@@ -473,74 +378,70 @@ export function SubmitClipModal({
                 />
               </div>
 
-              {/* Transport bar — [S−15] [S−5] [▶/⏸] [E+5] [E+15] */}
-              <div className="space-y-1">
-                <div className="flex justify-between px-0.5">
-                  <span className="font-retro text-md text-muted-foreground/60">Start</span>
-                  <span className="font-retro text-md text-muted-foreground/60">End</span>
-                </div>
-                <div className="flex gap-1 items-center">
-                  <Button variant="outline" className="flex-1 font-retro text-md h-10 px-1" onClick={() => adjustStart(-15)}>−15s</Button>
-                  <Button variant="outline" className="flex-1 font-retro text-md h-10 px-1" onClick={() => adjustStart(-5)}>−5s</Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0 h-10 w-12 mx-1"
-                    onClick={handlePlayPause}
-                    title={isPlaying ? "Pause" : "Play"}
-                  >
-                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                  </Button>
-                  <Button variant="outline" className="flex-1 font-retro text-md h-10 px-1" onClick={() => adjustEnd(5)}>+5s</Button>
-                  <Button variant="outline" className="flex-1 font-retro text-md h-10 px-1" onClick={() => adjustEnd(15)}>+15s</Button>
-                </div>
-              </div>
+              {/* Capture button */}
+              <Button
+                className={`w-full font-retro uppercase tracking-wide ${
+                  captureState === "capturing"
+                    ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground border-destructive"
+                    : ""
+                }`}
+                variant={captureState === "capturing" ? "default" : "outline"}
+                onClick={handleCaptureButton}
+              >
+                <span
+                  className={`w-2.5 h-2.5 rounded-full mr-2.5 shrink-0 bg-destructive ${
+                    captureState === "capturing" ? "animate-pulse bg-white" : ""
+                  }`}
+                />
+                {captureState === "capturing" ? "End Clip Capture" : "Start Clip Capture"}
+              </Button>
 
-              {/* Dual-handle range slider */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
+              {/* Captured timestamp display */}
+              {hasAnyTimestamp && (
+                <div className="flex items-center justify-between px-1">
                   <span className="font-retro text-md text-muted-foreground">
                     Start: <span className="text-primary tabular-nums">{formatTimestamp(startSeconds)}</span>
                   </span>
                   <span className="font-retro text-md text-muted-foreground">
-                    End: <span className="text-primary tabular-nums">{formatTimestamp(endSeconds)}</span>
+                    End:{" "}
+                    <span className={`tabular-nums ${captureState === "capturing" ? "text-destructive animate-pulse" : "text-primary"}`}>
+                      {captureState === "capturing"
+                        ? formatTimestamp(liveEndSeconds)
+                        : endSeconds > 0
+                        ? formatTimestamp(endSeconds)
+                        : "—"}
+                    </span>
                   </span>
                 </div>
-                <DualRangeSlider
-                  min={0}
-                  max={sliderMax}
-                  start={startSeconds}
-                  end={endSeconds}
-                  valid={isTimestampValid}
-                  onStartChange={handleStartChange}
-                  onEndChange={handleEndChange}
-                />
-              </div>
+              )}
 
-              {/* Validation hint */}
-              <p className={`font-retro text-md text-center ${isTimestampValid ? "text-muted-foreground" : "text-destructive"}`}>
-                {endSeconds <= startSeconds
-                  ? "Set an end time after the start"
-                  : clipDuration > contest.maxClipDurationSeconds
-                  ? `Clip too long — max ${contest.maxClipDurationSeconds}s`
-                  : clipDuration < 5
-                  ? "Clip must be at least 5 seconds"
-                  : `Clip length: ${formatTimestamp(clipDuration)}`}
-              </p>
+              {/* Validation / clip length hint */}
+              {hasAnyTimestamp && endSeconds > 0 && (
+                <p className={`font-retro text-md text-center ${isTimestampValid ? "text-muted-foreground" : "text-destructive"}`}>
+                  {endSeconds <= startSeconds
+                    ? "End time must be after start time"
+                    : clipDuration > contest.maxClipDurationSeconds
+                    ? `Clip too long — max ${contest.maxClipDurationSeconds}s`
+                    : clipDuration < 5
+                    ? "Clip must be at least 5 seconds"
+                    : `Clip length: ${formatTimestamp(clipDuration)}`}
+                </p>
+              )}
 
               {/* Play Clip / Stop Preview */}
-              <Button
-                variant="outline"
-                className="w-full font-retro uppercase"
-                onClick={isPreviewing ? handleStopPreview : handlePreviewClip}
-                disabled={!isPreviewing && !isTimestampValid}
-              >
-                {isPreviewing ? (
-                  <><Square className="w-4 h-4 mr-2" />Stop Preview</>
-                ) : (
-                  <><Play className="w-4 h-4 mr-2" />Play Clip</>
-                )}
-              </Button>
+              {isTimestampValid && (
+                <Button
+                  variant="outline"
+                  className="w-full font-retro uppercase"
+                  onClick={isPreviewing ? handleStopPreview : handlePreviewClip}
+                >
+                  {isPreviewing ? (
+                    <><Square className="w-4 h-4 mr-2" />Stop Preview</>
+                  ) : (
+                    <><Play className="w-4 h-4 mr-2" />Play Clip</>
+                  )}
+                </Button>
+              )}
 
               {/* Manual entry accordion */}
               <div className="border border-border/50 rounded-md overflow-hidden">
