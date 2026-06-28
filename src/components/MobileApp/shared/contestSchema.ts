@@ -40,4 +40,5 @@ export interface VoterStatusResponse {
   votesRemainingToday: number;
   nextPeriodStart: string;
   votedClipIds: number[];
+  submissionsRemaining: number;
 }

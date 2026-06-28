@@ -5,7 +5,7 @@ import { Film } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { SubmitClipModal } from "./contest/SubmitClipModal";
-import type { Contest, ContestClip } from "../shared/contestSchema";
+import type { Contest, ContestClip, VoterStatusResponse } from "../shared/contestSchema";
 import type { PaginatedResponse } from "../shared/schema";
 import { apiRequest } from "../lib/queryClient";
 import { useVoterToken, getStoredSubmitterName } from "../hooks/useVoterToken";
@@ -30,6 +30,16 @@ export function TopClipsCard() {
   });
 
   const contestId = contest?.id ?? null;
+
+  const { data: voterStatus } = useQuery<VoterStatusResponse>({
+    queryKey: ["contest-voter-status", contestId, voterToken],
+    queryFn: () =>
+      apiRequest("GET", `/api/contest/clip-contest/${contestId}/voter/${voterToken}`).then((r) =>
+        r.json()
+      ),
+    enabled: !!contestId,
+    refetchInterval: 60_000,
+  });
 
   const { data: clipsPage } = useQuery<PaginatedResponse<ContestClip>>({
     queryKey: ["contest-clips-top3", contestId],
@@ -114,6 +124,8 @@ export function TopClipsCard() {
             <Button
               className="font-retro uppercase tracking-wide"
               onClick={() => setSubmitOpen(true)}
+              disabled={voterStatus != null && voterStatus.submissionsRemaining === 0}
+              title={voterStatus != null && voterStatus.submissionsRemaining === 0 ? "Submission limit reached" : undefined}
             >
               + Submit Clip
             </Button>

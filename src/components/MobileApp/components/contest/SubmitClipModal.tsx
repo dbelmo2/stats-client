@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, Loader2, Play, Square } from "lucide-react";
+import Skeleton from "@mui/material/Skeleton";
 import {
   Dialog,
   DialogContent,
@@ -85,6 +86,7 @@ export function SubmitClipModal({
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -368,37 +370,67 @@ export function SubmitClipModal({
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5">
-          {pickerOpen ? (
-            <div className="space-y-1">
-              {(eligibleStreams ?? []).map((stream) => (
-                <button
-                  key={stream.videoId}
-                  type="button"
-                  onClick={() => { setSelectedVideoId(stream.videoId); setPickerOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 h-[68px] rounded-md text-left transition-colors ${
-                    stream.videoId === selectedVideoId ? "bg-primary/10" : "hover:bg-muted/30"
-                  }`}
-                >
-                  <img
-                    src={`https://img.youtube.com/vi/${stream.videoId}/mqdefault.jpg`}
-                    alt=""
-                    className="h-11 w-[78px] rounded object-cover shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-retro text-md text-foreground line-clamp-2 leading-snug">{stream.title}</p>
-                    {stream.actualStart && (
-                      <p className="font-retro text-xs text-muted-foreground mt-0.5">
-                        {new Date(stream.actualStart).toLocaleDateString()}
-                      </p>
+          {eligibleStreams && eligibleStreams.length > 0 && (
+            <div className={pickerOpen ? "space-y-1" : "hidden"}>
+              {eligibleStreams.map((stream) => {
+                const imgLoaded = loadedImages.has(stream.videoId);
+                return (
+                  <button
+                    key={stream.videoId}
+                    type="button"
+                    onClick={() => { setSelectedVideoId(stream.videoId); setPickerOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 h-[68px] rounded-md text-left transition-colors ${
+                      stream.videoId === selectedVideoId ? "bg-primary/10" : "hover:bg-muted/30"
+                    }`}
+                  >
+                    <div className="relative h-11 w-[78px] shrink-0">
+                      {!imgLoaded && (
+                        <Skeleton
+                          variant="rectangular"
+                          animation="wave"
+                          width={78}
+                          height={44}
+                          sx={{ borderRadius: "4px", bgcolor: "hsl(var(--muted))" }}
+                        />
+                      )}
+                      <img
+                        src={`https://img.youtube.com/vi/${stream.videoId}/mqdefault.jpg`}
+                        alt=""
+                        className="h-11 w-[78px] rounded object-cover absolute inset-0"
+                        style={{ opacity: imgLoaded ? 1 : 0 }}
+                        onLoad={() => setLoadedImages((prev) => new Set([...prev, stream.videoId]))}
+                      />
+                    </div>
+
+                    <div className="flex-1 min-w-0 space-y-1">
+                      {imgLoaded ? (
+                        <>
+                          <p className="font-retro text-md text-foreground line-clamp-2 leading-snug">{stream.title}</p>
+                          {stream.actualStart && (
+                            <p className="font-retro text-xs text-muted-foreground">
+                              {new Date(stream.actualStart).toLocaleDateString()}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <Skeleton variant="text" animation="wave" sx={{ fontSize: "0.875rem", bgcolor: "hsl(var(--muted))" }} />
+                          <Skeleton variant="text" animation="wave" width="45%" sx={{ fontSize: "0.75rem", bgcolor: "hsl(var(--muted))" }} />
+                        </>
+                      )}
+                    </div>
+
+                    {stream.videoId === selectedVideoId && imgLoaded && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                     )}
-                  </div>
-                  {stream.videoId === selectedVideoId && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                  )}
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
-          ) : !selectedVideoId ? (
+          )}
+
+          {!pickerOpen && (
+            !selectedVideoId ? (
             <div className="flex h-full items-center justify-center">
               <p className="font-retro text-lg text-muted-foreground/50 text-center">
                 Select a recent stream to get started
@@ -645,6 +677,7 @@ export function SubmitClipModal({
               )}
 
             </div>
+            )
           )}
         </div>
 

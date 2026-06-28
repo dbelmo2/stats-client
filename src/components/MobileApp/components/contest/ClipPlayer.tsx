@@ -137,21 +137,9 @@ export function ClipPlayer({ clip, autoPlay = false }: ClipPlayerProps) {
       </div>
 
       {/* Controls */}
-      <div className="px-3 py-2 flex items-center gap-3 bg-black/30 border-t border-border/20">
-        <Button
-          size="sm"
-          variant="outline"
-          className="font-retro text-sm uppercase shrink-0 w-28 flex items-center gap-1.5"
-          onClick={handlePlayPause}
-        >
-          {isPlaying
-            ? <><Pause className="w-3 h-3" /> Pause</>
-            : hasEnded
-            ? <><RotateCcw className="w-3 h-3" /> Play Again</>
-            : <><Play className="w-3 h-3" /> Play Clip</>}
-        </Button>
-
-        <div className="flex-1 flex items-center gap-2 min-w-0">
+      <div className="px-3 py-2 bg-black/30 border-t border-border/20 flex flex-col min-[475px]:flex-row min-[475px]:items-center gap-2 min-[475px]:gap-3">
+        {/* Progress: first on mobile, center (order-2) on desktop */}
+        <div className="flex items-center gap-2 min-w-0 min-[475px]:flex-1 min-[475px]:order-2">
           <span className="font-retro text-sm text-muted-foreground shrink-0 tabular-nums">{fmtTime(progress)}</span>
           <RangeSlider
             value={progress}
@@ -168,28 +156,44 @@ export function ClipPlayer({ clip, autoPlay = false }: ClipPlayerProps) {
           <span className="font-retro text-sm text-muted-foreground shrink-0 tabular-nums">{fmtTime(duration)}</span>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            onClick={() => {
-              const next = volume === 0 ? prevVolumeRef.current || 100 : 0;
-              setVolume(next);
-              playerRef.current?.setVolume(next);
-            }}
+        {/* Play + volume: side-by-side row on mobile, dissolved via contents on desktop */}
+        <div className="flex items-center justify-between min-[475px]:contents">
+          <Button
+            size="sm"
+            variant="outline"
+            className="font-retro text-sm uppercase shrink-0 h-8 w-8 p-0 min-[520px]:w-28 min-[520px]:px-2 flex items-center justify-center gap-1.5 min-[475px]:order-1"
+            onClick={handlePlayPause}
           >
-            {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-          </button>
-          <RangeSlider
-            value={volume}
-            min={0} max={100} step={1}
-            className="w-20"
-            onChange={(e) => {
-              const val = Number(e.target.value);
-              if (val > 0) prevVolumeRef.current = val;
-              setVolume(val);
-              playerRef.current?.setVolume(val);
-            }}
-          />
+            {isPlaying
+              ? <><Pause className="w-3 h-3" /><span className="hidden min-[520px]:inline">Pause</span></>
+              : hasEnded
+              ? <><RotateCcw className="w-3 h-3" /><span className="hidden min-[520px]:inline">Play Again</span></>
+              : <><Play className="w-3 h-3" /><span className="hidden min-[520px]:inline">Play Clip</span></>}
+          </Button>
+
+          <div className="flex items-center gap-1.5 shrink-0 min-[475px]:order-3">
+            <button
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => {
+                const next = volume === 0 ? prevVolumeRef.current || 100 : 0;
+                setVolume(next);
+                playerRef.current?.setVolume(next);
+              }}
+            >
+              {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </button>
+            <RangeSlider
+              value={volume}
+              min={0} max={100} step={1}
+              className="w-20"
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (val > 0) prevVolumeRef.current = val;
+                setVolume(val);
+                playerRef.current?.setVolume(val);
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>

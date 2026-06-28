@@ -210,6 +210,8 @@ export default function ContestPage() {
   const totalPages = isFiltered ? 0 : (clipsPage?.totalPages ?? 0);
   const totalClips = isFiltered ? displayClips.length : (clipsPage?.totalElements ?? 0);
   const votesRemaining = voterStatus?.votesRemainingToday ?? 0;
+  const submissionsRemaining = voterStatus?.submissionsRemaining ?? (contest?.maxSubmissionsPerUser ?? 1);
+  const submissionsExhausted = voterStatus != null && submissionsRemaining === 0;
   const votedClipIds = new Set(voterStatus?.votedClipIds ?? []);
   const isVoting = voteMutation.isPending || unvoteMutation.isPending;
 
@@ -272,6 +274,8 @@ export default function ContestPage() {
                     <Button
                       className="font-retro uppercase tracking-wide"
                       onClick={() => setSubmitOpen(true)}
+                      disabled={submissionsExhausted}
+                      title={submissionsExhausted ? "Submission limit reached" : undefined}
                     >
                       + Submit a Clip
                     </Button>
@@ -297,10 +301,14 @@ export default function ContestPage() {
                       <div className="p-1.5 rounded-md bg-accent/20 border border-accent/40">
                         <Zap className="w-4 h-4 text-accent" />
                       </div>
-                      <div>
+                      <div className="space-y-0.5">
                         <div className="font-pixel text-md text-accent">
                           {votesRemaining}{" "}
                           {votesRemaining === 1 ? "VOTE" : "VOTES"} REMAINING
+                        </div>
+                        <div className="font-pixel text-md text-primary">
+                          {submissionsRemaining}{" "}
+                          {submissionsRemaining === 1 ? "SUBMISSION" : "SUBMISSIONS"} REMAINING
                         </div>
                         <div className="font-retro text-sm text-muted-foreground uppercase">
                           {contest.voteRefreshSchedule === "DAILY"
@@ -423,6 +431,8 @@ export default function ContestPage() {
                         <Button
                           className="font-retro uppercase mt-2"
                           onClick={() => setSubmitOpen(true)}
+                          disabled={submissionsExhausted}
+                          title={submissionsExhausted ? "Submission limit reached" : undefined}
                         >
                           + Submit a Clip
                         </Button>
