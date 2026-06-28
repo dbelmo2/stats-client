@@ -56,14 +56,14 @@ function ResultRow({ result }: { result: ContestResult }) {
         )}
 
         <div className="flex-1 min-w-0">
-          <div className="font-retro text-xs uppercase text-muted-foreground">
+          <div className="font-retro text-sm uppercase text-muted-foreground">
             {RANK_LABELS[result.rank - 1] ?? `Rank ${result.rank}`}
           </div>
           <div className="font-retro text-base text-foreground truncate">
             {result.submitterName}
           </div>
           {clip && (
-            <div className="font-retro text-xs text-muted-foreground truncate mt-0.5">
+            <div className="font-retro text-sm text-muted-foreground truncate mt-0.5">
               {clip.title}
             </div>
           )}
@@ -71,7 +71,7 @@ function ResultRow({ result }: { result: ContestResult }) {
 
         <div className="text-right shrink-0">
           <div className="font-pixel text-md text-primary">{result.voteCount}</div>
-          <div className="font-retro text-xs text-muted-foreground">votes</div>
+          <div className="font-retro text-sm text-muted-foreground">votes</div>
         </div>
       </div>
 

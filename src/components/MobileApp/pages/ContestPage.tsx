@@ -302,7 +302,7 @@ export default function ContestPage() {
                           {votesRemaining}{" "}
                           {votesRemaining === 1 ? "VOTE" : "VOTES"} REMAINING
                         </div>
-                        <div className="font-retro text-xs text-muted-foreground uppercase">
+                        <div className="font-retro text-sm text-muted-foreground uppercase">
                           {contest.voteRefreshSchedule === "DAILY"
                             ? "Resets at midnight UTC"
                             : `Resets on ${contest.voteRefreshSchedule}`}
@@ -358,7 +358,7 @@ export default function ContestPage() {
                         key={field}
                         variant={active ? "default" : "outline"}
                         size="sm"
-                        className="font-retro text-xs h-8 px-3 gap-1"
+                        className="font-retro text-sm h-8 px-3 gap-1"
                         onClick={() => {
                           if (active) {
                             setSortDir((d) => (d === "desc" ? "asc" : "desc"));

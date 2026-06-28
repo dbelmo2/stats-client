@@ -109,7 +109,7 @@ export default function Dashboard() {
 
         <div className="w-full flex justify-end mt-2 md:mt-4">
           <div className="flex items-center gap-2 text-right">
-            <p className="font-retro text-xs md:text-md text-muted-foreground">How is late time calculated?</p>
+            <p className="font-retro text-sm md:text-md text-muted-foreground">How is late time calculated?</p>
             <Tooltip open={isLateCalcInfoOpen} onOpenChange={setIsLateCalcInfoOpen}>
               <TooltipTrigger asChild>
                 <Button
@@ -123,7 +123,7 @@ export default function Dashboard() {
                   <Info className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" align="end" className="max-w-[320px] font-retro text-xs leading-relaxed">
+              <TooltipContent side="bottom" align="end" className="max-w-[320px] font-retro text-sm leading-relaxed">
                 Late time is calculated using the YouTube API to compare a stream&apos;s original scheduled start time to its actual start time. If the scheduled time changes later, the app keeps the original scheduled timestamp for the calculation. Streams that start within 10 seconds of the original scheduled time are counted as ON TIME.
               </TooltipContent>
             </Tooltip>

@@ -103,7 +103,7 @@ export function StatCard({
                     size="sm"
                     onClick={onActionClick}
                     disabled={actionDisabled || !onActionClick}
-                    className="font-retro text-xs uppercase tracking-wide flex items-center justify-center gap-2 w-full h-12"
+                    className="font-retro text-sm uppercase tracking-wide flex items-center justify-center gap-2 w-full h-12"
                     data-testid={actionTestId ?? `button-action-${label.toLowerCase().replace(/\s+/g, '-')}`}
                   >
                     {actionChecked && <Check className="w-4 h-4" />}
@@ -117,7 +117,7 @@ export function StatCard({
                     size="sm"
                     onClick={onSecondaryActionClick}
                     disabled={!onSecondaryActionClick}
-                    className="font-retro text-xs uppercase tracking-wide flex items-center justify-center gap-2 w-full h-12"
+                    className="font-retro text-sm uppercase tracking-wide flex items-center justify-center gap-2 w-full h-12"
                     data-testid={secondaryActionTestId ?? `button-secondary-action-${label.toLowerCase().replace(/\s+/g, '-')}`}
                   >
                     {secondaryActionLabel}
@@ -131,7 +131,7 @@ export function StatCard({
                 variant="outline"
                 size="sm"
                 onClick={handleWatchOnYouTube}
-                className="font-retro text-xs uppercase tracking-wide flex items-center gap-2 w-full h-12"
+                className="font-retro text-sm uppercase tracking-wide flex items-center gap-2 w-full h-12"
                 data-testid={`button-watch-youtube-${label.toLowerCase().replace(/\s+/g, '-')}`}
               >
                 <ExternalLink className="w-4 h-4" />

@@ -82,7 +82,7 @@ export function TimeStatusPieChart({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" data-testid="list-time-status-breakdown">
           {chartData.map((entry) => (
             <div key={entry.key} className="rounded-md border border-border/60 bg-background/60 px-3 py-2">
-              <div className="font-retro text-xs text-muted-foreground">{entry.label}</div>
+              <div className="font-retro text-sm text-muted-foreground">{entry.label}</div>
               <div className="font-pixel text-lg leading-none" style={{ color: entry.color }}>
                 {entry.percentage.toFixed(1)}%
               </div>

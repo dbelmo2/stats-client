@@ -286,7 +286,7 @@ export default function LivestreamDataPage() {
       type: "singleSelect",
       valueOptions: ["LATE", "EARLY", "ON_TIME"],
       renderCell: ({ value }) => (
-        <span className={`inline-flex rounded border px-2 py-0.5 font-retro text-xs ${timeStatusBadgeClass(value)}`}>
+        <span className={`inline-flex rounded border px-2 py-0.5 font-retro text-sm ${timeStatusBadgeClass(value)}`}>
           {value}
         </span>
       ),
@@ -300,7 +300,7 @@ export default function LivestreamDataPage() {
       type: "singleSelect",
       valueOptions: ["LIVE", "SCHEDULED", "ENDED", "CANCELLED"],
       renderCell: ({ value }) => (
-        <span className={`inline-flex rounded border px-2 py-0.5 font-retro text-xs ${statusBadgeClass(value)}`}>
+        <span className={`inline-flex rounded border px-2 py-0.5 font-retro text-sm ${statusBadgeClass(value)}`}>
           {value}
         </span>
       ),

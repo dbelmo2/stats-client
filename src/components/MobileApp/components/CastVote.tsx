@@ -1,9 +1,31 @@
 import { CheckCircle, Vote } from "lucide-react";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import type { TimeStatus } from "../shared/schema";
+
+const toggleSx = {
+  '& .MuiToggleButton-root': {
+    fontFamily: 'inherit',
+    fontSize: '0.7rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    color: 'hsl(var(--muted-foreground))',
+    borderColor: 'hsl(var(--input))',
+    py: 0.9,
+    px: 2,
+    '&.Mui-selected': {
+      color: 'hsl(var(--primary))',
+      backgroundColor: 'hsl(var(--primary) / 0.12)',
+      borderColor: 'hsl(var(--primary) / 0.5)',
+      '&:hover': { backgroundColor: 'hsl(var(--primary) / 0.2)' },
+    },
+    '&:hover': { backgroundColor: 'hsl(var(--muted) / 0.15)' },
+  },
+};
 
 interface CastVoteProps {
   hasPendingVote: boolean;
@@ -72,7 +94,7 @@ export function CastVote({
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="vote-username" className="font-retro text-xs uppercase tracking-wide text-muted-foreground">
+              <Label htmlFor="vote-username" className="font-retro text-sm uppercase tracking-wide text-muted-foreground">
                 Username
               </Label>
               <Input
@@ -85,79 +107,80 @@ export function CastVote({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="vote-direction" className="font-retro text-xs uppercase tracking-wide text-muted-foreground">
-                Prediction Type
-              </Label>
-              <select
-                id="vote-direction"
-                value={voteDirection}
-                onChange={(event) => onDirectionChange(event.target.value as TimeStatus)}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 font-retro text-md"
-                data-testid="select-vote-direction"
-              >
-                <option value="LATE">LATE</option>
-                <option value="EARLY">EARLY</option>
-                <option value="ON_TIME">ON_TIME</option>
-              </select>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="vote-hours" className="font-retro text-xs uppercase tracking-wide text-muted-foreground">
-                  Hours
+            <div className="flex flex-col min-[395px]:flex-row min-[395px]:items-end gap-3">
+              <div className="flex flex-col gap-2 shrink-0 order-2 min-[395px]:order-1">
+                <Label className="font-retro text-sm uppercase tracking-wide text-muted-foreground">
+                  Prediction Type
                 </Label>
-                <Input
-                  id="vote-hours"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={voteHours}
-                  onChange={(event) => onHoursChange(event.target.value)}
-                  onFocus={() => { if (voteHours === "0") onHoursChange(""); }}
-                  onBlur={() => { if (voteHours === "") onHoursChange("0"); }}
-                  disabled={voteDirection === "ON_TIME"}
-                  className="font-retro"
-                  data-testid="input-vote-hours"
-                />
+                <ToggleButtonGroup
+                  value={voteDirection}
+                  exclusive
+                  onChange={(_, val: TimeStatus | null) => { if (val) onDirectionChange(val); }}
+                  size="small"
+                  data-testid="select-vote-direction"
+                  sx={toggleSx}
+                >
+                  <ToggleButton value="LATE">Late</ToggleButton>
+                  <ToggleButton value="EARLY">Early</ToggleButton>
+                  <ToggleButton value="ON_TIME">On Time</ToggleButton>
+                </ToggleButtonGroup>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="vote-minutes" className="font-retro text-xs uppercase tracking-wide text-muted-foreground">
-                  Minutes
-                </Label>
-                <Input
-                  id="vote-minutes"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={voteMinutes}
-                  onChange={(event) => onMinutesChange(event.target.value)}
-                  onFocus={() => { if (voteMinutes === "0") onMinutesChange(""); }}
-                  onBlur={() => { if (voteMinutes === "") onMinutesChange("0"); }}
-                  disabled={voteDirection === "ON_TIME"}
-                  className="font-retro"
-                  data-testid="input-vote-minutes"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="vote-seconds" className="font-retro text-xs uppercase tracking-wide text-muted-foreground">
-                  Seconds
-                </Label>
-                <Input
-                  id="vote-seconds"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={voteSeconds}
-                  onChange={(event) => onSecondsChange(event.target.value)}
-                  onFocus={() => { if (voteSeconds === "0") onSecondsChange(""); }}
-                  onBlur={() => { if (voteSeconds === "") onSecondsChange("0"); }}
-                  disabled={voteDirection === "ON_TIME"}
-                  className="font-retro"
-                  data-testid="input-vote-seconds"
-                />
+              <div className="flex gap-2 flex-1 min-w-0 order-1 min-[395px]:order-2">
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                  <Label htmlFor="vote-hours" className="font-retro text-sm uppercase tracking-wide text-muted-foreground">
+                    Hours
+                  </Label>
+                  <Input
+                    id="vote-hours"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={voteHours}
+                    onChange={(event) => onHoursChange(event.target.value)}
+                    onFocus={() => { if (voteHours === "0") onHoursChange(""); }}
+                    onBlur={() => { if (voteHours === "") onHoursChange("0"); }}
+                    disabled={voteDirection === "ON_TIME"}
+                    className="font-retro"
+                    data-testid="input-vote-hours"
+                  />
+                </div>
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                  <Label htmlFor="vote-minutes" className="font-retro text-sm uppercase tracking-wide text-muted-foreground">
+                    Mins
+                  </Label>
+                  <Input
+                    id="vote-minutes"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={voteMinutes}
+                    onChange={(event) => onMinutesChange(event.target.value)}
+                    onFocus={() => { if (voteMinutes === "0") onMinutesChange(""); }}
+                    onBlur={() => { if (voteMinutes === "") onMinutesChange("0"); }}
+                    disabled={voteDirection === "ON_TIME"}
+                    className="font-retro"
+                    data-testid="input-vote-minutes"
+                  />
+                </div>
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                  <Label htmlFor="vote-seconds" className="font-retro text-sm uppercase tracking-wide text-muted-foreground">
+                    Secs
+                  </Label>
+                  <Input
+                    id="vote-seconds"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={voteSeconds}
+                    onChange={(event) => onSecondsChange(event.target.value)}
+                    onFocus={() => { if (voteSeconds === "0") onSecondsChange(""); }}
+                    onBlur={() => { if (voteSeconds === "") onSecondsChange("0"); }}
+                    disabled={voteDirection === "ON_TIME"}
+                    className="font-retro"
+                    data-testid="input-vote-seconds"
+                  />
+                </div>
               </div>
             </div>
 
@@ -179,7 +202,7 @@ export function CastVote({
               {isPending ? "Submitting..." : "Submit Vote"}
             </Button>
 
-            <p className="font-retro text-xs text-muted-foreground text-center">
+            <p className="font-retro text-sm text-muted-foreground text-center">
               Note: Votes cannot be changed once submitted.
             </p>
           </div>

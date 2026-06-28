@@ -5,6 +5,41 @@ import type { ContestClip } from "../../shared/contestSchema";
 import { pauseForVideo, resumeAfterVideo } from "../../lib/dashboardAudio";
 import { loadYTApi, type YTPlayer } from "../../lib/youtubePlayer";
 
+function RangeSlider({
+  value, min, max, step, className = "",
+  onChange, onPointerDown, onPointerUp,
+}: {
+  value: number; min: number; max: number; step: number; className?: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onPointerDown?: () => void;
+  onPointerUp?: () => void;
+}) {
+  const pct = max > min ? ((value - min) / (max - min)) * 100 : 0;
+  return (
+    <input
+      type="range"
+      min={min} max={max} step={step} value={value}
+      onChange={onChange}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      className={`h-1 cursor-pointer appearance-none rounded-full
+        [&::-webkit-slider-thumb]:appearance-none
+        [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5
+        [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary
+        [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:shadow-sm
+        [&::-webkit-slider-thumb]:cursor-pointer
+        [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-125
+        [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5
+        [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary
+        [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer
+        ${className}`}
+      style={{
+        background: `linear-gradient(to right, hsl(var(--primary)) ${pct}%, hsl(var(--muted)) ${pct}%)`,
+      }}
+    />
+  );
+}
+
 function fmtTime(s: number): string {
   const m = Math.floor(s / 60);
   return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -106,7 +141,7 @@ export function ClipPlayer({ clip, autoPlay = false }: ClipPlayerProps) {
         <Button
           size="sm"
           variant="outline"
-          className="font-retro text-xs uppercase shrink-0 w-28 flex items-center gap-1.5"
+          className="font-retro text-sm uppercase shrink-0 w-28 flex items-center gap-1.5"
           onClick={handlePlayPause}
         >
           {isPlaying
@@ -117,14 +152,11 @@ export function ClipPlayer({ clip, autoPlay = false }: ClipPlayerProps) {
         </Button>
 
         <div className="flex-1 flex items-center gap-2 min-w-0">
-          <span className="font-retro text-xs text-muted-foreground shrink-0 tabular-nums">{fmtTime(progress)}</span>
-          <input
-            type="range"
-            min={0}
-            max={duration}
-            step={0.5}
+          <span className="font-retro text-sm text-muted-foreground shrink-0 tabular-nums">{fmtTime(progress)}</span>
+          <RangeSlider
             value={progress}
-            className="flex-1 h-1.5 cursor-pointer accent-purple-500"
+            min={0} max={duration} step={0.5}
+            className="flex-1"
             onPointerDown={() => { isDraggingRef.current = true; }}
             onPointerUp={() => { isDraggingRef.current = false; }}
             onChange={(e) => {
@@ -133,7 +165,7 @@ export function ClipPlayer({ clip, autoPlay = false }: ClipPlayerProps) {
               playerRef.current?.seekTo(clip.startSeconds + val, true);
             }}
           />
-          <span className="font-retro text-xs text-muted-foreground shrink-0 tabular-nums">{fmtTime(duration)}</span>
+          <span className="font-retro text-sm text-muted-foreground shrink-0 tabular-nums">{fmtTime(duration)}</span>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
@@ -147,13 +179,10 @@ export function ClipPlayer({ clip, autoPlay = false }: ClipPlayerProps) {
           >
             {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
+          <RangeSlider
             value={volume}
-            className="w-20 h-1.5 cursor-pointer accent-purple-500"
+            min={0} max={100} step={1}
+            className="w-20"
             onChange={(e) => {
               const val = Number(e.target.value);
               if (val > 0) prevVolumeRef.current = val;

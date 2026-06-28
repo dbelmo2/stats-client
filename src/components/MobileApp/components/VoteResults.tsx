@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { TbCrown } from "react-icons/tb";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -34,6 +36,26 @@ function getCrownClassName(rank: number): string {
   if (rank === 2) return "text-slate-300";
   return "text-orange-500";
 }
+
+const toggleSx = {
+  '& .MuiToggleButton-root': {
+    fontFamily: 'inherit',
+    fontSize: '0.7rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    color: 'hsl(var(--muted-foreground))',
+    borderColor: 'hsl(var(--input))',
+    py: 0.9,
+    px: 2,
+    '&.Mui-selected': {
+      color: 'hsl(var(--primary))',
+      backgroundColor: 'hsl(var(--primary) / 0.12)',
+      borderColor: 'hsl(var(--primary) / 0.5)',
+      '&:hover': { backgroundColor: 'hsl(var(--primary) / 0.2)' },
+    },
+    '&:hover': { backgroundColor: 'hsl(var(--muted) / 0.15)' },
+  },
+};
 
 export function VoteResults() {
   const [page, setPage] = useState(0);
@@ -107,7 +129,7 @@ export function VoteResults() {
 
         <div className="relative z-10 space-y-3">
           <label className="flex flex-col gap-1">
-            <span className="font-retro text-xs uppercase tracking-wide text-muted-foreground">Search by Username</span>
+            <span className="font-retro text-sm uppercase tracking-wide text-muted-foreground">Search by Username</span>
             <Input
               type="text"
               value={searchQuery}
@@ -118,55 +140,52 @@ export function VoteResults() {
             />
           </label>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="font-retro text-xs uppercase tracking-wide text-muted-foreground">Sort By</span>
-              <select
+          <div className="flex flex-wrap gap-4 items-end">
+            <div className="flex flex-col gap-1">
+              <span className="font-retro text-sm uppercase tracking-wide text-muted-foreground">Sort By</span>
+              <ToggleButtonGroup
                 value={sortField}
-                onChange={(event) => {
-                  setSortField(event.target.value as SortField);
-                  setPage(0);
-                }}
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 font-retro text-md"
+                exclusive
+                onChange={(_, val: SortField | null) => { if (val) { setSortField(val); setPage(0); } }}
+                size="small"
                 data-testid="select-sort-field"
+                sx={toggleSx}
               >
-                <option value="proximityScore">Off By (Proximity)</option>
-                <option value="userGuess">Guess Value</option>
-              </select>
-            </label>
+                <ToggleButton value="proximityScore">Off By</ToggleButton>
+                <ToggleButton value="userGuess">Guess</ToggleButton>
+              </ToggleButtonGroup>
+            </div>
 
-            <label className="flex flex-col gap-1">
-              <span className="font-retro text-xs uppercase tracking-wide text-muted-foreground">Direction</span>
-              <select
+            <div className="flex flex-col gap-1">
+              <span className="font-retro text-sm uppercase tracking-wide text-muted-foreground">Direction</span>
+              <ToggleButtonGroup
                 value={sortDirection}
-                onChange={(event) => {
-                  setSortDirection(event.target.value as SortDirection);
-                  setPage(0);
-                }}
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 font-retro text-md"
+                exclusive
+                onChange={(_, val: SortDirection | null) => { if (val) { setSortDirection(val); setPage(0); } }}
+                size="small"
                 data-testid="select-sort-direction"
+                sx={toggleSx}
               >
-                <option value="asc">ASC</option>
-                <option value="desc">DESC</option>
-              </select>
-            </label>
+                <ToggleButton value="asc">ASC</ToggleButton>
+                <ToggleButton value="desc">DESC</ToggleButton>
+              </ToggleButtonGroup>
+            </div>
 
-            <label className="flex flex-col gap-1">
-              <span className="font-retro text-xs uppercase tracking-wide text-muted-foreground">Page Size</span>
-              <select
+            <div className="flex flex-col gap-1">
+              <span className="font-retro text-sm uppercase tracking-wide text-muted-foreground">Page Size</span>
+              <ToggleButtonGroup
                 value={pageSize}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value));
-                  setPage(0);
-                }}
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 font-retro text-md"
+                exclusive
+                onChange={(_, val: number | null) => { if (val) { setPageSize(val); setPage(0); } }}
+                size="small"
                 data-testid="select-page-size"
+                sx={toggleSx}
               >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-            </label>
+                <ToggleButton value={10}>10</ToggleButton>
+                <ToggleButton value={25}>25</ToggleButton>
+                <ToggleButton value={50}>50</ToggleButton>
+              </ToggleButtonGroup>
+            </div>
           </div>
         </div>
       </Card>
@@ -224,10 +243,10 @@ export function VoteResults() {
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="border-b border-border/60 bg-muted/20">
-                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-retro text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground">#</th>
-                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-retro text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground">Username</th>
-                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-retro text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground">Guess</th>
-                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-retro text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground">Off By</th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-retro text-[10px] sm:text-sm uppercase tracking-wider text-muted-foreground">#</th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-retro text-[10px] sm:text-sm uppercase tracking-wider text-muted-foreground">Username</th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-retro text-[10px] sm:text-sm uppercase tracking-wider text-muted-foreground">Guess</th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-retro text-[10px] sm:text-sm uppercase tracking-wider text-muted-foreground">Off By</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -237,8 +256,8 @@ export function VoteResults() {
 
                     return (
                       <tr key={`${entry.userName}-${index}`} className="border-b border-border/30 hover:bg-muted/10 transition-colors">
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-md text-foreground/70">{page * pageSize + index + 1}</td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-md text-foreground/90 break-all">
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-sm sm:text-md text-foreground/70">{page * pageSize + index + 1}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-sm sm:text-md text-foreground/90 break-all">
                           <span className="inline-flex items-center gap-2">
                             <span>{entry.userName}</span>
                             {topRank && (
@@ -249,8 +268,8 @@ export function VoteResults() {
                             )}
                           </span>
                         </td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-md text-foreground/90 whitespace-nowrap">{formatVoteGuess(entry.userGuess)}</td>
-                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-xs sm:text-md text-foreground/90 whitespace-nowrap">{formatVoteGuess(entry.proximityScore, true)}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-sm sm:text-md text-foreground/90 whitespace-nowrap">{formatVoteGuess(entry.userGuess)}</td>
+                        <td className="px-2 sm:px-4 py-2 sm:py-3 font-retro text-sm sm:text-md text-foreground/90 whitespace-nowrap">{formatVoteGuess(entry.proximityScore, true)}</td>
                       </tr>
                     );
                   })}

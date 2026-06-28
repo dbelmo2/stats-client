@@ -84,6 +84,7 @@ export function SubmitClipModal({
   const [liveEndSeconds, setLiveEndSeconds] = useState(0);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -280,6 +281,7 @@ export function SubmitClipModal({
     setFormError(null);
     setVideoDuration(0);
     setManualEntryOpen(false);
+    setPickerOpen(false);
     currentVideoTimeRef.current = 0;
     captureStartTimeRef.current = 0;
     if (captureTimerRef.current) { clearTimeout(captureTimerRef.current); captureTimerRef.current = null; }
@@ -301,9 +303,6 @@ export function SubmitClipModal({
   }
 
   // ── Styles ─────────────────────────────────────────────────────────────────
-  const inputClass =
-    "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-md font-retro placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
   const hmsBase =
     "flex-1 min-w-0 h-10 rounded-md border px-2 py-2 text-md font-retro text-center bg-background focus-visible:outline-none focus-visible:ring-2";
   const hmsOk = `${hmsBase} border-input focus-visible:ring-ring`;
@@ -325,7 +324,7 @@ export function SubmitClipModal({
           <div className="space-y-1.5 mt-4">
             <Label className="font-retro text-md uppercase text-muted-foreground">Stream</Label>
             {streamsLoading ? (
-              <div className="flex items-center gap-2 h-10 px-3 border border-input rounded-md">
+              <div className="flex items-center gap-2 h-16 px-3 border border-input rounded-md">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 <span className="font-retro text-md text-muted-foreground">Loading streams...</span>
               </div>
@@ -333,27 +332,73 @@ export function SubmitClipModal({
               <p className="font-retro text-md text-muted-foreground px-3 py-2 border border-input rounded-md">
                 No streams available for this contest period.
               </p>
-            ) : (
-              <select
-                value={selectedVideoId}
-                onChange={(e) => setSelectedVideoId(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">Select a stream...</option>
-                {eligibleStreams.map((s) => (
-                  <option key={s.videoId} value={s.videoId}>
-                    {s.title}
-                    {s.actualStart ? ` — ${new Date(s.actualStart).toLocaleDateString()}` : ""}
-                  </option>
-                ))}
-              </select>
-            )}
+            ) : (() => {
+              const sel = eligibleStreams.find((s) => s.videoId === selectedVideoId);
+              return (
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((v) => !v)}
+                  className="w-full flex items-center gap-3 h-16 rounded-md border border-input bg-background px-3 hover:bg-muted/20 transition-colors"
+                >
+                  {sel ? (
+                    <>
+                      <img
+                        src={`https://img.youtube.com/vi/${sel.videoId}/mqdefault.jpg`}
+                        alt=""
+                        className="h-10 w-[72px] rounded object-cover shrink-0"
+                      />
+                      <div className="flex-1 text-left min-w-0">
+                        <p className="font-retro text-md text-foreground truncate">{sel.title}</p>
+                        {sel.actualStart && (
+                          <p className="font-retro text-xs text-muted-foreground">
+                            {new Date(sel.actualStart).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <span className="flex-1 text-left font-retro text-md text-muted-foreground">Select a stream...</span>
+                  )}
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${pickerOpen ? "rotate-180" : ""}`} />
+                </button>
+              );
+            })()}
           </div>
         </div>
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5">
-          {!selectedVideoId ? (
+          {pickerOpen ? (
+            <div className="space-y-1">
+              {(eligibleStreams ?? []).map((stream) => (
+                <button
+                  key={stream.videoId}
+                  type="button"
+                  onClick={() => { setSelectedVideoId(stream.videoId); setPickerOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 h-[68px] rounded-md text-left transition-colors ${
+                    stream.videoId === selectedVideoId ? "bg-primary/10" : "hover:bg-muted/30"
+                  }`}
+                >
+                  <img
+                    src={`https://img.youtube.com/vi/${stream.videoId}/mqdefault.jpg`}
+                    alt=""
+                    className="h-11 w-[78px] rounded object-cover shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-retro text-md text-foreground line-clamp-2 leading-snug">{stream.title}</p>
+                    {stream.actualStart && (
+                      <p className="font-retro text-xs text-muted-foreground mt-0.5">
+                        {new Date(stream.actualStart).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                  {stream.videoId === selectedVideoId && (
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : !selectedVideoId ? (
             <div className="flex h-full items-center justify-center">
               <p className="font-retro text-lg text-muted-foreground/50 text-center">
                 Select a recent stream to get started
@@ -554,7 +599,6 @@ export function SubmitClipModal({
                 <Input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Why is this the best moment?"
                   maxLength={120}
                   className="font-retro"
                 />
@@ -569,7 +613,7 @@ export function SubmitClipModal({
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Add some context..."
+                  placeholder="context...?"
                   rows={2}
                   maxLength={280}
                   className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-md font-retro placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"

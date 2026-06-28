@@ -46,7 +46,7 @@ export function VoteRefreshCountdown({ targetDate, label, colorClass = "text-pri
       <div className={`font-pixel text-base ${colorClass} drop-shadow-[0_0_8px_rgba(168,85,247,0.4)]`}>
         {parts.join(" ")}
       </div>
-      <div className="font-retro text-xs text-muted-foreground uppercase tracking-wide">
+      <div className="font-retro text-sm text-muted-foreground uppercase tracking-wide">
         {label}
       </div>
     </div>
