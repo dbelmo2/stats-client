@@ -20,7 +20,7 @@ declare global {
       Player: new (
         element: HTMLIFrameElement,
         options: { events?: { onStateChange?: (e: { data: number }) => void } }
-      ) => { destroy: () => void };
+      ) => { destroy: () => void; seekTo: (seconds: number, allowSeekAhead: boolean) => void; pauseVideo: () => void };
     };
     onYouTubeIframeAPIReady?: () => void;
   }
@@ -106,24 +106,33 @@ export function ContestClipCard({
   const [reportDone, setReportDone] = useState(false);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const playerRef = useRef<{ destroy: () => void; seekTo: (seconds: number, allowSeekAhead: boolean) => void; pauseVideo: () => void } | null>(null);
 
   useEffect(() => {
-    let player: { destroy: () => void } | null = null;
     let mounted = true;
     loadYTApi(() => {
       if (!mounted || !iframeRef.current) return;
-      player = new window.YT.Player(iframeRef.current, {
+      playerRef.current = new window.YT.Player(iframeRef.current, {
         events: {
           onStateChange: ({ data }: { data: number }) => {
-            if (data === 1) pauseForVideo();
-            else if (data === 0 || data === 2) resumeAfterVideo();
+            if (data === 1) {
+              pauseForVideo();
+            } else if (data === 2) {
+              resumeAfterVideo();
+            } else if (data === 0) {
+              resumeAfterVideo();
+              // Reset to clip start so next manual play begins at the right timestamp
+              playerRef.current?.seekTo(clip.startSeconds, true);
+              playerRef.current?.pauseVideo();
+            }
           },
         },
       });
     });
     return () => {
       mounted = false;
-      try { player?.destroy(); } catch {}
+      try { playerRef.current?.destroy(); } catch {}
+      playerRef.current = null;
     };
   }, []);
 
