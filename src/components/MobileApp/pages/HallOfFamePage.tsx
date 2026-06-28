@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ChevronDown, ChevronUp, Trophy } from "lucide-react";
+import { ChevronDown, ChevronUp, Play, Trophy } from "lucide-react";
 import { LoadingScreen } from "../components/LoadingScreen";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import type { Contest, ContestResult } from "../shared/contestSchema";
+import { ClipPlayer } from "../components/contest/ClipPlayer";
+import type { Contest, ContestClip, ContestResult } from "../shared/contestSchema";
 import type { PaginatedResponse } from "../shared/schema";
 import { apiRequest } from "../lib/queryClient";
 
@@ -20,6 +21,67 @@ function formatContestRange(startDate: string, endDate: string): string {
     year: "numeric",
   });
   return `${start} – ${end}`;
+}
+
+function ResultRow({ result }: { result: ContestResult }) {
+  const [playerOpen, setPlayerOpen] = useState(false);
+
+  const { data: clip } = useQuery<ContestClip>({
+    queryKey: ["contest-clip", result.clipId],
+    queryFn: () =>
+      apiRequest("GET", `/api/contest/clip-contest/clips/${result.clipId}`).then((r) => r.json()),
+  });
+
+  return (
+    <div className="rounded-md bg-background/40 border border-border/40 overflow-hidden">
+      <div className="flex items-center gap-3 p-3">
+        <span className="text-2xl shrink-0">{RANK_ICONS[result.rank - 1] ?? `#${result.rank}`}</span>
+
+        {clip ? (
+          <button
+            className="relative shrink-0 w-20 aspect-video rounded overflow-hidden border border-primary/20 hover:border-primary/50 transition-colors group"
+            onClick={() => setPlayerOpen((v) => !v)}
+          >
+            <img
+              src={`https://img.youtube.com/vi/${clip.videoId}/mqdefault.jpg`}
+              alt={clip.title}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/20 transition-colors">
+              <Play className="w-4 h-4 text-white" />
+            </div>
+          </button>
+        ) : (
+          <div className="shrink-0 w-20 aspect-video rounded bg-muted/30 animate-pulse" />
+        )}
+
+        <div className="flex-1 min-w-0">
+          <div className="font-retro text-xs uppercase text-muted-foreground">
+            {RANK_LABELS[result.rank - 1] ?? `Rank ${result.rank}`}
+          </div>
+          <div className="font-retro text-base text-foreground truncate">
+            {result.submitterName}
+          </div>
+          {clip && (
+            <div className="font-retro text-xs text-muted-foreground truncate mt-0.5">
+              {clip.title}
+            </div>
+          )}
+        </div>
+
+        <div className="text-right shrink-0">
+          <div className="font-pixel text-md text-primary">{result.voteCount}</div>
+          <div className="font-retro text-xs text-muted-foreground">votes</div>
+        </div>
+      </div>
+
+      {playerOpen && clip && (
+        <div className="border-t border-border/40">
+          <ClipPlayer clip={clip} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface PastContestRowProps {
@@ -76,24 +138,7 @@ function PastContestRow({ contest }: PastContestRowProps) {
           ) : (
             <div className="space-y-3">
               {results.map((result) => (
-                <div
-                  key={result.id}
-                  className="flex items-center gap-3 p-3 rounded-md bg-background/40 border border-border/40"
-                >
-                  <span className="text-2xl shrink-0">{RANK_ICONS[result.rank - 1] ?? `#${result.rank}`}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-retro text-xs uppercase text-muted-foreground">
-                      {RANK_LABELS[result.rank - 1] ?? `Rank ${result.rank}`}
-                    </div>
-                    <div className="font-retro text-base text-foreground truncate">
-                      {result.submitterName}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="font-pixel text-md text-primary">{result.voteCount}</div>
-                    <div className="font-retro text-xs text-muted-foreground">votes</div>
-                  </div>
-                </div>
+                <ResultRow key={result.id} result={result} />
               ))}
             </div>
           )}

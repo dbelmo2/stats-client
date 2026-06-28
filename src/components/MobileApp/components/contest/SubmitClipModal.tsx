@@ -305,7 +305,7 @@ export function SubmitClipModal({
     "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-md font-retro placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   const hmsBase =
-    "w-16 h-10 rounded-md border px-2 py-2 text-md font-retro text-center bg-background focus-visible:outline-none focus-visible:ring-2";
+    "flex-1 min-w-0 h-10 rounded-md border px-2 py-2 text-md font-retro text-center bg-background focus-visible:outline-none focus-visible:ring-2";
   const hmsOk = `${hmsBase} border-input focus-visible:ring-ring`;
   const hmsErr = `${hmsBase} border-destructive text-destructive focus-visible:ring-destructive`;
 
@@ -402,6 +402,11 @@ export function SubmitClipModal({
                   <span className="font-retro text-md text-muted-foreground">
                     Start: <span className="text-primary tabular-nums">{formatTimestamp(startSeconds)}</span>
                   </span>
+                  {captureState === "capturing" && (
+                    <span className="font-retro text-md text-destructive animate-pulse tabular-nums">
+                      {formatTimestamp(Math.max(0, liveEndSeconds - startSeconds))}
+                    </span>
+                  )}
                   <span className="font-retro text-md text-muted-foreground">
                     End:{" "}
                     <span className={`tabular-nums ${captureState === "capturing" ? "text-destructive animate-pulse" : "text-primary"}`}>
@@ -458,13 +463,14 @@ export function SubmitClipModal({
 
                 {manualEntryOpen && (
                   <div className="px-4 pb-4 pt-2 space-y-4 border-t border-border/50">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Start time */}
                       <div className="space-y-1.5">
                         <Label className="font-retro text-md uppercase text-muted-foreground">Start Time</Label>
                         <div className="flex items-center gap-1">
                           <input type="number" min="0" value={startH}
                             onChange={(e) => setStartH(e.target.value)}
+                            onFocus={() => { if (startH === "0") setStartH(""); }}
                             onBlur={(e) => {
                               const h = e.target.value === "" ? (setStartH("0"), "0") : e.target.value;
                               seekStart(h, startM, startS);
@@ -473,6 +479,7 @@ export function SubmitClipModal({
                           <span className="font-retro text-md text-muted-foreground">h</span>
                           <input type="number" min="0" max="59" value={startM}
                             onChange={(e) => setStartM(e.target.value)}
+                            onFocus={() => { if (startM === "0") setStartM(""); }}
                             onBlur={(e) => {
                               const m = e.target.value === "" ? (setStartM("0"), "0") : e.target.value;
                               seekStart(startH, m, startS);
@@ -481,6 +488,7 @@ export function SubmitClipModal({
                           <span className="font-retro text-md text-muted-foreground">m</span>
                           <input type="number" min="0" max="59" value={startS}
                             onChange={(e) => setStartS(e.target.value)}
+                            onFocus={() => { if (startS === "0") setStartS(""); }}
                             onBlur={(e) => {
                               const s = e.target.value === "" ? (setStartS("0"), "0") : e.target.value;
                               seekStart(startH, startM, s);
@@ -501,6 +509,7 @@ export function SubmitClipModal({
                         <div className="flex items-center gap-1">
                           <input type="number" min="0" value={endH}
                             onChange={(e) => setEndH(e.target.value)}
+                            onFocus={() => { if (endH === "0") setEndH(""); }}
                             onBlur={(e) => {
                               const h = e.target.value === "" ? (setEndH("0"), "0") : e.target.value;
                               seekEnd(h, endM, endS);
@@ -509,6 +518,7 @@ export function SubmitClipModal({
                           <span className="font-retro text-md text-muted-foreground">h</span>
                           <input type="number" min="0" max="59" value={endM}
                             onChange={(e) => setEndM(e.target.value)}
+                            onFocus={() => { if (endM === "0") setEndM(""); }}
                             onBlur={(e) => {
                               const m = e.target.value === "" ? (setEndM("0"), "0") : e.target.value;
                               seekEnd(endH, m, endS);
@@ -517,6 +527,7 @@ export function SubmitClipModal({
                           <span className="font-retro text-md text-muted-foreground">m</span>
                           <input type="number" min="0" max="59" value={endS}
                             onChange={(e) => setEndS(e.target.value)}
+                            onFocus={() => { if (endS === "0") setEndS(""); }}
                             onBlur={(e) => {
                               const s = e.target.value === "" ? (setEndS("0"), "0") : e.target.value;
                               seekEnd(endH, endM, s);

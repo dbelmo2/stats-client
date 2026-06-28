@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ThumbsUp, ExternalLink, Flag } from "lucide-react";
 import { Card } from "../ui/card";
@@ -12,38 +12,7 @@ import {
 } from "../ui/dialog";
 import type { ContestClip } from "../../shared/contestSchema";
 import { apiRequest } from "../../lib/queryClient";
-import { pauseForVideo, resumeAfterVideo } from "../../lib/dashboardAudio";
-
-declare global {
-  interface Window {
-    YT: {
-      Player: new (
-        element: HTMLIFrameElement,
-        options: { events?: { onStateChange?: (e: { data: number }) => void } }
-      ) => { destroy: () => void; seekTo: (seconds: number, allowSeekAhead: boolean) => void; pauseVideo: () => void };
-    };
-    onYouTubeIframeAPIReady?: () => void;
-  }
-}
-
-let _ytReady = false;
-const _ytQueue: (() => void)[] = [];
-
-function loadYTApi(cb: () => void): void {
-  if (_ytReady) { cb(); return; }
-  _ytQueue.push(cb);
-  if (document.querySelector('script[src*="youtube.com/iframe_api"]')) return;
-  const prev = window.onYouTubeIframeAPIReady;
-  window.onYouTubeIframeAPIReady = () => {
-    _ytReady = true;
-    if (prev) prev();
-    _ytQueue.splice(0).forEach(fn => fn());
-  };
-  const tag = document.createElement('script');
-  tag.src = 'https://www.youtube.com/iframe_api';
-  document.head.appendChild(tag);
-}
-
+import { ClipPlayer } from "./ClipPlayer";
 
 function getReadableError(error: unknown): string {
   if (error instanceof Error) {
@@ -98,38 +67,6 @@ export function ContestClipCard({
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportDone, setReportDone] = useState(false);
 
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const playerRef = useRef<{ destroy: () => void; seekTo: (seconds: number, allowSeekAhead: boolean) => void; pauseVideo: () => void } | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    loadYTApi(() => {
-      if (!mounted || !iframeRef.current) return;
-      playerRef.current = new window.YT.Player(iframeRef.current, {
-        events: {
-          onStateChange: ({ data }: { data: number }) => {
-            if (data === 1) {
-              pauseForVideo();
-            } else if (data === 2) {
-              resumeAfterVideo();
-            } else if (data === 0) {
-              resumeAfterVideo();
-              // Reset to clip start so next manual play begins at the right timestamp
-              playerRef.current?.seekTo(clip.startSeconds, true);
-              playerRef.current?.pauseVideo();
-            }
-          },
-        },
-      });
-    });
-    return () => {
-      mounted = false;
-      try { playerRef.current?.destroy(); } catch {}
-      playerRef.current = null;
-    };
-  }, []);
-
-  const embedSrc = `https://www.youtube.com/embed/${clip.videoId}?start=${clip.startSeconds}&end=${clip.endSeconds}&autoplay=${autoPlay ? 1 : 0}&enablejsapi=1`;
   const duration = clip.endSeconds - clip.startSeconds;
 
   const reportMutation = useMutation({
@@ -162,18 +99,7 @@ export function ContestClipCard({
       <Card className={`relative overflow-hidden border-2 ${borderColor} bg-card/95 backdrop-blur-sm shadow-lg hover-elevate transition-all duration-300 flex flex-col`}>
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
 
-        {/* YouTube embed */}
-        <div className="relative w-full aspect-video bg-black/40">
-          <iframe
-            ref={iframeRef}
-            src={embedSrc}
-            className="absolute inset-0 w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            loading="lazy"
-            title={clip.title}
-          />
-        </div>
+        <ClipPlayer clip={clip} autoPlay={autoPlay} />
 
         {/* Card body */}
         <div className="relative z-10 p-4 flex flex-col gap-3 flex-1">
@@ -198,11 +124,11 @@ export function ContestClipCard({
             <div className="font-retro text-md text-muted-foreground">
               <span className="text-foreground/70"> Submitted By: {clip.submitterName}</span>
               {isMyClip && (
-                <span className="ml-1 text-accent text-md"> Submitted By: (you)</span>
+                <span className="ml-1 text-accent text-md"> (you)</span>
               )}
             </div>
             <div className="flex items-center gap-1 font-retro text-md text-muted-foreground">
-              <span className="text-sm  leading-none mt-0.5 shrink-0">{DURATION_ICON}</span>
+              <span className="text-sm leading-none mt-0.5 shrink-0">{DURATION_ICON}</span>
               <span className="text-muted-foreground/50">•</span>
               <span>{duration}s</span>
             </div>
