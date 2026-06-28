@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Tv, X } from "lucide-react";
+import { X } from "lucide-react";
 import { FaYoutube } from "react-icons/fa";
 import {
   DataGrid,
