@@ -56,7 +56,7 @@ interface SubmitClipModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contest: Contest;
-  voterToken: string;
+  userToken: string;
   initialSubmitterName: string;
   onSuccess: (clip: ContestClip) => void;
 }
@@ -65,7 +65,7 @@ export function SubmitClipModal({
   open,
   onOpenChange,
   contest,
-  voterToken,
+  userToken,
   initialSubmitterName,
   onSuccess,
 }: SubmitClipModalProps) {
@@ -128,7 +128,7 @@ export function SubmitClipModal({
         description: description.trim() || null,
         startSeconds,
         endSeconds,
-        submitterToken: voterToken,
+        userToken: userToken,
         submitterName: submitterName.trim(),
       }).then((r) => r.json() as Promise<ContestClip>),
     onSuccess: (clip) => {

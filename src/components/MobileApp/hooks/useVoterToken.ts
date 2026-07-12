@@ -3,7 +3,7 @@ import { useState } from "react";
 const VOTER_TOKEN_KEY = "contest:voter-token";
 export const SUBMITTER_NAME_KEY = "contest:submitter-name";
 
-export function useVoterToken(): string {
+export function useUserToken(): string {
   const [token] = useState<string>(() => {
     try {
       const stored = localStorage.getItem(VOTER_TOKEN_KEY);

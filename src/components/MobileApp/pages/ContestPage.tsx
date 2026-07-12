@@ -11,7 +11,7 @@ import { VoteRefreshCountdown } from "../components/contest/VoteRefreshCountdown
 import type { Contest, ContestClip, VoterStatusResponse } from "../shared/contestSchema";
 import type { PaginatedResponse } from "../shared/schema";
 import { apiRequest } from "../lib/queryClient";
-import { useVoterToken, getStoredSubmitterName } from "../hooks/useVoterToken";
+import { useUserToken, getStoredSubmitterName } from "../hooks/useVoterToken";
 import { config } from "../../game/utils/config";
 import { resumeAfterVideo } from "../lib/dashboardAudio";
 
@@ -74,7 +74,7 @@ function getReadableError(error: unknown): string {
 export default function ContestPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const voterToken = useVoterToken();
+  const userToken = useUserToken();
 
   const [page, setPage] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
@@ -145,11 +145,11 @@ export default function ContestPage() {
 
   // Fetch voter status (budget + which clips voted on)
   const { data: voterStatus } = useQuery<VoterStatusResponse>({
-    queryKey: ["contest-voter-status", contestId, voterToken],
+    queryKey: ["contest-voter-status", contestId, userToken],
     queryFn: () =>
       apiRequest(
         "GET",
-        `/api/contest/clip-contest/${contestId}/voter/${voterToken}`
+        `/api/contest/clip-contest/${contestId}/voter/${userToken}`
       ).then((r) => r.json()),
     enabled: !!contestId,
     refetchInterval: 60_000,
@@ -157,13 +157,13 @@ export default function ContestPage() {
 
   function invalidateContestData() {
     queryClient.invalidateQueries({ queryKey: ["contest-clips", contestId] });
-    queryClient.invalidateQueries({ queryKey: ["contest-voter-status", contestId, voterToken] });
+    queryClient.invalidateQueries({ queryKey: ["contest-voter-status", contestId, userToken] });
   }
 
   const voteMutation = useMutation({
     mutationFn: (clipId: number) =>
       apiRequest("POST", `/api/contest/clip-contest/clips/${clipId}/vote`, {
-        voterToken,
+        userToken,
       }),
     onMutate: (clipId) => {
       setPendingClipId(clipId);
@@ -182,7 +182,7 @@ export default function ContestPage() {
     mutationFn: (clipId: number) =>
       apiRequest(
         "DELETE",
-        `/api/contest/clip-contest/clips/${clipId}/vote?voterToken=${encodeURIComponent(voterToken)}`
+        `/api/contest/clip-contest/clips/${clipId}/vote?userToken=${encodeURIComponent(userToken)}`
       ),
     onMutate: (clipId) => {
       setPendingClipId(clipId);
@@ -446,12 +446,12 @@ export default function ContestPage() {
                         key={clip.id}
                         clip={clip}
                         rank={isFiltered ? i + 1 : i + 1 + page * PAGE_SIZE}
-                        voterToken={voterToken}
+                        userToken={userToken}
                         hasVoted={votedClipIds.has(clip.id)}
                         votesRemaining={votesRemaining}
                         isVoting={isVoting && pendingClipId === clip.id}
                         contestActive={contest.status === "ACTIVE"}
-                        isMyClip={clip.submitterToken === voterToken}
+                        isMyClip={clip.userToken === userToken}
                         autoPlay={clip.id === autoPlayClipId}
                         onVote={(id) => voteMutation.mutate(id)}
                         onUnvote={(id) => unvoteMutation.mutate(id)}
@@ -503,7 +503,7 @@ export default function ContestPage() {
           open={submitOpen}
           onOpenChange={setSubmitOpen}
           contest={contest}
-          voterToken={voterToken}
+          userToken={userToken}
           initialSubmitterName={getStoredSubmitterName()}
           onSuccess={(clip) => {
             setPinnedClip(clip);

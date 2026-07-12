@@ -8,7 +8,7 @@ import { SubmitClipModal } from "./contest/SubmitClipModal";
 import type { Contest, ContestClip, VoterStatusResponse } from "../shared/contestSchema";
 import type { PaginatedResponse } from "../shared/schema";
 import { apiRequest } from "../lib/queryClient";
-import { useVoterToken, getStoredSubmitterName } from "../hooks/useVoterToken";
+import { useUserToken, getStoredSubmitterName } from "../hooks/useVoterToken";
 import { config } from "../../game/utils/config";
 
 const RANK_ICONS: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
@@ -16,7 +16,7 @@ const RANK_ICONS: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 export function TopClipsCard() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const voterToken = useVoterToken();
+  const userToken = useUserToken();
   const [submitOpen, setSubmitOpen] = useState(false);
 
   const { data: contest } = useQuery<Contest | null>({
@@ -32,9 +32,9 @@ export function TopClipsCard() {
   const contestId = contest?.id ?? null;
 
   const { data: voterStatus } = useQuery<VoterStatusResponse>({
-    queryKey: ["contest-voter-status", contestId, voterToken],
+    queryKey: ["contest-voter-status", contestId, userToken],
     queryFn: () =>
-      apiRequest("GET", `/api/contest/clip-contest/${contestId}/voter/${voterToken}`).then((r) =>
+      apiRequest("GET", `/api/contest/clip-contest/${contestId}/voter/${userToken}`).then((r) =>
         r.json()
       ),
     enabled: !!contestId,
@@ -137,7 +137,7 @@ export function TopClipsCard() {
         open={submitOpen}
         onOpenChange={setSubmitOpen}
         contest={contest}
-        voterToken={voterToken}
+        userToken={userToken}
         initialSubmitterName={getStoredSubmitterName()}
         onSuccess={(clip) => {
           queryClient.invalidateQueries({ queryKey: ["contest-clips-top3", contestId] });

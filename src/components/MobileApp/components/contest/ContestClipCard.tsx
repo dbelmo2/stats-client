@@ -37,7 +37,7 @@ type ReportReason = typeof REPORT_REASONS[number]["value"];
 interface ContestClipCardProps {
   clip: ContestClip;
   rank: number;
-  voterToken: string;
+  userToken: string;
   hasVoted: boolean;
   votesRemaining: number;
   isVoting: boolean;
@@ -51,7 +51,7 @@ interface ContestClipCardProps {
 export function ContestClipCard({
   clip,
   rank,
-  voterToken,
+  userToken,
   hasVoted,
   votesRemaining,
   isVoting,
@@ -72,7 +72,7 @@ export function ContestClipCard({
   const reportMutation = useMutation({
     mutationFn: () =>
       apiRequest("POST", `/api/contest/clip-contest/clips/${clip.id}/report`, {
-        reporterToken: voterToken,
+        reporterToken: userToken,
         reason: reportReason,
         description: reportDescription || null,
       }),

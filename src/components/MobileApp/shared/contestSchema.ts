@@ -19,7 +19,7 @@ export interface ContestClip {
   description: string | null;
   startSeconds: number;
   endSeconds: number;
-  submitterToken: string;
+  userToken: string;
   submitterName: string;
   submittedAt: string;
   voteCount: number;
