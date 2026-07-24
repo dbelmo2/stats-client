@@ -1,6 +1,7 @@
 // vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -10,13 +11,9 @@ export default defineConfig({
   base: '/',
   plugins: [
     react({
-      // Additional React plugin options if needed
       jsxRuntime: 'automatic',
     }),
-    // Add development plugins if in dev environment (optional)
-    ...(process.env.NODE_ENV !== "production" 
-      ? [] // Add dev plugins here if needed later
-      : []),
+    basicSsl(),
   ],
   resolve: {
     extensions: ['.ts', '.tsx', '.js', '.jsx'],
@@ -39,6 +36,7 @@ export default defineConfig({
     ],
   },
   server: {
+    https: true,
     fs: {
       strict: true,
       deny: ["**/.*"],

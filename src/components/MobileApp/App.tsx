@@ -7,9 +7,12 @@ import { Toaster } from "./components/ui/toaster";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useDarkMode } from "./hooks/useDarkMode";
 import { createAppTheme } from "./lib/muiTheme";
+import { Layout } from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import LivestreamDataPage from "./pages/LivestreamDataPage";
 import VotePage from "./pages/VotePage";
+import ContestPage from "./pages/ContestPage";
+import HallOfFamePage from "./pages/HallOfFamePage";
 import NotFound from "./pages/not-found";
 
 function RootRedirect() {
@@ -27,6 +30,8 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/data" component={LivestreamDataPage} />
       <Route path="/vote" component={VotePage} />
+      <Route path="/contest" component={ContestPage} />
+      <Route path="/contest/hall-of-fame" component={HallOfFamePage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -41,7 +46,9 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <Layout>
+            <Router />
+          </Layout>
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>

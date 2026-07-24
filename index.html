@@ -69,6 +69,15 @@
     <link rel="preload" href="/fonts/SHPinscher-Regular.woff2" as="font" type="font/woff2" crossorigin>
   </head>
   <body>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('theme') || 'dark';
+          document.documentElement.classList.toggle('dark', t === 'dark');
+          document.body.style.background = t === 'dark' ? 'hsl(220,25%,7%)' : 'hsl(220,15%,90%)';
+        } catch (e) {}
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

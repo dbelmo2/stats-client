@@ -4,15 +4,16 @@
 
 /* LIGHT MODE - Retro CRT Light Theme */
 :root {
+  --footer: rgba(255,255,255, 0.50);
   --button-outline: rgba(0,0,0, .10);
   --badge-outline: rgba(0,0,0, .05);
   --opaque-button-border-intensity: -8;
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
-  --background: 220 15% 95%;
+  --background: 220 15% 90%;
   --foreground: 270 20% 15%;
   --border: 270 10% 75%;
-  --card: 220 20% 98%;
+  --card: 220 20% 95%;
   --card-foreground: 270 20% 15%;
   --card-border: 270 10% 85%;
   --sidebar: 220 18% 96%;
@@ -88,15 +89,16 @@
 }
 
 .dark {
+  --footer: rgba(0,0,0, .20);
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
-  --background: 220 25% 8%;
+  --background: 220 25% 7%;
   --foreground: 280 15% 92%;
   --border: 270 15% 22%;
-  --card: 220 22% 12%;
+  --card: 220 22% 9%;
   --card-foreground: 280 15% 92%;
   --card-border: 270 18% 18%;
   --sidebar: 220 22% 10%;
