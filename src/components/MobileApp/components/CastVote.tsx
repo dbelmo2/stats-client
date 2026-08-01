@@ -37,7 +37,6 @@ interface CastVoteProps {
   voteHours: string;
   voteMinutes: string;
   voteSeconds: string;
-  onUserNameChange: (value: string) => void;
   onDirectionChange: (value: TimeStatus) => void;
   onHoursChange: (value: string) => void;
   onMinutesChange: (value: string) => void;
@@ -55,7 +54,6 @@ export function CastVote({
   voteHours,
   voteMinutes,
   voteSeconds,
-  onUserNameChange,
   onDirectionChange,
   onHoursChange,
   onMinutesChange,
@@ -94,17 +92,12 @@ export function CastVote({
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="vote-username" className="font-retro text-sm uppercase tracking-wide text-muted-foreground">
-                Username
+              <Label className="font-retro text-sm uppercase tracking-wide text-muted-foreground">
+                Voting As
               </Label>
-              <Input
-                id="vote-username"
-                value={voteUserName}
-                onChange={(event) => onUserNameChange(event.target.value)}
-                className="font-retro"
-                placeholder="FupaTroopa#123456"
-                data-testid="input-vote-username"
-              />
+              <p className="font-retro text-md text-foreground/90" data-testid="text-vote-username">
+                {voteUserName}
+              </p>
             </div>
 
             <div className="flex flex-col min-[395px]:flex-row min-[395px]:items-end gap-3">

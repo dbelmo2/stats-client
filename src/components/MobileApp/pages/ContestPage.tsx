@@ -11,8 +11,7 @@ import { VoteRefreshCountdown } from "../components/contest/VoteRefreshCountdown
 import type { Contest, ContestClip, VoterStatusResponse } from "../shared/contestSchema";
 import type { PaginatedResponse } from "../shared/schema";
 import { apiRequest } from "../lib/queryClient";
-import { useUserToken, getStoredSubmitterName } from "../hooks/useVoterToken";
-import { config } from "../../game/utils/config";
+import { useUserToken } from "../hooks/useVoterToken";
 import { resumeAfterVideo } from "../lib/dashboardAudio";
 
 
@@ -94,10 +93,13 @@ export default function ContestPage() {
   const { data: contest, isLoading: contestLoading } = useQuery<Contest | null>({
     queryKey: ["contest-active"],
     queryFn: async () => {
-      const res = await fetch(`${config.API_URL}/api/contest/clip-contest/active`);
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error(`${res.status}: Failed to load contest`);
-      return res.json() as Promise<Contest>;
+      try {
+        const res = await apiRequest("GET", "/api/contest/clip-contest/active");
+        return (await res.json()) as Contest;
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith("404:")) return null;
+        throw err;
+      }
     },
   });
 
@@ -504,7 +506,6 @@ export default function ContestPage() {
           onOpenChange={setSubmitOpen}
           contest={contest}
           userToken={userToken}
-          initialSubmitterName={getStoredSubmitterName()}
           onSuccess={(clip) => {
             setPinnedClip(clip);
             queryClient.invalidateQueries({ queryKey: ["contest-clips", contestId] });

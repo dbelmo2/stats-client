@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { MusicToggle } from "./MusicToggle";
+import { AccountMenu } from "./AccountMenu";
 import { Button } from "./ui/button";
 import { init as initAudio, toggleMute, isMuted } from "../lib/dashboardAudio";
 import Logo from "../../game/images/l3l3.png";
@@ -19,6 +20,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   "/data":                 { title: "LIVESTREAMS", backTo: "/dashboard" },
   "/contest":              { title: "TOP CLIPS", backTo: "/dashboard" },
   "/contest/hall-of-fame": { title: "HALL OF FAME", backTo: "/contest" },
+  "/login":                { title: "LOG IN", backTo: "/dashboard" },
 };
 
 interface LayoutProps {
@@ -130,6 +132,7 @@ export function Layout({ children }: LayoutProps) {
           <div className="flex items-center gap-2">
             <MusicToggle muted={musicMuted} onToggle={handleMusicToggle} />
             <ThemeToggle />
+            <AccountMenu />
           </div>
         </div>
       </header>

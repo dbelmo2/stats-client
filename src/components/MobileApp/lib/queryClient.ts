@@ -1,5 +1,6 @@
 import { QueryClient, type QueryFunction } from "@tanstack/react-query";
 import { config } from "../../game/utils/config";
+import { getCsrfTokenFromCookie } from "../../../shared/authClient";
 
 // Get the base API URL from environment variables
 const API_BASE_URL = config.API_URL;
@@ -18,12 +19,19 @@ export async function apiRequest(
 ): Promise<Response> {
   // Construct full URL by combining base URL with the endpoint
   const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
-  
+
+  const headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
+  if (method !== "GET") {
+    const csrfToken = getCsrfTokenFromCookie();
+    if (csrfToken) headers["X-XSRF-TOKEN"] = csrfToken;
+  }
+
   const res = await fetch(fullUrl, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
-    // Remove credentials to match axios behavior and avoid CORS preflight
+    // Session cookie must be sent/received for logged-in request attribution to work.
+    credentials: "include",
   });
 
   await throwIfResNotOk(res);
@@ -39,9 +47,9 @@ export const getQueryFn: <T>(options: {
     // Construct the full URL by combining base URL with query key path
     const endpoint = queryKey.join("/");
     const fullUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
-    
+
     const res = await fetch(fullUrl, {
-      // Remove credentials to match axios behavior and avoid CORS preflight
+      credentials: "include",
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

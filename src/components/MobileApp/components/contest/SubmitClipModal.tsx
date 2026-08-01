@@ -15,7 +15,7 @@ import { Label } from "../ui/label";
 import type { Contest, ContestClip } from "../../shared/contestSchema";
 import type { LivestreamRecord } from "../../shared/schema";
 import { apiRequest } from "../../lib/queryClient";
-import { saveSubmitterName } from "../../hooks/useVoterToken";
+import { useAuth } from "../../hooks/useAuth";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -57,7 +57,6 @@ interface SubmitClipModalProps {
   onOpenChange: (open: boolean) => void;
   contest: Contest;
   userToken: string;
-  initialSubmitterName: string;
   onSuccess: (clip: ContestClip) => void;
 }
 
@@ -66,9 +65,9 @@ export function SubmitClipModal({
   onOpenChange,
   contest,
   userToken,
-  initialSubmitterName,
   onSuccess,
 }: SubmitClipModalProps) {
+  const { displayName } = useAuth();
   const [selectedVideoId, setSelectedVideoId] = useState("");
   const [startH, setStartH] = useState("0");
   const [startM, setStartM] = useState("0");
@@ -78,7 +77,6 @@ export function SubmitClipModal({
   const [endS, setEndS] = useState("0");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [submitterName, setSubmitterName] = useState(initialSubmitterName);
   const [formError, setFormError] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState(0);
   const [captureState, setCaptureState] = useState<"idle" | "capturing">("idle");
@@ -129,10 +127,9 @@ export function SubmitClipModal({
         startSeconds,
         endSeconds,
         userToken: userToken,
-        submitterName: submitterName.trim(),
+        submitterName: displayName,
       }).then((r) => r.json() as Promise<ContestClip>),
     onSuccess: (clip) => {
-      saveSubmitterName(submitterName.trim());
       onSuccess(clip);
       handleClose();
     },
@@ -298,7 +295,6 @@ export function SubmitClipModal({
   function handleSubmit() {
     setFormError(null);
     if (!selectedVideoId) { setFormError("Please select a stream to clip."); return; }
-    if (!submitterName.trim()) { setFormError("Please enter your display name."); return; }
     if (!title.trim()) { setFormError("Please enter a title for your clip."); return; }
     if (!isTimestampValid) { setFormError("Please set a valid clip range."); return; }
     submitMutation.mutate();
@@ -655,15 +651,9 @@ export function SubmitClipModal({
               {/* Display name */}
               <div className="space-y-1.5">
                 <Label className="font-retro text-md uppercase text-muted-foreground">
-                  Your Name <span className="text-destructive">*</span>
+                  Posting As
                 </Label>
-                <Input
-                  value={submitterName}
-                  onChange={(e) => setSubmitterName(e.target.value)}
-                  placeholder="What should we call you?"
-                  maxLength={40}
-                  className="font-retro"
-                />
+                <p className="font-retro text-md text-foreground/90">{displayName}</p>
                 <p className="font-retro text-md text-muted-foreground">
                   Displayed on leaderboard and winners list.
                 </p>

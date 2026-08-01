@@ -23,6 +23,7 @@ import { DevModeManager } from './DevModeManager';
 import { TvManager } from './TvManager';
 import { BugReportManager } from './BugReportManager';
 import { loginScreen, cleanupLoginScreen } from '../ui/LoginScreen';
+import { getAuthMe } from '../../../shared/authClient';
 import { SettingsManager } from './SettingsManager';
 import type { InputPayload, NetworkState, PlayerScore, PlayerServerState, ProjectileServerState, ServerStateUpdate } from '../types/network.types';
 import type { GameState, PlayerData, WorldObjects } from '../types/game.types';
@@ -212,7 +213,10 @@ export class GameManager {
         this.bugReportManager.onModalClose(() => this.ui.overlayActive = false);
 
 
-        const { name, region } = await loginScreen(this.onSwitchToDashboard);
+        const authState = await getAuthMe().catch(() => ({
+            authenticated: false, userId: null, username: null, discriminator: null, email: null, avatarUrl: null,
+        }));
+        const { name, region } = await loginScreen(this.onSwitchToDashboard, authState);
         this.player.name = name;
 
         this.setupControlListeners();

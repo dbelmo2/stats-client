@@ -14,6 +14,7 @@ import type {
 } from "../shared/schema";
 import { formatTimeStatusDelta } from "../lib/utils";
 import { apiRequest } from "../lib/queryClient";
+import { useAuth } from "../hooks/useAuth";
 
 interface VotePayload {
   diffSeconds: number;
@@ -21,11 +22,6 @@ interface VotePayload {
 }
 
 const PENDING_VOTE_STORAGE_KEY = "vote:submitted:pending";
-
-function buildRandomUserName(): string {
-  const randomSequence = Math.floor(100000 + Math.random() * 900000);
-  return `FupaTroopa#${randomSequence}`;
-}
 
 function parsePositiveInteger(value: string): number {
   const parsedValue = Number.parseInt(value, 10);
@@ -49,11 +45,11 @@ export default function VotePage() {
   const initialTab: ActiveTab = new URLSearchParams(search).get("tab") === "results" ? "results" : "cast";
   const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab);
 
+  const { displayName } = useAuth();
   const [voteDirection, setVoteDirection] = useState<TimeStatus>("LATE");
   const [voteHours, setVoteHours] = useState("0");
   const [voteMinutes, setVoteMinutes] = useState("0");
   const [voteSeconds, setVoteSeconds] = useState("0");
-  const [voteUserName, setVoteUserName] = useState(buildRandomUserName);
   const [voteFormError, setVoteFormError] = useState<string | null>(null);
 
   const [hasPendingVote, setHasPendingVote] = useState(false);
@@ -124,12 +120,6 @@ export default function VotePage() {
       return;
     }
 
-    const normalizedUserName = voteUserName.trim();
-    if (!normalizedUserName) {
-      setVoteFormError("Please enter a username before submitting your vote.");
-      return;
-    }
-
     const hoursValue = parsePositiveInteger(voteHours);
     const minutesValue = parsePositiveInteger(voteMinutes);
     const secondsValue = parsePositiveInteger(voteSeconds);
@@ -140,7 +130,7 @@ export default function VotePage() {
     if (voteDirection === "LATE") diffSeconds = totalSeconds;
 
     setVoteFormError(null);
-    voteMutation.mutate({ diffSeconds, userName: normalizedUserName });
+    voteMutation.mutate({ diffSeconds, userName: displayName });
   };
 
   if (recentLivestreamLoading) {
@@ -220,12 +210,11 @@ export default function VotePage() {
               voteSuccessMessage={voteSuccessMessage}
               isPending={voteMutation.isPending}
               voteFormError={voteFormError}
-              voteUserName={voteUserName}
+              voteUserName={displayName}
               voteDirection={voteDirection}
               voteHours={voteHours}
               voteMinutes={voteMinutes}
               voteSeconds={voteSeconds}
-              onUserNameChange={setVoteUserName}
               onDirectionChange={setVoteDirection}
               onHoursChange={setVoteHours}
               onMinutesChange={setVoteMinutes}

@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 const VOTER_TOKEN_KEY = "contest:voter-token";
-export const SUBMITTER_NAME_KEY = "contest:submitter-name";
 
 export function useUserToken(): string {
   const [token] = useState<string>(() => {
@@ -16,20 +15,4 @@ export function useUserToken(): string {
     }
   });
   return token;
-}
-
-export function getStoredSubmitterName(): string {
-  try {
-    return localStorage.getItem(SUBMITTER_NAME_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-export function saveSubmitterName(name: string): void {
-  try {
-    localStorage.setItem(SUBMITTER_NAME_KEY, name);
-  } catch {
-    // ignore
-  }
 }

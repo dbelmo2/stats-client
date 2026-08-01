@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { ModalManager } from '../ui/Modal';
 import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
 import lerp from '../utils/utils';
+import { getAuthMe, getGameToken } from '../../../shared/authClient';
 
 
 export interface InitializationOptions {
@@ -64,6 +65,21 @@ export class NetworkManager {
           reconnectionDelay: 1000,
           timeout: 20000,
           upgrade: false,
+          // Must be a function, not a static object — socket.io calls this fresh on every
+          // (re)connection attempt so a freshly-fetched, non-expired token is sent each time.
+          auth: async (cb) => {
+            try {
+              const me = await getAuthMe();
+              if (me.authenticated) {
+                const { token } = await getGameToken();
+                cb({ token });
+                return;
+              }
+            } catch (err) {
+              console.warn('[NetworkManager] Failed to resolve game-token, joining as guest', err);
+            }
+            cb({});
+          },
         });
 
         await this.waitForConnect();
