@@ -8,8 +8,7 @@ import { SubmitClipModal } from "./contest/SubmitClipModal";
 import type { Contest, ContestClip, VoterStatusResponse } from "../shared/contestSchema";
 import type { PaginatedResponse } from "../shared/schema";
 import { apiRequest } from "../lib/queryClient";
-import { useUserToken, getStoredSubmitterName } from "../hooks/useVoterToken";
-import { config } from "../../game/utils/config";
+import { useUserToken } from "../hooks/useVoterToken";
 
 const RANK_ICONS: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
@@ -22,10 +21,13 @@ export function TopClipsCard() {
   const { data: contest } = useQuery<Contest | null>({
     queryKey: ["contest-active"],
     queryFn: async () => {
-      const res = await fetch(`${config.API_URL}/api/contest/clip-contest/active`);
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
+      try {
+        const res = await apiRequest("GET", "/api/contest/clip-contest/active");
+        return (await res.json()) as Contest;
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith("404:")) return null;
+        throw err;
+      }
     },
   });
 
@@ -138,7 +140,6 @@ export function TopClipsCard() {
         onOpenChange={setSubmitOpen}
         contest={contest}
         userToken={userToken}
-        initialSubmitterName={getStoredSubmitterName()}
         onSuccess={(clip) => {
           queryClient.invalidateQueries({ queryKey: ["contest-clips-top3", contestId] });
           sessionStorage.setItem("contest:pinnedClipId", String(clip.id));
