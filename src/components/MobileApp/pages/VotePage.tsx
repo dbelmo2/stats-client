@@ -96,20 +96,32 @@ export default function VotePage() {
     }
   }, [canViewVoteResults, mostRecentLivestream]);
 
+  function markVoteSubmitted() {
+    try {
+      window.localStorage.setItem(PENDING_VOTE_STORAGE_KEY, Date.now().toString());
+    } catch {
+      // ignore
+    }
+    setHasPendingVote(true);
+  }
+
   const voteMutation = useMutation({
     mutationFn: async (payload: VotePayload) => {
       await apiRequest("POST", "/api/vote", payload);
     },
     onSuccess: () => {
-      try {
-        window.localStorage.setItem(PENDING_VOTE_STORAGE_KEY, Date.now().toString());
-      } catch {
-        // ignore
-      }
-      setHasPendingVote(true);
+      markVoteSubmitted();
       setVoteFormError(null);
     },
     onError: (error) => {
+      // 409 means this identity already has a vote on record — possibly submitted from a
+      // different browser/device under the same logged-in account. That's not a failure from
+      // the user's perspective; reflect the same "already voted" state a successful submit would.
+      if (error instanceof Error && error.message.startsWith("409:")) {
+        markVoteSubmitted();
+        setVoteFormError(null);
+        return;
+      }
       setVoteFormError(getReadableErrorMessage(error));
     },
   });
