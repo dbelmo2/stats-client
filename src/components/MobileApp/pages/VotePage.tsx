@@ -15,10 +15,12 @@ import type {
 import { formatTimeStatusDelta } from "../lib/utils";
 import { apiRequest } from "../lib/queryClient";
 import { useAuth } from "../hooks/useAuth";
+import { useUserToken } from "../hooks/useVoterToken";
+import { resolveVoteDisplayName } from "../../../shared/identity";
 
 interface VotePayload {
   diffSeconds: number;
-  userName: string;
+  userToken: string;
 }
 
 const PENDING_VOTE_STORAGE_KEY = "vote:submitted:pending";
@@ -45,7 +47,9 @@ export default function VotePage() {
   const initialTab: ActiveTab = new URLSearchParams(search).get("tab") === "results" ? "results" : "cast";
   const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab);
 
-  const { displayName } = useAuth();
+  const auth = useAuth();
+  const userToken = useUserToken();
+  const voteDisplayName = resolveVoteDisplayName(auth, userToken);
   const [voteDirection, setVoteDirection] = useState<TimeStatus>("LATE");
   const [voteHours, setVoteHours] = useState("0");
   const [voteMinutes, setVoteMinutes] = useState("0");
@@ -142,7 +146,7 @@ export default function VotePage() {
     if (voteDirection === "LATE") diffSeconds = totalSeconds;
 
     setVoteFormError(null);
-    voteMutation.mutate({ diffSeconds, userName: displayName });
+    voteMutation.mutate({ diffSeconds, userToken });
   };
 
   if (recentLivestreamLoading) {
@@ -222,7 +226,7 @@ export default function VotePage() {
               voteSuccessMessage={voteSuccessMessage}
               isPending={voteMutation.isPending}
               voteFormError={voteFormError}
-              voteUserName={displayName}
+              voteUserName={voteDisplayName}
               voteDirection={voteDirection}
               voteHours={voteHours}
               voteMinutes={voteMinutes}
