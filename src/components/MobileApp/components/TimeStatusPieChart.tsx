@@ -1,5 +1,6 @@
 import { Card } from "../components/ui/card";
-import { Pie, PieChart, ResponsiveContainer, Tooltip, Cell } from "recharts";
+import { AnimatedResponsiveContainer } from "../components/ui/animated-responsive-container";
+import { Pie, PieChart, Tooltip, Cell } from "recharts";
 
 interface TimeStatusPieChartProps {
   lateCount: number;
@@ -38,7 +39,7 @@ export function TimeStatusPieChart({
         </div>
 
         <div className="w-full h-64 md:h-80" data-testid="chart-time-status-breakdown">
-          <ResponsiveContainer width="100%" height="100%" minHeight={256}>
+          <AnimatedResponsiveContainer width="100%" height="100%" minHeight={256}>
             <PieChart>
               <Pie
                 data={chartData}
@@ -76,7 +77,7 @@ export function TimeStatusPieChart({
                 }}
               />
             </PieChart>
-          </ResponsiveContainer>
+          </AnimatedResponsiveContainer>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" data-testid="list-time-status-breakdown">

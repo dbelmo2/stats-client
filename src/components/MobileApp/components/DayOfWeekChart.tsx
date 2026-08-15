@@ -1,5 +1,6 @@
 import { Card } from "../components/ui/card";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { AnimatedResponsiveContainer } from "../components/ui/animated-responsive-container";
+import { Bar, BarChart, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import type { DayStatsResponse } from "../shared/schema";
 import { formatLateTime } from "../lib/utils";
 
@@ -40,7 +41,7 @@ export function DayOfWeekChart({ dailyStats }: DayOfWeekChartProps) {
         </h2>
         
         <div className="w-full h-56 md:h-72" data-testid="chart-day-of-week">
-          <ResponsiveContainer width="100%" height="100%" minHeight={224}>
+          <AnimatedResponsiveContainer width="100%" height="100%" minHeight={224}>
             <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
               <XAxis 
@@ -75,7 +76,7 @@ export function DayOfWeekChart({ dailyStats }: DayOfWeekChartProps) {
                 style={{ filter: 'drop-shadow(0 0 8px rgba(236,72,153,0.4))' }}
               />
             </BarChart>
-          </ResponsiveContainer>
+          </AnimatedResponsiveContainer>
         </div>
       </div>
       

@@ -1,5 +1,6 @@
 import { Card } from "../components/ui/card";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { AnimatedResponsiveContainer } from "../components/ui/animated-responsive-container";
+import { Line, LineChart, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import type { TrendLivestream } from "../shared/schema";
 import { formatLateTime } from "../lib/utils";
 
@@ -35,7 +36,7 @@ export function LatenessTrendChart({ livestreams }: LatenessTrendChartProps) {
         </div>
         
         <div className="w-full h-64 md:h-80" data-testid="chart-lateness-trend">
-          <ResponsiveContainer width="100%" height="100%" minHeight={256}>
+          <AnimatedResponsiveContainer width="100%" height="100%" minHeight={256}>
             <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
               <XAxis 
@@ -103,7 +104,7 @@ export function LatenessTrendChart({ livestreams }: LatenessTrendChartProps) {
                 activeDot={{ r: 6, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
               />
             </LineChart>
-          </ResponsiveContainer>
+          </AnimatedResponsiveContainer>
         </div>
       </div>
       
